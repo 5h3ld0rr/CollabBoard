@@ -7,6 +7,7 @@ import {
   Eye,
   EyeOff,
   ArrowRight,
+  ArrowLeft,
   AlertCircle,
   Sparkles,
   Zap,
@@ -66,6 +67,17 @@ export const Login: React.FC = () => {
       <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
         <div className="absolute -top-40 -left-40 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl" />
         <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl" />
+      </div>
+
+      {/* Back to Home Button */}
+      <div className="w-full max-w-5xl mb-4 sm:mb-6 flex items-center justify-start">
+        <Link
+          to="/"
+          className="inline-flex items-center space-x-2 px-3.5 py-2 rounded-xl bg-slate-900/80 hover:bg-slate-800/90 text-slate-400 hover:text-white text-xs sm:text-sm font-medium border border-slate-800/80 hover:border-slate-700/80 backdrop-blur-md transition-all group shadow-sm ring-1 ring-white/5 cursor-pointer"
+        >
+          <ArrowLeft className="w-4 h-4 text-slate-400 group-hover:text-indigo-400 group-hover:-translate-x-0.5 transition-all" />
+          <span>Back to Home</span>
+        </Link>
       </div>
 
       <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
