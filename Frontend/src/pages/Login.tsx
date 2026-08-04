@@ -1,19 +1,18 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  Kanban,
   Mail,
   Lock,
   Eye,
   EyeOff,
   ArrowRight,
-  ArrowLeft,
-  AlertCircle,
-  Sparkles,
   Zap,
   ShieldCheck,
   WifiOff,
+  AlertCircle,
+  Sparkles,
 } from "lucide-react";
+import { AmbientBackground, BackButton, Button, Logo } from "../components/common";
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -56,7 +55,6 @@ export const Login: React.FC = () => {
     // Simulate authentication flow (M1 static flow)
     setTimeout(() => {
       setIsLoading(false);
-      // In M1, could navigate to board dashboard or show successful sign in
       navigate("/boards");
     }, 800);
   };
@@ -64,35 +62,17 @@ export const Login: React.FC = () => {
   return (
     <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col justify-center items-center p-4 sm:p-6 lg:p-8 selection:bg-indigo-500 selection:text-white">
       {/* Ambient background glow effects */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
-        <div className="absolute -top-40 -left-40 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl" />
-      </div>
+      <AmbientBackground variant="auth" />
 
       {/* Back to Home Button */}
       <div className="w-full max-w-5xl mb-4 sm:mb-6 flex items-center justify-start">
-        <Link
-          to="/"
-          className="inline-flex items-center space-x-2 px-3.5 py-2 rounded-xl bg-slate-900/80 hover:bg-slate-800/90 text-slate-400 hover:text-white text-xs sm:text-sm font-medium border border-slate-800/80 hover:border-slate-700/80 backdrop-blur-md transition-all group shadow-sm ring-1 ring-white/5 cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4 text-slate-400 group-hover:text-indigo-400 group-hover:-translate-x-0.5 transition-all" />
-          <span>Back to Home</span>
-        </Link>
+        <BackButton to="/" />
       </div>
 
       <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
         {/* Left Side: Brand & Feature Highlights */}
         <div className="lg:col-span-5 flex flex-col justify-center space-y-6 px-4 lg:px-0">
-          <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 rounded-xl bg-linear-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/25 ring-1 ring-white/20">
-              <Kanban className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <span className="text-2xl font-bold tracking-tight bg-linear-to-r from-white via-slate-200 to-indigo-200 bg-clip-text text-transparent">
-                CollabBoard
-              </span>
-            </div>
-          </div>
+          <Logo size="lg" to="/" />
 
           <div className="space-y-3">
             <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white leading-tight">
@@ -259,20 +239,16 @@ export const Login: React.FC = () => {
               </div>
 
               {/* Submit Button */}
-              <button
+              <Button
                 type="submit"
-                disabled={isLoading}
-                className="w-full mt-2 py-3 px-4 rounded-xl bg-linear-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-sm font-semibold shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/50 flex items-center justify-center space-x-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-900 transition-all disabled:opacity-50 disabled:cursor-not-allowed group cursor-pointer"
+                isLoading={isLoading}
+                variant="primary"
+                size="md"
+                className="w-full mt-2"
+                iconRight={<ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />}
               >
-                {isLoading ? (
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <span>Sign In</span>
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-                  </>
-                )}
-              </button>
+                Sign In
+              </Button>
             </form>
 
             {/* Switch to Register */}

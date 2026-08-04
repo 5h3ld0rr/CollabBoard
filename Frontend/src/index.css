@@ -20,13 +20,20 @@
   --color-accent-600: #9333ea;
 
   /* Dark Theme Surfaces */
-  --color-surface-bg: #020617;        /* slate-950 */
-  --color-surface-card: #0f172a;      /* slate-900 */
-  --color-surface-card-hover: #1e293b;/* slate-800 */
-  --color-surface-border: #1e293b;    /* slate-800 */
-  --color-surface-muted: #64748b;     /* slate-500 */
-  --color-surface-text: #f8fafc;      /* slate-50 */
-  --color-surface-text-muted: #94a3b8;/* slate-400 */
+  --color-surface-bg: #020617;
+  /* slate-950 */
+  --color-surface-card: #0f172a;
+  /* slate-900 */
+  --color-surface-card-hover: #1e293b;
+  /* slate-800 */
+  --color-surface-border: #1e293b;
+  /* slate-800 */
+  --color-surface-muted: #64748b;
+  /* slate-500 */
+  --color-surface-text: #f8fafc;
+  /* slate-50 */
+  --color-surface-text-muted: #94a3b8;
+  /* slate-400 */
 }
 
 @layer base {
