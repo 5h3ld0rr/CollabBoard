@@ -115,6 +115,22 @@ export const ManageWorkspaceModal: React.FC<ManageWorkspaceModalProps> = ({
     onUpdateWorkspace(updated);
   };
 
+  const handleChangeRole = (userId: string, newRole: 'Admin' | 'Member') => {
+    const updatedMembers = members.map((m) =>
+      m.id === userId ? { ...m, role: newRole } : m
+    );
+    setMembers(updatedMembers);
+    const updated: Workspace = {
+      ...workspace,
+      members: updatedMembers,
+      memberCount: updatedMembers.length,
+    };
+    onUpdateWorkspace(updated);
+    const target = members.find((m) => m.id === userId);
+    setSuccessMessage(`Updated role for ${target ? target.name : 'member'} to ${newRole}`);
+    setTimeout(() => setSuccessMessage(null), 2500);
+  };
+
   const handleDelete = () => {
     if (onDeleteWorkspace) {
       onDeleteWorkspace(workspace.id);
@@ -307,13 +323,24 @@ export const ManageWorkspaceModal: React.FC<ManageWorkspaceModalProps> = ({
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                      {member.role || 'Member'}
-                    </span>
-                    {members.length > 1 && member.role !== 'Owner' && (
+                    <select
+                      value={member.role === 'Admin' ? 'Admin' : 'Member'}
+                      onChange={(e) =>
+                        handleChangeRole(
+                          member.id,
+                          e.target.value as 'Admin' | 'Member'
+                        )
+                      }
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 border border-slate-700 text-indigo-300 hover:border-indigo-500 cursor-pointer focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="Member">Member</option>
+                      <option value="Admin">Admin</option>
+                    </select>
+
+                    {members.length > 1 && (
                       <button
                         onClick={() => handleRemoveMember(member.id)}
-                        className="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
                         title="Remove member"
                       >
                         <Trash2 className="w-3.5 h-3.5" />

@@ -7,11 +7,12 @@ import {
   CircleDot,
   CheckCircle2,
   Share2,
+  Users,
 } from 'lucide-react';
 import { Navbar, AmbientBackground } from '../components/common';
-import { Column, TaskModal } from '../components/board';
+import { Column, TaskModal, BoardMembersModal } from '../components/board';
 import { MOCK_BOARDS, MOCK_TASKS, MOCK_USERS } from '../data/mockData';
-import type { Board, Task, TaskStatus } from '../types';
+import type { Board, Task, TaskStatus, User } from '../types';
 
 export const BoardView: React.FC = () => {
   const { boardId } = useParams<{ boardId: string }>();
@@ -43,6 +44,9 @@ export const BoardView: React.FC = () => {
     );
   }, [boardId]);
 
+  // Board members state
+  const [boardMembers, setBoardMembers] = useState<User[]>(currentBoard.members);
+
   // Tasks state for this board
   const [tasks, setTasks] = useState<Task[]>(() => {
     const initial = boardId ? MOCK_TASKS[boardId] : null;
@@ -52,6 +56,7 @@ export const BoardView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [modalDefaultStatus, setModalDefaultStatus] = useState<TaskStatus>('todo');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -143,6 +148,11 @@ export const BoardView: React.FC = () => {
     });
   };
 
+  const handleUpdateMembers = (updatedMembers: User[]) => {
+    setBoardMembers(updatedMembers);
+    currentBoard.members = updatedMembers;
+  };
+
   return (
     <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
       <AmbientBackground variant="minimal" />
@@ -191,25 +201,40 @@ export const BoardView: React.FC = () => {
 
           {/* Right Action Tools */}
           <div className="flex items-center space-x-3">
-            {/* Active Members avatars */}
-            <div className="flex items-center -space-x-1.5 bg-slate-900/60 border border-slate-800/80 p-1 rounded-xl">
-              {currentBoard.members.map((member) => (
-                <div
-                  key={member.id}
-                  title={member.name}
-                  className={`w-7 h-7 rounded-lg ${member.color} text-white font-bold text-[10px] flex items-center justify-center ring-2 ring-slate-950 shadow-sm`}
-                >
-                  {member.initials}
-                </div>
-              ))}
-              <button
-                onClick={() => showToast('Invite link copied to clipboard')}
-                className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-xs transition"
-                title="Invite collaborators"
-              >
-                <Share2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
+            {/* Active Members Button & Avatars */}
+            <button
+              onClick={() => setIsMembersModalOpen(true)}
+              className="flex items-center space-x-2 bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 p-1.5 pr-2.5 rounded-2xl transition shadow-xs group"
+              title="Manage board members"
+            >
+              <div className="flex items-center -space-x-1.5">
+                {boardMembers.map((member) => (
+                  <div
+                    key={member.id}
+                    title={`${member.name} (${member.boardRole || 'Editor'})`}
+                    className={`w-7 h-7 rounded-lg ${
+                      member.color || 'bg-indigo-600'
+                    } text-white font-bold text-[10px] flex items-center justify-center ring-2 ring-slate-950 shadow-sm`}
+                  >
+                    {member.initials}
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center space-x-1 text-xs font-semibold text-slate-300 group-hover:text-white">
+                <Users className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="hidden sm:inline">Members</span>
+                <span className="text-[10px] font-mono text-slate-400">({boardMembers.length})</span>
+              </div>
+            </button>
+
+            {/* Share / Invite Action */}
+            <button
+              onClick={() => setIsMembersModalOpen(true)}
+              className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition"
+              title="Invite collaborators"
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
 
             {/* Create Task Button */}
             <button
@@ -314,7 +339,16 @@ export const BoardView: React.FC = () => {
         initialTask={editingTask}
         defaultStatus={modalDefaultStatus}
         boardId={currentBoard.id}
+        availableAssignees={boardMembers}
         onSaveTask={handleSaveTask}
+      />
+
+      {/* Board Members Management Modal */}
+      <BoardMembersModal
+        isOpen={isMembersModalOpen}
+        onClose={() => setIsMembersModalOpen(false)}
+        board={{ ...currentBoard, members: boardMembers }}
+        onUpdateMembers={handleUpdateMembers}
       />
     </div>
   );

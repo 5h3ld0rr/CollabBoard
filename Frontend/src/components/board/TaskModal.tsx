@@ -9,6 +9,7 @@ interface TaskModalProps {
   initialTask?: Task | null;
   defaultStatus?: TaskStatus;
   boardId: string;
+  availableAssignees?: User[];
   onSaveTask: (task: Task) => void;
 }
 
@@ -18,6 +19,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   initialTask,
   defaultStatus = 'todo',
   boardId,
+  availableAssignees = MOCK_USERS,
   onSaveTask,
 }) => {
   const [title, setTitle] = useState('');
@@ -56,7 +58,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       return;
     }
 
-    const assignedUser: User | undefined = MOCK_USERS.find((u) => u.id === assigneeId);
+    const assignedUser: User | undefined = availableAssignees.find((u) => u.id === assigneeId) || MOCK_USERS.find((u) => u.id === assigneeId);
     const parsedTags = tagInput
       .split(',')
       .map((t) => t.trim())
@@ -195,7 +197,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 onChange={(e) => setAssigneeId(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
               >
-                {MOCK_USERS.map((user) => (
+                {availableAssignees.map((user) => (
                   <option key={user.id} value={user.id}>
                     {user.name} ({user.initials})
                   </option>

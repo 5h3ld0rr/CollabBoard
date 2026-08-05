@@ -9,6 +9,7 @@ export interface User {
   initials: string;
   color: string;
   role?: 'Owner' | 'Admin' | 'Member';
+  boardRole?: 'Admin' | 'Editor' | 'Viewer';
 }
 
 export interface Task {
