@@ -3,6 +3,7 @@ import Home from './pages/Home';
 import Register from './pages/Register';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import BoardView from './pages/BoardView';
 
 function App() {
   return (
@@ -12,6 +13,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/boards" element={<Dashboard />} />
+        <Route path="/boards/:boardId" element={<BoardView />} />
         <Route path="/dashboard" element={<Navigate to="/boards" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
