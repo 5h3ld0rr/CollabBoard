@@ -6,6 +6,7 @@ import {
   ArrowRight,
   ArrowLeft,
   GripVertical,
+  CheckCircle2,
 } from 'lucide-react';
 import type { Task, TaskPriority, TaskStatus } from '../../types';
 
@@ -66,21 +67,34 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     else if (task.status === 'in-progress') onMoveStatus(task.id, 'todo');
   };
 
+  const isDone = task.status === 'done';
+
   return (
     <div
       draggable
       onDragStart={(e) => onDragStart?.(e, task.id)}
-      className="group relative rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 hover:border-indigo-500/40 p-4 transition-all duration-150 shadow-sm hover:shadow-lg hover:shadow-indigo-950/30 cursor-grab active:cursor-grabbing select-none"
+      className={`group relative rounded-xl border p-4 transition-all duration-150 shadow-sm select-none cursor-grab active:cursor-grabbing ${
+        isDone
+          ? 'bg-slate-800/50 hover:bg-slate-800/70 border-slate-700/40 hover:border-emerald-500/30 opacity-90'
+          : 'bg-slate-800/80 hover:bg-slate-800 border-slate-700/60 hover:border-indigo-500/40 hover:shadow-lg hover:shadow-indigo-950/30'
+      }`}
     >
-      {/* Top Strip: Priority Badge & Menu */}
+      {/* Top Strip: Priority / Done Badge & Menu */}
       <div className="flex items-center justify-between gap-2 mb-2.5">
         <div className="flex items-center space-x-2">
           <GripVertical className="w-3.5 h-3.5 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-          <span
-            className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${priorityInfo.bg} ${priorityInfo.text} ${priorityInfo.border}`}
-          >
-            {priorityInfo.label}
-          </span>
+          {isDone ? (
+            <span className="px-2 py-0.5 rounded text-[10px] font-semibold border bg-emerald-500/15 text-emerald-300 border-emerald-500/30 flex items-center space-x-1">
+              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+              <span>Done</span>
+            </span>
+          ) : (
+            <span
+              className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${priorityInfo.bg} ${priorityInfo.text} ${priorityInfo.border}`}
+            >
+              {priorityInfo.label}
+            </span>
+          )}
         </div>
 
         <div className="relative">
@@ -124,13 +138,23 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       </div>
 
       {/* Task Title */}
-      <h4 className="text-sm font-semibold text-white leading-snug mb-1.5 group-hover:text-indigo-200 transition-colors">
+      <h4
+        className={`text-sm font-semibold leading-snug mb-1.5 transition-colors ${
+          isDone
+            ? 'line-through text-slate-400 group-hover:text-slate-300'
+            : 'text-white group-hover:text-indigo-200'
+        }`}
+      >
         {task.title}
       </h4>
 
       {/* Task Description (if any) */}
       {task.description && (
-        <p className="text-xs text-slate-400 leading-relaxed line-clamp-2 mb-3 font-normal">
+        <p
+          className={`text-xs leading-relaxed line-clamp-2 mb-3 font-normal ${
+            isDone ? 'text-slate-500' : 'text-slate-400'
+          }`}
+        >
           {task.description}
         </p>
       )}
@@ -165,7 +189,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               ?
             </div>
           )}
-          <span className="text-[11px] truncate max-w-[90px]">
+          <span className="text-[11px] truncate max-w-22.5">
             {task.assignee ? task.assignee.name.split(' ')[0] : 'Unassigned'}
           </span>
         </div>

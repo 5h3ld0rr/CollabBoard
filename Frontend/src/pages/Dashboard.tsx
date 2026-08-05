@@ -23,7 +23,7 @@ export const Dashboard: React.FC = () => {
   const [workspaces, setWorkspaces] = useState<Workspace[]>(MOCK_WORKSPACES);
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace>(MOCK_WORKSPACES[0]);
   const [boards, setBoards] = useState<Board[]>(MOCK_BOARDS);
-  const [activeTab, setActiveTab] = useState<'all' | 'starred' | string>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'starred'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'updated' | 'tasks' | 'title'>('updated');
   
@@ -43,14 +43,12 @@ export const Dashboard: React.FC = () => {
   // Workspace actions
   const handleSelectWorkspace = (ws: Workspace) => {
     setCurrentWorkspace(ws);
-    setActiveTab(ws.id);
     showToast(`Switched to "${ws.name}"`);
   };
 
   const handleCreateWorkspace = (newWs: Workspace) => {
     setWorkspaces((prev) => [...prev, newWs]);
     setCurrentWorkspace(newWs);
-    setActiveTab(newWs.id);
     showToast(`Created workspace "${newWs.name}"!`);
   };
 
@@ -120,11 +118,9 @@ export const Dashboard: React.FC = () => {
   const filteredBoards = useMemo(() => {
     return boards
       .filter((board) => {
-        // Workspace / Tab filter
-        if (activeTab === 'starred') {
-          if (!board.isFavorite) return false;
-        } else if (activeTab !== 'all') {
-          if (board.workspaceId !== activeTab) return false;
+        // Tab filter
+        if (activeTab === 'starred' && !board.isFavorite) {
+          return false;
         }
 
         // Search query filter
@@ -232,23 +228,6 @@ export const Dashboard: React.FC = () => {
               <Star className="w-3.5 h-3.5 fill-amber-400/80 text-amber-400" />
               <span>Starred ({boards.filter((b) => b.isFavorite).length})</span>
             </button>
-
-            {workspaces.map((ws) => (
-              <button
-                key={ws.id}
-                onClick={() => {
-                  setActiveTab(ws.id);
-                  setCurrentWorkspace(ws);
-                }}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-                  activeTab === ws.id
-                    ? 'bg-indigo-600 text-white shadow-md'
-                    : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800'
-                }`}
-              >
-                {ws.name}
-              </button>
-            ))}
           </div>
 
           {/* Sort & Mobile Search Controls */}
