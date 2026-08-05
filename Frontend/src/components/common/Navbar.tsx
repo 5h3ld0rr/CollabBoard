@@ -9,20 +9,29 @@ import {
   LogOut,
   User,
   Settings,
-  ChevronDown,
   LayoutGrid,
 } from 'lucide-react';
 import { Logo } from './Logo';
+import { WorkspaceSwitcher } from '../workspace/WorkspaceSwitcher';
+import type { Workspace } from '../../types';
 
 interface NavbarProps {
-  currentWorkspace?: string;
+  workspaces?: Workspace[];
+  currentWorkspace?: Workspace | string;
+  onSelectWorkspace?: (workspace: Workspace) => void;
+  onOpenCreateWorkspace?: () => void;
+  onOpenManageWorkspace?: () => void;
   onOpenCreateBoard?: () => void;
   searchQuery?: string;
   onSearchChange?: (q: string) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  currentWorkspace = 'Core Engineering',
+  workspaces,
+  currentWorkspace,
+  onSelectWorkspace,
+  onOpenCreateWorkspace,
+  onOpenManageWorkspace,
   onOpenCreateBoard,
   searchQuery = '',
   onSearchChange,
@@ -40,21 +49,43 @@ export const Navbar: React.FC<NavbarProps> = ({
     navigate('/login');
   };
 
+  const workspaceObject: Workspace =
+    typeof currentWorkspace === 'object' && currentWorkspace !== null
+      ? currentWorkspace
+      : {
+          id: 'ws-1',
+          name: typeof currentWorkspace === 'string' ? currentWorkspace : 'Core Engineering',
+          description: 'Platform infrastructure and real-time engine',
+          boardCount: 4,
+          memberCount: 4,
+          color: 'from-indigo-600 to-violet-600',
+          role: 'Owner',
+        };
+
   return (
     <header className="sticky top-0 z-40 w-full backdrop-blur-xl bg-slate-950/80 border-b border-slate-800/80 transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         
         {/* Left Side: Brand Logo & Workspace Switcher */}
-        <div className="flex items-center space-x-6">
-          <Link to="/boards" className="flex items-center space-x-2">
+        <div className="flex items-center space-x-5 sm:space-x-6">
+          <Link to="/boards" className="flex items-center space-x-2 shrink-0">
             <Logo size="sm" />
           </Link>
 
-          <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800 text-xs text-slate-300 hover:border-slate-700 transition cursor-pointer">
-            <LayoutGrid className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="font-semibold">{currentWorkspace}</span>
-            <ChevronDown className="w-3 h-3 text-slate-500" />
-          </div>
+          {workspaces && onSelectWorkspace && onOpenCreateWorkspace && onOpenManageWorkspace ? (
+            <WorkspaceSwitcher
+              workspaces={workspaces}
+              currentWorkspace={workspaceObject}
+              onSelectWorkspace={onSelectWorkspace}
+              onOpenCreateWorkspace={onOpenCreateWorkspace}
+              onOpenManageWorkspace={onOpenManageWorkspace}
+            />
+          ) : (
+            <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs text-slate-300">
+              <LayoutGrid className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="font-semibold">{workspaceObject.name}</span>
+            </div>
+          )}
         </div>
 
         {/* Middle: Search Bar */}
@@ -164,10 +195,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <User className="w-3.5 h-3.5" />
                     <span>Your Profile</span>
                   </button>
-                  <button className="w-full flex items-center space-x-2 px-3 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition text-left">
-                    <Settings className="w-3.5 h-3.5" />
-                    <span>Workspace Settings</span>
-                  </button>
+                  {onOpenManageWorkspace && (
+                    <button
+                      onClick={() => {
+                        setShowProfileMenu(false);
+                        onOpenManageWorkspace();
+                      }}
+                      className="w-full flex items-center space-x-2 px-3 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition text-left"
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                      <span>Workspace Settings</span>
+                    </button>
+                  )}
                   <button
                     onClick={handleSignOut}
                     className="w-full flex items-center space-x-2 px-3 py-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition text-left"

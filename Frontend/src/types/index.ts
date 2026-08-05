@@ -8,6 +8,7 @@ export interface User {
   avatar?: string;
   initials: string;
   color: string;
+  role?: 'Owner' | 'Admin' | 'Member';
 }
 
 export interface Task {
@@ -52,4 +53,7 @@ export interface Workspace {
   description: string;
   boardCount: number;
   memberCount: number;
+  color?: string;
+  role?: 'Owner' | 'Admin' | 'Member';
+  members?: User[];
 }
