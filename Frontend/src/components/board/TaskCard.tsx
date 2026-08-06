@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   GripVertical,
   CheckCircle2,
+  Calendar,
 } from 'lucide-react';
 import type { Task, TaskPriority, TaskStatus } from '../../types';
 
@@ -53,6 +54,23 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   onDragStart,
 }) => {
   const [showMenu, setShowMenu] = useState(false);
+  const menuRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+
+    if (showMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showMenu]);
+
   const priorityInfo = PRIORITY_BADGES[task.priority] || PRIORITY_BADGES.medium;
 
   const handleNextStatus = (e: React.MouseEvent) => {
@@ -68,6 +86,10 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   };
 
   const isDone = task.status === 'done';
+  const isOverdue =
+    !isDone &&
+    Boolean(task.dueDate) &&
+    new Date(task.dueDate!).getTime() < new Date().setHours(0, 0, 0, 0);
 
   return (
     <div
@@ -76,6 +98,8 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       className={`group relative rounded-xl border p-4 transition-all duration-150 shadow-sm select-none cursor-grab active:cursor-grabbing ${
         isDone
           ? 'bg-slate-800/50 hover:bg-slate-800/70 border-slate-700/40 hover:border-emerald-500/30 opacity-90'
+          : isOverdue
+          ? 'bg-slate-800/90 hover:bg-slate-800 border-rose-500/40 hover:border-rose-500/70 hover:shadow-lg hover:shadow-rose-950/30'
           : 'bg-slate-800/80 hover:bg-slate-800 border-slate-700/60 hover:border-indigo-500/40 hover:shadow-lg hover:shadow-indigo-950/30'
       }`}
     >
@@ -88,6 +112,10 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               <CheckCircle2 className="w-3 h-3 text-emerald-400" />
               <span>Done</span>
             </span>
+          ) : isOverdue ? (
+            <span className="px-2 py-0.5 rounded text-[10px] font-semibold border bg-rose-500/15 text-rose-300 border-rose-500/30">
+              Overdue
+            </span>
           ) : (
             <span
               className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${priorityInfo.bg} ${priorityInfo.text} ${priorityInfo.border}`}
@@ -97,19 +125,19 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           )}
         </div>
 
-        <div className="relative">
+        <div className="relative" ref={menuRef}>
           <button
             onClick={(e) => {
               e.stopPropagation();
               setShowMenu((prev) => !prev);
             }}
-            className="p-1 rounded-lg hover:bg-slate-700/60 text-slate-400 hover:text-white transition"
+            className="p-1 rounded-lg hover:bg-slate-700/60 text-slate-400 hover:text-white transition cursor-pointer"
           >
             <MoreHorizontal className="w-3.5 h-3.5" />
           </button>
 
           {showMenu && (
-            <div className="absolute right-0 mt-1 w-36 rounded-xl bg-slate-900 border border-slate-800 shadow-xl py-1 z-30 animate-in fade-in zoom-in-95 duration-100">
+            <div className="absolute right-0 mt-1 w-36 rounded-xl bg-slate-900/95 border border-slate-700/80 shadow-2xl shadow-black/90 backdrop-blur-xl py-1 z-30 ring-1 ring-white/10 animate-in fade-in zoom-in-95 duration-100">
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -173,25 +201,41 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         </div>
       )}
 
-      {/* Card Footer: Assignee & Quick Move Buttons */}
+      {/* Card Footer: Assignee, Due Date & Quick Move Buttons */}
       <div className="pt-2.5 border-t border-slate-700/40 flex items-center justify-between text-xs text-slate-400">
-        {/* Assignee */}
-        <div className="flex items-center space-x-1.5">
-          {task.assignee ? (
-            <div
-              title={task.assignee.name}
-              className={`w-5 h-5 rounded-full ${task.assignee.color} text-white font-bold text-[9px] flex items-center justify-center ring-1 ring-slate-800`}
+        {/* Assignee & Due Date */}
+        <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-1.5">
+            {task.assignee ? (
+              <div
+                title={task.assignee.name}
+                className={`w-5 h-5 rounded-full ${task.assignee.color} text-white font-bold text-[9px] flex items-center justify-center ring-1 ring-slate-800`}
+              >
+                {task.assignee.initials}
+              </div>
+            ) : (
+              <div className="w-5 h-5 rounded-full bg-slate-700 text-slate-400 text-[9px] flex items-center justify-center">
+                ?
+              </div>
+            )}
+            <span className="text-[11px] truncate max-w-20">
+              {task.assignee ? task.assignee.name.split(' ')[0] : 'Unassigned'}
+            </span>
+          </div>
+
+          {task.dueDate && (
+            <span
+              title={isOverdue ? `Overdue: Due on ${task.dueDate}` : `Due date: ${task.dueDate}`}
+              className={`inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[9px] font-medium border ${
+                isOverdue
+                  ? 'bg-rose-500/15 text-rose-300 border-rose-500/30 font-semibold'
+                  : 'bg-slate-900/80 text-slate-400 border-slate-700/50'
+              }`}
             >
-              {task.assignee.initials}
-            </div>
-          ) : (
-            <div className="w-5 h-5 rounded-full bg-slate-700 text-slate-400 text-[9px] flex items-center justify-center">
-              ?
-            </div>
+              <Calendar className="w-2.5 h-2.5" />
+              <span>{task.dueDate.slice(5)}</span>
+            </span>
           )}
-          <span className="text-[11px] truncate max-w-22.5">
-            {task.assignee ? task.assignee.name.split(' ')[0] : 'Unassigned'}
-          </span>
         </div>
 
         {/* Quick Shift buttons */}

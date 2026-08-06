@@ -32,7 +32,7 @@ export const Logo: React.FC<LogoProps> = ({
 }) => {
   const config = sizeConfig[size];
 
-  const content = (
+  return (
     <div className={`flex items-center space-x-3 group ${className}`}>
       <div
         className={`${config.box} bg-linear-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 ring-1 ring-white/20 group-hover:scale-105 transition-transform`}
@@ -48,9 +48,6 @@ export const Logo: React.FC<LogoProps> = ({
       )}
     </div>
   );
-
-
-  return content;
 };
 
 export default Logo;

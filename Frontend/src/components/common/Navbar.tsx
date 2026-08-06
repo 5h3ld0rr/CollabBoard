@@ -5,7 +5,6 @@ import {
   Bell,
   Plus,
   Wifi,
-  WifiOff,
   LogOut,
   User,
   LayoutGrid,
@@ -44,7 +43,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   hideLiveSync = false,
 }) => {
   const navigate = useNavigate();
-  const [isOnline, setIsOnline] = useState(true);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotificationToast, setShowNotificationToast] = useState(false);
 
@@ -52,10 +50,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   const shouldHideWorkspace = hideWorkspace || isProfileVariant;
   const shouldHideSearch = hideSearch || isProfileVariant;
   const shouldHideLiveSync = hideLiveSync || isProfileVariant;
-
-  const toggleNetworkStatus = () => {
-    setIsOnline((prev) => !prev);
-  };
 
   const handleSignOut = () => {
     navigate('/login');
@@ -126,31 +120,16 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Right Side: Network Status, Create CTA, Notifications, Profile */}
         <div className="flex items-center space-x-3">
           
-          {/* Offline/Online Simulator Pill */}
+          {/* Live Sync Status Indicator Badge */}
           {!shouldHideLiveSync && (
-            <button
-              onClick={toggleNetworkStatus}
-              title={isOnline ? "Simulated Online (Click to toggle offline mode)" : "Simulated Offline"}
-              className={`hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
-                isOnline
-                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/25 hover:bg-emerald-500/20"
-                  : "bg-amber-500/10 text-amber-400 border-amber-500/25 hover:bg-amber-500/20"
-              }`}
+            <div
+              className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium border bg-emerald-500/10 text-emerald-400 border-emerald-500/25 select-none cursor-default"
+              title="Live sync active"
             >
-              {isOnline ? (
-                <>
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <Wifi className="w-3.5 h-3.5" />
-                  <span>Live Sync</span>
-                </>
-              ) : (
-                <>
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                  <WifiOff className="w-3.5 h-3.5" />
-                  <span>Offline Mode</span>
-                </>
-              )}
-            </button>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <Wifi className="w-3.5 h-3.5" />
+              <span>Live Sync</span>
+            </div>
           )}
 
           {/* New Board Action Button */}
@@ -176,7 +155,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
 
             {showNotificationToast && (
-              <div className="absolute right-0 mt-2 w-72 p-3.5 rounded-2xl bg-slate-900/95 border border-slate-800 shadow-2xl backdrop-blur-xl z-50 animate-in fade-in zoom-in-95 duration-100">
+              <div className="absolute right-0 mt-2 w-72 p-3.5 rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black/90 backdrop-blur-xl z-50 ring-1 ring-white/10 animate-in fade-in zoom-in-95 duration-100">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-800 mb-2">
                   <span className="text-xs font-bold text-white">Notifications</span>
                   <span className="text-[10px] text-indigo-400 font-medium">1 New</span>
@@ -203,7 +182,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
 
             {showProfileMenu && (
-              <div className="absolute right-0 mt-2 w-52 rounded-2xl bg-slate-900/95 border border-slate-800 shadow-2xl backdrop-blur-xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-100">
+              <div className="absolute right-0 mt-2 w-52 rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black/90 backdrop-blur-xl p-1.5 z-50 ring-1 ring-white/10 animate-in fade-in zoom-in-95 duration-100">
                 <div className="px-3 py-2 border-b border-slate-800 mb-1">
                   <p className="text-xs font-semibold text-white">Alex Chen</p>
                   <p className="text-[11px] text-slate-400 truncate">alex.chen@collabboard.io</p>

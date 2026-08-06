@@ -28,6 +28,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [assigneeId, setAssigneeId] = useState<string>(MOCK_USERS[0].id);
   const [tagInput, setTagInput] = useState('');
+  const [dueDate, setDueDate] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -38,6 +39,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setPriority(initialTask.priority);
       setAssigneeId(initialTask.assignee?.id || MOCK_USERS[0].id);
       setTagInput(initialTask.tags.join(', '));
+      setDueDate(initialTask.dueDate || '');
     } else {
       setTitle('');
       setDescription('');
@@ -45,6 +47,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setPriority('medium');
       setAssigneeId(MOCK_USERS[0].id);
       setTagInput('Frontend, Feature');
+      setDueDate('');
     }
     setError(null);
   }, [initialTask, defaultStatus, isOpen]);
@@ -75,6 +78,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       tags: parsedTags.length > 0 ? parsedTags : ['General'],
       order: initialTask ? initialTask.order : 0,
       version: initialTask ? initialTask.version + 1 : 1,
+      dueDate: dueDate.trim() || undefined,
       createdAt: initialTask ? initialTask.createdAt : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -85,7 +89,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
-      <div className="relative w-full max-w-lg rounded-3xl bg-slate-900 border border-slate-800 p-6 sm:p-8 shadow-2xl shadow-indigo-950/50 text-slate-100 ring-1 ring-white/10 max-h-[90vh] overflow-y-auto">
+      <div className="relative w-full max-w-lg rounded-3xl bg-slate-900 border border-slate-700/80 p-6 sm:p-8 shadow-2xl shadow-black/90 text-slate-100 ring-1 ring-white/10 max-h-[90vh] overflow-y-auto">
         
         {/* Close Button */}
         <button
@@ -218,6 +222,19 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
               />
             </div>
+          </div>
+
+          {/* Due Date Field */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+              Due Date
+            </label>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition scheme-dark"
+            />
           </div>
 
           {/* Modal Actions */}

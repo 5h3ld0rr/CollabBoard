@@ -97,7 +97,7 @@ export const Register: React.FC = () => {
       <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
         {/* Left Side: Brand & Feature Highlights */}
         <div className="lg:col-span-5 flex flex-col justify-center space-y-6 px-4 lg:px-0">
-          <Logo size="lg" to="/" />
+          <Logo size="lg" />
 
           <div className="space-y-3">
             <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white leading-tight">

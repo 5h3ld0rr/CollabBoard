@@ -104,6 +104,25 @@
     cursor: pointer;
   }
 
+  /* Global Select & Option Dark Theme Styling */
+  select {
+    color-scheme: dark;
+  }
+
+  select option,
+  select optgroup {
+    background-color: #0f172a;
+    color: #f8fafc;
+    padding: 8px 12px;
+  }
+
+  select option:hover,
+  select option:focus,
+  select option:checked {
+    background-color: #4f46e5;
+    color: #ffffff;
+  }
+
   button:disabled,
   [role="button"][aria-disabled="true"],
   input:disabled {

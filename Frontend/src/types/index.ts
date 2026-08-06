@@ -23,6 +23,7 @@ export interface Task {
   tags: string[];
   order: number;
   version: number;
+  dueDate?: string;
   createdAt: string;
   updatedAt: string;
 }
