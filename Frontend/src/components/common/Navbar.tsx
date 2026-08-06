@@ -23,6 +23,10 @@ interface NavbarProps {
   onOpenCreateBoard?: () => void;
   searchQuery?: string;
   onSearchChange?: (q: string) => void;
+  variant?: 'default' | 'minimal' | 'profile';
+  hideWorkspace?: boolean;
+  hideSearch?: boolean;
+  hideLiveSync?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -34,11 +38,20 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenCreateBoard,
   searchQuery = '',
   onSearchChange,
+  variant = 'default',
+  hideWorkspace = false,
+  hideSearch = false,
+  hideLiveSync = false,
 }) => {
   const navigate = useNavigate();
   const [isOnline, setIsOnline] = useState(true);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotificationToast, setShowNotificationToast] = useState(false);
+
+  const isProfileVariant = variant === 'profile';
+  const shouldHideWorkspace = hideWorkspace || isProfileVariant;
+  const shouldHideSearch = hideSearch || isProfileVariant;
+  const shouldHideLiveSync = hideLiveSync || isProfileVariant;
 
   const toggleNetworkStatus = () => {
     setIsOnline((prev) => !prev);
@@ -71,68 +84,74 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Logo size="sm" />
           </Link>
 
-          {workspaces && onSelectWorkspace && onOpenCreateWorkspace && onOpenManageWorkspace ? (
-            <WorkspaceSwitcher
-              workspaces={workspaces}
-              currentWorkspace={workspaceObject}
-              onSelectWorkspace={onSelectWorkspace}
-              onOpenCreateWorkspace={onOpenCreateWorkspace}
-              onOpenManageWorkspace={onOpenManageWorkspace}
-            />
-          ) : (
-            <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs text-slate-300">
-              <LayoutGrid className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="font-semibold">{workspaceObject.name}</span>
-            </div>
+          {!shouldHideWorkspace && (
+            workspaces && onSelectWorkspace && onOpenCreateWorkspace && onOpenManageWorkspace ? (
+              <WorkspaceSwitcher
+                workspaces={workspaces}
+                currentWorkspace={workspaceObject}
+                onSelectWorkspace={onSelectWorkspace}
+                onOpenCreateWorkspace={onOpenCreateWorkspace}
+                onOpenManageWorkspace={onOpenManageWorkspace}
+              />
+            ) : (
+              <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs text-slate-300">
+                <LayoutGrid className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="font-semibold">{workspaceObject.name}</span>
+              </div>
+            )
           )}
         </div>
 
         {/* Middle: Search Bar */}
-        <div className="flex-1 max-w-md hidden md:block">
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => onSearchChange?.(e.target.value)}
-              placeholder="Search boards, tasks, or tags... (Press /)"
-              className="w-full pl-10 pr-10 py-1.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500/50 transition-all shadow-inner"
-            />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center space-x-0.5 pointer-events-none">
-              <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-semibold text-slate-400 bg-slate-800 rounded border border-slate-700">
-                ⌘K
-              </kbd>
+        {!shouldHideSearch && (
+          <div className="flex-1 max-w-md hidden md:block">
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => onSearchChange?.(e.target.value)}
+                placeholder="Search boards, tasks, or tags... (Press /)"
+                className="w-full pl-10 pr-10 py-1.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500/50 transition-all shadow-inner"
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center space-x-0.5 pointer-events-none">
+                <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-semibold text-slate-400 bg-slate-800 rounded border border-slate-700">
+                  ⌘K
+                </kbd>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Right Side: Network Status, Create CTA, Notifications, Profile */}
         <div className="flex items-center space-x-3">
           
           {/* Offline/Online Simulator Pill */}
-          <button
-            onClick={toggleNetworkStatus}
-            title={isOnline ? "Simulated Online (Click to toggle offline mode)" : "Simulated Offline"}
-            className={`hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
-              isOnline
-                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/25 hover:bg-emerald-500/20"
-                : "bg-amber-500/10 text-amber-400 border-amber-500/25 hover:bg-amber-500/20"
-            }`}
-          >
-            {isOnline ? (
-              <>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <Wifi className="w-3.5 h-3.5" />
-                <span>Live Sync</span>
-              </>
-            ) : (
-              <>
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                <WifiOff className="w-3.5 h-3.5" />
-                <span>Offline Mode</span>
-              </>
-            )}
-          </button>
+          {!shouldHideLiveSync && (
+            <button
+              onClick={toggleNetworkStatus}
+              title={isOnline ? "Simulated Online (Click to toggle offline mode)" : "Simulated Offline"}
+              className={`hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                isOnline
+                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/25 hover:bg-emerald-500/20"
+                  : "bg-amber-500/10 text-amber-400 border-amber-500/25 hover:bg-amber-500/20"
+              }`}
+            >
+              {isOnline ? (
+                <>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <Wifi className="w-3.5 h-3.5" />
+                  <span>Live Sync</span>
+                </>
+              ) : (
+                <>
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                  <WifiOff className="w-3.5 h-3.5" />
+                  <span>Offline Mode</span>
+                </>
+              )}
+            </button>
+          )}
 
           {/* New Board Action Button */}
           {onOpenCreateBoard && (

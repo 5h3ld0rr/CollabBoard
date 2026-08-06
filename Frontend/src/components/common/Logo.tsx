@@ -1,11 +1,9 @@
 import React from "react";
-import { Link } from "react-router-dom";
 import { Kanban } from "lucide-react";
 
 export interface LogoProps {
   size?: "sm" | "md" | "lg";
   showText?: boolean;
-  to?: string;
   className?: string;
 }
 
@@ -30,7 +28,6 @@ const sizeConfig = {
 export const Logo: React.FC<LogoProps> = ({
   size = "md",
   showText = true,
-  to = "/",
   className = "",
 }) => {
   const config = sizeConfig[size];
@@ -52,13 +49,6 @@ export const Logo: React.FC<LogoProps> = ({
     </div>
   );
 
-  if (to) {
-    return (
-      <Link to={to} className="inline-block focus:outline-none">
-        {content}
-      </Link>
-    );
-  }
 
   return content;
 };

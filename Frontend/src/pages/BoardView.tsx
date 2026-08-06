@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   Plus,
   Search,
-  CircleDot,
   CheckCircle2,
   Settings,
 } from 'lucide-react';
@@ -206,10 +205,6 @@ export const BoardView: React.FC = () => {
               </Link>
               <span className="px-2.5 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">
                 {boardData.workspaceName}
-              </span>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center space-x-1">
-                <CircleDot className="w-2.5 h-2.5 animate-pulse" />
-                <span className="hidden sm:inline">Live Sync Connected</span>
               </span>
             </div>
 

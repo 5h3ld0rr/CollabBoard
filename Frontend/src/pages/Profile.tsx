@@ -13,7 +13,6 @@ import {
   Smartphone,
   Sparkles,
   Save,
-  ArrowLeft,
   Calendar,
   Check,
   ExternalLink,
@@ -22,8 +21,10 @@ import {
   Zap,
   Crown,
   CreditCard,
+  Settings,
 } from 'lucide-react';
-import { Navbar, AmbientBackground, Button } from '../components/common';
+import { Navbar, AmbientBackground, Button, BackButton } from '../components/common';
+import { ManageWorkspaceModal } from '../components/workspace';
 import {
   MOCK_WORKSPACES,
   MOCK_TASKS,
@@ -35,7 +36,7 @@ import {
   MOCK_SUBSCRIPTION_PLANS,
   MOCK_BILLING_INFO,
 } from '../data/mockData';
-import type { Task, TaskStatus } from '../types';
+import type { Task, TaskStatus, Workspace } from '../types';
 
 type ProfileTab = 'overview' | 'workspaces' | 'subscription' | 'tasks' | 'preferences' | 'security';
 
@@ -71,6 +72,11 @@ export const Profile: React.FC = () => {
 
   // Preferences state
   const [preferences, setPreferences] = useState(MOCK_USER_PREFERENCES);
+
+  // Workspaces state
+  const [workspaces, setWorkspaces] = useState<Workspace[]>(MOCK_WORKSPACES);
+  const [managingWorkspace, setManagingWorkspace] = useState<Workspace | null>(null);
+  const [isManageWorkspaceModalOpen, setIsManageWorkspaceModalOpen] = useState(false);
 
   // Security state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -181,7 +187,7 @@ export const Profile: React.FC = () => {
       <AmbientBackground variant="minimal" />
 
       {/* Top Navigation */}
-      <Navbar />
+      <Navbar variant="profile" />
 
       {/* Toast Notification */}
       {toastMessage && (
@@ -197,22 +203,9 @@ export const Profile: React.FC = () => {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        
-        {/* Back Link & Breadcrumbs */}
-        <div className="flex items-center justify-between">
-          <button
-            onClick={() => navigate('/boards')}
-            className="inline-flex items-center space-x-2 text-xs font-medium text-slate-400 hover:text-white transition-colors group cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4 text-slate-400 group-hover:-translate-x-0.5 transition-transform" />
-            <span>Back to Boards</span>
-          </button>
-
-          <div className="flex items-center space-x-2 text-xs text-slate-400">
-            <span>CollabBoard</span>
-            <ChevronRight className="w-3 h-3 text-slate-600" />
-            <span className="text-slate-200 font-medium">User Profile</span>
-          </div>
+        {/* Back Navigation Button */}
+        <div>
+          <BackButton to="/boards" label="Back to Boards" />
         </div>
 
         {/* Profile Header Hero Card */}
@@ -222,7 +215,6 @@ export const Profile: React.FC = () => {
 
           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
-              
               {/* Avatar with Gradient selector indicator */}
               <div className="relative group">
                 <div
@@ -337,7 +329,7 @@ export const Profile: React.FC = () => {
             }`}
           >
             <Building2 className="w-3.5 h-3.5" />
-            <span>Workspaces ({MOCK_WORKSPACES.length})</span>
+            <span>Workspaces ({workspaces.length})</span>
           </button>
 
           <button
@@ -776,17 +768,30 @@ export const Profile: React.FC = () => {
                       <div className={`w-10 h-10 rounded-xl bg-linear-to-br ${ws.color || 'from-indigo-600 to-violet-600'} flex items-center justify-center text-white font-bold text-sm shadow-md`}>
                         <Building2 className="w-5 h-5 text-white" />
                       </div>
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
-                          ws.role === 'Owner'
-                            ? 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30'
-                            : ws.role === 'Admin'
-                            ? 'bg-violet-500/10 text-violet-300 border-violet-500/30'
-                            : 'bg-slate-800 text-slate-300 border-slate-700'
-                        }`}
-                      >
-                        {ws.role}
-                      </span>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setManagingWorkspace(ws);
+                            setIsManageWorkspaceModalOpen(true);
+                          }}
+                          className="p-1.5 rounded-lg bg-slate-950/60 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition cursor-pointer"
+                          title="Workspace Settings"
+                        >
+                          <Settings className="w-3.5 h-3.5" />
+                        </button>
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
+                            ws.role === 'Owner'
+                              ? 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30'
+                              : ws.role === 'Admin'
+                              ? 'bg-violet-500/10 text-violet-300 border-violet-500/30'
+                              : 'bg-slate-800 text-slate-300 border border-slate-700'
+                          }`}
+                        >
+                          {ws.role}
+                        </span>
+                      </div>
                     </div>
 
                     <div>
@@ -1223,6 +1228,25 @@ export const Profile: React.FC = () => {
         )}
 
       </main>
+
+      {/* Manage Workspace Settings Modal */}
+      {isManageWorkspaceModalOpen && managingWorkspace && (
+        <ManageWorkspaceModal
+          isOpen={isManageWorkspaceModalOpen}
+          onClose={() => setIsManageWorkspaceModalOpen(false)}
+          workspace={managingWorkspace}
+          onUpdateWorkspace={(updatedWs) => {
+            setWorkspaces((prev) => prev.map((w) => (w.id === updatedWs.id ? updatedWs : w)));
+            setManagingWorkspace(updatedWs);
+            showToast(`Workspace "${updatedWs.name}" updated!`);
+          }}
+          onDeleteWorkspace={(id) => {
+            setWorkspaces((prev) => prev.filter((w) => w.id !== id));
+            setIsManageWorkspaceModalOpen(false);
+            showToast('Workspace deleted', 'info');
+          }}
+        />
+      )}
     </div>
   );
 };

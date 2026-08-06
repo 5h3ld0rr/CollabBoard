@@ -59,8 +59,7 @@ export const ManageWorkspaceModal: React.FC<ManageWorkspaceModalProps> = ({
       memberCount: members.length,
     };
     onUpdateWorkspace(updated);
-    setSuccessMessage('Workspace settings updated!');
-    setTimeout(() => setSuccessMessage(null), 2500);
+    onClose();
   };
 
   const handleInviteMember = (e: React.FormEvent) => {
