@@ -45,7 +45,7 @@ const PRIORITY_BADGES: Record<TaskPriority, { label: string; bg: string; text: s
   },
 };
 
-export const TaskCard: React.FC<TaskCardProps> = ({
+export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   task,
   onEdit,
   onDelete,
@@ -218,4 +218,4 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       </div>
     </div>
   );
-};
+});

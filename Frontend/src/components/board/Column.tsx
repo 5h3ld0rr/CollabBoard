@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, MoreHorizontal } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { TaskCard } from './TaskCard';
 import type { Task, TaskStatus } from '../../types';
 
@@ -57,7 +57,7 @@ export const Column: React.FC<ColumnProps> = ({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`flex flex-col rounded-2xl bg-slate-900/60 border transition-all duration-200 min-w-[300px] sm:min-w-[340px] max-w-[380px] flex-1 p-4 shadow-sm ${
+      className={`flex flex-col rounded-2xl bg-slate-900/60 border transition-all duration-200 min-w-75 sm:min-w-85 max-w-95 flex-1 p-4 shadow-sm ${
         isDragOver
           ? 'border-indigo-500 bg-slate-900/90 ring-2 ring-indigo-500/20'
           : 'border-slate-800/80 hover:border-slate-700/80'
@@ -75,25 +75,17 @@ export const Column: React.FC<ColumnProps> = ({
           </span>
         </div>
 
-        <div className="flex items-center space-x-1">
-          <button
-            onClick={() => onAddTask(status)}
-            title={`Add task to ${title}`}
-            className="p-1 rounded-lg bg-slate-800/70 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-700/50 transition"
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
-          <button
-            aria-label="Column options"
-            className="p-1 rounded-lg hover:bg-slate-800 text-slate-500 hover:text-slate-300 transition"
-          >
-            <MoreHorizontal className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        <button
+          onClick={() => onAddTask(status)}
+          title={`Add task to ${title}`}
+          className="p-1 rounded-lg bg-slate-800/70 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-700/50 transition"
+        >
+          <Plus className="w-3.5 h-3.5" />
+        </button>
       </div>
 
       {/* Task Cards List */}
-      <div className="flex-1 space-y-3 overflow-y-auto pr-0.5 min-h-[150px]">
+      <div className="flex-1 space-y-3 overflow-y-auto pr-0.5 min-h-37.5">
         {tasks.length === 0 ? (
           <div
             onClick={() => onAddTask(status)}
@@ -116,14 +108,6 @@ export const Column: React.FC<ColumnProps> = ({
         )}
       </div>
 
-      {/* Column Footer Quick Add Trigger */}
-      <button
-        onClick={() => onAddTask(status)}
-        className="mt-3 w-full py-2 rounded-xl border border-transparent hover:border-slate-800 hover:bg-slate-800/50 text-xs font-medium text-slate-400 hover:text-slate-200 transition flex items-center justify-center space-x-1.5"
-      >
-        <Plus className="w-3.5 h-3.5" />
-        <span>Add task</span>
-      </button>
     </div>
   );
 };

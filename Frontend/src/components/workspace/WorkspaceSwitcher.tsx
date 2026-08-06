@@ -14,7 +14,7 @@ interface WorkspaceSwitcherProps {
   currentWorkspace: Workspace;
   onSelectWorkspace: (workspace: Workspace) => void;
   onOpenCreateWorkspace: () => void;
-  onOpenManageWorkspace: () => void;
+  onOpenManageWorkspace: (workspace?: Workspace) => void;
 }
 
 export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
@@ -43,7 +43,7 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
       {/* Switcher Pill Button */}
       <button
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-slate-700 text-xs text-slate-200 transition shadow-sm active:scale-98"
+        className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-slate-700 text-xs text-slate-200 transition shadow-sm active:scale-98 cursor-pointer"
       >
         <div
           className={`w-3.5 h-3.5 rounded bg-linear-to-br ${
@@ -52,7 +52,7 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
         >
           <LayoutGrid className="w-2.5 h-2.5 text-white" />
         </div>
-        <span className="font-semibold truncate max-w-[120px] sm:max-w-[160px]">
+        <span className="font-semibold truncate max-w-30 sm:max-w-40">
           {currentWorkspace.name}
         </span>
         {currentWorkspace.role && (
@@ -79,28 +79,33 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
             {workspaces.map((ws) => {
               const isSelected = ws.id === currentWorkspace.id;
               return (
-                <button
+                <div
                   key={ws.id}
                   onClick={() => {
                     onSelectWorkspace(ws);
                     setIsOpen(false);
                   }}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs transition ${
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs transition cursor-pointer group/item ${
                     isSelected
                       ? 'bg-indigo-600/15 border border-indigo-500/30 text-white font-semibold'
                       : 'hover:bg-slate-800/80 text-slate-300 hover:text-white border border-transparent'
                   }`}
                 >
-                  <div className="flex items-center space-x-2.5 truncate">
+                  <div className="flex items-center space-x-2.5 truncate flex-1 min-w-0 pr-2">
                     <div
-                      className={`w-5 h-5 rounded-md bg-linear-to-br ${
+                      className={`w-6 h-6 rounded-lg bg-linear-to-br ${
                         ws.color || 'from-indigo-600 to-violet-600'
                       } flex items-center justify-center shrink-0 shadow-xs`}
                     >
                       <LayoutGrid className="w-3 h-3 text-white" />
                     </div>
-                    <div className="truncate">
-                      <p className="truncate font-medium">{ws.name}</p>
+                    <div className="truncate min-w-0 flex-1">
+                      <div className="flex items-center space-x-1.5">
+                        <p className="truncate font-medium">{ws.name}</p>
+                        {isSelected && (
+                          <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                        )}
+                      </div>
                       <div className="flex items-center space-x-2 text-[10px] text-slate-400 font-normal">
                         <span>{ws.boardCount} boards</span>
                         <span>•</span>
@@ -112,34 +117,32 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
                     </div>
                   </div>
 
-                  {isSelected && (
-                    <Check className="w-4 h-4 text-indigo-400 shrink-0 ml-2" />
-                  )}
-                </button>
+                  {/* Settings Icon inside Workspace Item */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsOpen(false);
+                      onOpenManageWorkspace(ws);
+                    }}
+                    title={`Workspace settings for ${ws.name}`}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/60 transition shrink-0 opacity-70 group-hover/item:opacity-100 cursor-pointer"
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               );
             })}
           </div>
 
-          <div className="pt-2 mt-1 border-t border-slate-800/80 space-y-0.5">
-            {/* Manage Current Workspace Action */}
-            <button
-              onClick={() => {
-                setIsOpen(false);
-                onOpenManageWorkspace();
-              }}
-              className="w-full flex items-center space-x-2 px-3 py-2 rounded-xl text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition text-left"
-            >
-              <Settings className="w-3.5 h-3.5 text-slate-400" />
-              <span>Workspace Settings & Members</span>
-            </button>
-
+          <div className="pt-2 mt-1 border-t border-slate-800/80">
             {/* Create Workspace Action */}
             <button
               onClick={() => {
                 setIsOpen(false);
                 onOpenCreateWorkspace();
               }}
-              className="w-full flex items-center space-x-2 px-3 py-2 rounded-xl text-xs text-indigo-400 hover:bg-indigo-600/10 hover:text-indigo-300 transition text-left font-medium"
+              className="w-full flex items-center space-x-2 px-3 py-2 rounded-xl text-xs text-indigo-400 hover:bg-indigo-600/10 hover:text-indigo-300 transition text-left font-medium cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Create New Workspace</span>

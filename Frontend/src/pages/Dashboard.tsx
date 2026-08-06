@@ -22,6 +22,7 @@ import type { Board, Workspace } from '../types';
 export const Dashboard: React.FC = () => {
   const [workspaces, setWorkspaces] = useState<Workspace[]>(MOCK_WORKSPACES);
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace>(MOCK_WORKSPACES[0]);
+  const [managingWorkspace, setManagingWorkspace] = useState<Workspace>(MOCK_WORKSPACES[0]);
   const [boards, setBoards] = useState<Board[]>(MOCK_BOARDS);
   const [activeTab, setActiveTab] = useState<'all' | 'starred'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -43,6 +44,7 @@ export const Dashboard: React.FC = () => {
   // Workspace actions
   const handleSelectWorkspace = (ws: Workspace) => {
     setCurrentWorkspace(ws);
+    setManagingWorkspace(ws);
     showToast(`Switched to "${ws.name}"`);
   };
 
@@ -93,14 +95,6 @@ export const Dashboard: React.FC = () => {
         return b;
       })
     );
-  };
-
-  const handleDeleteBoard = (boardId: string) => {
-    const target = boards.find((b) => b.id === boardId);
-    setBoards((prev) => prev.filter((b) => b.id !== boardId));
-    if (target) {
-      showToast(`Deleted board "${target.title}"`);
-    }
   };
 
   const handleCreateBoard = (newBoard: Board) => {
@@ -156,7 +150,14 @@ export const Dashboard: React.FC = () => {
         currentWorkspace={currentWorkspace}
         onSelectWorkspace={handleSelectWorkspace}
         onOpenCreateWorkspace={() => setIsCreateWorkspaceModalOpen(true)}
-        onOpenManageWorkspace={() => setIsManageWorkspaceModalOpen(true)}
+        onOpenManageWorkspace={(ws) => {
+          if (ws) {
+            setManagingWorkspace(ws);
+          } else {
+            setManagingWorkspace(currentWorkspace);
+          }
+          setIsManageWorkspaceModalOpen(true);
+        }}
         onOpenCreateBoard={() => setIsCreateBoardModalOpen(true)}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -283,7 +284,7 @@ export const Dashboard: React.FC = () => {
             {/* Action Card: Create New Board */}
             <button
               onClick={() => setIsCreateBoardModalOpen(true)}
-              className="group rounded-2xl border-2 border-dashed border-slate-800 hover:border-indigo-500/60 bg-slate-900/20 hover:bg-slate-900/50 p-6 flex flex-col items-center justify-center text-center space-y-3 min-h-[260px] transition-all duration-200"
+              className="group rounded-2xl border-2 border-dashed border-slate-800 hover:border-indigo-500/60 bg-slate-900/20 hover:bg-slate-900/50 p-6 flex flex-col items-center justify-center text-center space-y-3 min-h-65 transition-all duration-200"
             >
               <div className="w-12 h-12 rounded-2xl bg-indigo-600/10 group-hover:bg-indigo-600/20 border border-indigo-500/20 group-hover:border-indigo-500/40 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
                 <Plus className="w-6 h-6" />
@@ -292,7 +293,7 @@ export const Dashboard: React.FC = () => {
                 <h4 className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors">
                   Create New Board
                 </h4>
-                <p className="text-xs text-slate-400 mt-1 max-w-[200px]">
+                <p className="text-xs text-slate-400 mt-1 max-w-50">
                   Add a new sprint, feature roadmap, or team board
                 </p>
               </div>
@@ -304,7 +305,6 @@ export const Dashboard: React.FC = () => {
                 key={board.id}
                 board={board}
                 onToggleFavorite={handleToggleFavorite}
-                onDeleteBoard={handleDeleteBoard}
               />
             ))}
           </div>
@@ -370,7 +370,7 @@ export const Dashboard: React.FC = () => {
       <ManageWorkspaceModal
         isOpen={isManageWorkspaceModalOpen}
         onClose={() => setIsManageWorkspaceModalOpen(false)}
-        workspace={currentWorkspace}
+        workspace={managingWorkspace}
         onUpdateWorkspace={handleUpdateWorkspace}
         onDeleteWorkspace={handleDeleteWorkspace}
       />

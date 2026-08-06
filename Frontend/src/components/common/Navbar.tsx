@@ -8,7 +8,6 @@ import {
   WifiOff,
   LogOut,
   User,
-  Settings,
   LayoutGrid,
 } from 'lucide-react';
 import { Logo } from './Logo';
@@ -20,7 +19,7 @@ interface NavbarProps {
   currentWorkspace?: Workspace | string;
   onSelectWorkspace?: (workspace: Workspace) => void;
   onOpenCreateWorkspace?: () => void;
-  onOpenManageWorkspace?: () => void;
+  onOpenManageWorkspace?: (workspace?: Workspace) => void;
   onOpenCreateBoard?: () => void;
   searchQuery?: string;
   onSearchChange?: (q: string) => void;
@@ -201,18 +200,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <User className="w-3.5 h-3.5" />
                     <span>Your Profile</span>
                   </button>
-                  {onOpenManageWorkspace && (
-                    <button
-                      onClick={() => {
-                        setShowProfileMenu(false);
-                        onOpenManageWorkspace();
-                      }}
-                      className="w-full flex items-center space-x-2 px-3 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition text-left"
-                    >
-                      <Settings className="w-3.5 h-3.5" />
-                      <span>Workspace Settings</span>
-                    </button>
-                  )}
                   <button
                     onClick={handleSignOut}
                     className="w-full flex items-center space-x-2 px-3 py-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition text-left"

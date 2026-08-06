@@ -1,24 +1,24 @@
-import React, { useState, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Plus,
   Search,
   CircleDot,
   CheckCircle2,
-  Share2,
-  Users,
+  Settings,
 } from 'lucide-react';
 import { Navbar, AmbientBackground } from '../components/common';
-import { Column, TaskModal, BoardMembersModal } from '../components/board';
+import { Column, TaskModal, BoardSettingsModal } from '../components/board';
 import { MOCK_BOARDS, MOCK_TASKS, MOCK_USERS } from '../data/mockData';
 import type { Board, Task, TaskStatus, User } from '../types';
 
 export const BoardView: React.FC = () => {
   const { boardId } = useParams<{ boardId: string }>();
+  const navigate = useNavigate();
 
   // Find board or fallback to first
-  const currentBoard: Board = useMemo(() => {
+  const initialBoard: Board = useMemo(() => {
     const found = MOCK_BOARDS.find((b) => b.id === boardId);
     return (
       found || {
@@ -44,8 +44,19 @@ export const BoardView: React.FC = () => {
     );
   }, [boardId]);
 
+  // Board reactive state
+  const [boardData, setBoardData] = useState<Board>(initialBoard);
+
+  useEffect(() => {
+    setBoardData(initialBoard);
+  }, [initialBoard]);
+
   // Board members state
-  const [boardMembers, setBoardMembers] = useState<User[]>(currentBoard.members);
+  const [boardMembers, setBoardMembers] = useState<User[]>(boardData.members);
+
+  useEffect(() => {
+    setBoardMembers(boardData.members);
+  }, [boardData.members]);
 
   // Tasks state for this board
   const [tasks, setTasks] = useState<Task[]>(() => {
@@ -56,7 +67,7 @@ export const BoardView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [modalDefaultStatus, setModalDefaultStatus] = useState<TaskStatus>('todo');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -148,9 +159,20 @@ export const BoardView: React.FC = () => {
     });
   };
 
-  const handleUpdateMembers = (updatedMembers: User[]) => {
-    setBoardMembers(updatedMembers);
-    currentBoard.members = updatedMembers;
+  const handleUpdateBoard = (updatedBoard: Board) => {
+    setBoardData(updatedBoard);
+    setBoardMembers(updatedBoard.members);
+    showToast('Board updated successfully');
+  };
+
+  const handleDeleteBoard = (_deletedBoardId: string) => {
+    showToast('Board deleted');
+    navigate('/boards');
+  };
+
+  const handleClearTasks = () => {
+    setTasks([]);
+    showToast('All tasks cleared from board');
   };
 
   return (
@@ -158,7 +180,7 @@ export const BoardView: React.FC = () => {
       <AmbientBackground variant="minimal" />
 
       {/* Top Navbar */}
-      <Navbar currentWorkspace={currentBoard.workspaceName} />
+      <Navbar currentWorkspace={boardData.workspaceName} />
 
       {/* Toast Notification */}
       {toastMessage && (
@@ -183,7 +205,7 @@ export const BoardView: React.FC = () => {
                 <ArrowLeft className="w-4 h-4" />
               </Link>
               <span className="px-2.5 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">
-                {currentBoard.workspaceName}
+                {boardData.workspaceName}
               </span>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center space-x-1">
                 <CircleDot className="w-2.5 h-2.5 animate-pulse" />
@@ -192,54 +214,28 @@ export const BoardView: React.FC = () => {
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              {currentBoard.title}
+              {boardData.title}
             </h1>
             <p className="text-xs sm:text-sm text-slate-400 max-w-2xl">
-              {currentBoard.description}
+              {boardData.description}
             </p>
           </div>
 
           {/* Right Action Tools */}
           <div className="flex items-center space-x-3">
-            {/* Active Members Button & Avatars */}
+            {/* Board Settings Action Button */}
             <button
-              onClick={() => setIsMembersModalOpen(true)}
-              className="flex items-center space-x-2 bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 p-1.5 pr-2.5 rounded-2xl transition shadow-xs group"
-              title="Manage board members"
+              onClick={() => setIsSettingsModalOpen(true)}
+              className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition cursor-pointer"
+              title="Board Settings (General, Members, Danger Zone)"
             >
-              <div className="flex items-center -space-x-1.5">
-                {boardMembers.map((member) => (
-                  <div
-                    key={member.id}
-                    title={`${member.name} (${member.boardRole || 'Editor'})`}
-                    className={`w-7 h-7 rounded-lg ${
-                      member.color || 'bg-indigo-600'
-                    } text-white font-bold text-[10px] flex items-center justify-center ring-2 ring-slate-950 shadow-sm`}
-                  >
-                    {member.initials}
-                  </div>
-                ))}
-              </div>
-              <div className="flex items-center space-x-1 text-xs font-semibold text-slate-300 group-hover:text-white">
-                <Users className="w-3.5 h-3.5 text-indigo-400" />
-                <span className="hidden sm:inline">Members</span>
-                <span className="text-[10px] font-mono text-slate-400">({boardMembers.length})</span>
-              </div>
-            </button>
-
-            {/* Share / Invite Action */}
-            <button
-              onClick={() => setIsMembersModalOpen(true)}
-              className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition"
-              title="Invite collaborators"
-            >
-              <Share2 className="w-4 h-4" />
+              <Settings className="w-4 h-4" />
             </button>
 
             {/* Create Task Button */}
             <button
               onClick={() => handleOpenCreateTask('todo')}
-              className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 hover:shadow-indigo-500/20 transition-all active:scale-95"
+              className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 hover:shadow-indigo-500/20 transition-all active:scale-95 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Add Task</span>
@@ -338,17 +334,19 @@ export const BoardView: React.FC = () => {
         onClose={() => setIsModalOpen(false)}
         initialTask={editingTask}
         defaultStatus={modalDefaultStatus}
-        boardId={currentBoard.id}
+        boardId={boardData.id}
         availableAssignees={boardMembers}
         onSaveTask={handleSaveTask}
       />
 
-      {/* Board Members Management Modal */}
-      <BoardMembersModal
-        isOpen={isMembersModalOpen}
-        onClose={() => setIsMembersModalOpen(false)}
-        board={{ ...currentBoard, members: boardMembers }}
-        onUpdateMembers={handleUpdateMembers}
+      {/* Board Settings Modal (General, Members, Danger Zone) */}
+      <BoardSettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        board={boardData}
+        onUpdateBoard={handleUpdateBoard}
+        onDeleteBoard={handleDeleteBoard}
+        onClearTasks={handleClearTasks}
       />
     </div>
   );

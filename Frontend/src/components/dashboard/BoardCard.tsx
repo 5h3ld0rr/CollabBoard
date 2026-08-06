@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Star,
@@ -7,25 +7,19 @@ import {
   WifiOff,
   Layers,
   ShieldCheck,
-  MoreVertical,
-  Trash2,
-  ExternalLink,
 } from 'lucide-react';
 import type { Board } from '../../types';
 
 interface BoardCardProps {
   board: Board;
   onToggleFavorite: (id: string) => void;
-  onDeleteBoard?: (id: string) => void;
 }
 
-export const BoardCard: React.FC<BoardCardProps> = ({
+export const BoardCard: React.FC<BoardCardProps> = React.memo(({
   board,
   onToggleFavorite,
-  onDeleteBoard,
 }) => {
   const navigate = useNavigate();
-  const [showMenu, setShowMenu] = useState(false);
 
   // Icon Resolver
   const renderIcon = (iconName: string) => {
@@ -56,24 +50,13 @@ export const BoardCard: React.FC<BoardCardProps> = ({
     onToggleFavorite(board.id);
   };
 
-  const handleMenuClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowMenu((prev) => !prev);
-  };
-
-  const handleDelete = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowMenu(false);
-    onDeleteBoard?.(board.id);
-  };
-
   return (
     <div
       onClick={handleCardClick}
       className="group relative rounded-2xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 hover:border-indigo-500/40 p-5 sm:p-6 transition-all duration-200 shadow-sm hover:shadow-xl hover:shadow-indigo-950/20 cursor-pointer flex flex-col justify-between"
     >
       <div>
-        {/* Card Header: Icon, Tags & Favorite/Menu */}
+        {/* Card Header: Icon, Tags & Favorite */}
         <div className="flex items-start justify-between gap-3 mb-4">
           <div className="flex items-center space-x-3">
             <div
@@ -91,57 +74,21 @@ export const BoardCard: React.FC<BoardCardProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center space-x-1">
-            <button
-              onClick={handleStarClick}
-              title={board.isFavorite ? 'Remove from starred' : 'Star this board'}
-              className={`p-1.5 rounded-lg border transition-all ${
-                board.isFavorite
-                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
-                  : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:text-slate-200'
+          <button
+            onClick={handleStarClick}
+            title={board.isFavorite ? 'Remove from starred' : 'Star this board'}
+            className={`p-1.5 rounded-lg border transition-all ${
+              board.isFavorite
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
+                : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Star
+              className={`w-4 h-4 ${
+                board.isFavorite ? 'fill-amber-400 text-amber-400' : ''
               }`}
-            >
-              <Star
-                className={`w-4 h-4 ${
-                  board.isFavorite ? 'fill-amber-400 text-amber-400' : ''
-                }`}
-              />
-            </button>
-
-            <div className="relative">
-              <button
-                onClick={handleMenuClick}
-                className="p-1.5 rounded-lg bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 text-slate-400 hover:text-white transition"
-              >
-                <MoreVertical className="w-4 h-4" />
-              </button>
-
-              {showMenu && (
-                <div className="absolute right-0 mt-1.5 w-36 rounded-xl bg-slate-900 border border-slate-800 shadow-xl py-1 z-30 animate-in fade-in zoom-in-95 duration-100">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowMenu(false);
-                      navigate(`/boards/${board.id}`);
-                    }}
-                    className="w-full flex items-center space-x-2 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800 hover:text-white"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span>Open Board</span>
-                  </button>
-                  {onDeleteBoard && (
-                    <button
-                      onClick={handleDelete}
-                      className="w-full flex items-center space-x-2 px-3 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Delete Board</span>
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
+            />
+          </button>
         </div>
 
         {/* Description */}
@@ -200,4 +147,4 @@ export const BoardCard: React.FC<BoardCardProps> = ({
       </div>
     </div>
   );
-};
+});
