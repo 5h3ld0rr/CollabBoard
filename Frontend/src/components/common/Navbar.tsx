@@ -191,7 +191,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <p className="text-[11px] text-slate-400 truncate">alex.chen@collabboard.io</p>
                 </div>
                 <div className="space-y-0.5 text-xs">
-                  <button className="w-full flex items-center space-x-2 px-3 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition text-left">
+                  <button
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      navigate('/profile');
+                    }}
+                    className="w-full flex items-center space-x-2 px-3 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition text-left cursor-pointer"
+                  >
                     <User className="w-3.5 h-3.5" />
                     <span>Your Profile</span>
                   </button>
