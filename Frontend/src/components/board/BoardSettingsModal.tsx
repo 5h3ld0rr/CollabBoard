@@ -20,7 +20,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import type { Board, User } from '../../types';
-import { MOCK_USERS } from '../../data/mockData';
+import { MOCK_USERS, COLOR_OPTIONS } from '../../data/mockData';
 
 interface BoardSettingsModalProps {
   isOpen: boolean;
@@ -31,14 +31,6 @@ interface BoardSettingsModalProps {
   onClearTasks?: () => void;
   initialTab?: 'general' | 'members' | 'danger';
 }
-
-const COLOR_OPTIONS = [
-  { label: 'Indigo & Violet', value: 'from-indigo-600 to-violet-600' },
-  { label: 'Emerald & Teal', value: 'from-emerald-600 to-teal-600' },
-  { label: 'Fuchsia & Pink', value: 'from-fuchsia-600 to-pink-600' },
-  { label: 'Amber & Orange', value: 'from-amber-600 to-orange-600' },
-  { label: 'Sky & Cyan', value: 'from-sky-600 to-cyan-600' },
-];
 
 const ICON_OPTIONS = [
   { name: 'Kanban', icon: Kanban, label: 'Board' },

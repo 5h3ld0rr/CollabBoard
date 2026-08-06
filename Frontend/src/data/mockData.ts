@@ -381,3 +381,126 @@ export const MOCK_TASKS: Record<string, Task[]> = {
     },
   ],
 };
+
+/* ==========================================================================
+   User Profile & Identity Mock Data
+   ========================================================================== */
+
+export const MOCK_CURRENT_USER: User = MOCK_USERS[0];
+
+export const MOCK_USER_PROFILE = {
+  name: 'Alex Chen',
+  username: 'alexchen',
+  email: 'alex.chen@collabboard.io',
+  role: 'Principal Software Architect',
+  company: 'CollabBoard Engine',
+  location: 'San Francisco, CA',
+  bio: 'Specializing in real-time collaborative systems, CRDT state sync, and high-performance WebGL & React interfaces.',
+  memberSince: 'Member since Oct 2024',
+};
+
+/* ==========================================================================
+   User Preferences Mock Data
+   ========================================================================== */
+
+export const MOCK_USER_PREFERENCES = {
+  emailTaskAssignment: true,
+  emailWeeklyDigest: false,
+  desktopNotifications: true,
+  soundEffects: true,
+  compactBoardView: false,
+  offlineAutoSync: true,
+};
+
+/* ==========================================================================
+   Active Security Sessions Mock Data
+   ========================================================================== */
+
+export const MOCK_ACTIVE_SESSIONS = [
+  {
+    id: 'sess-1',
+    device: 'Windows 11 • Chrome 124',
+    ip: '198.51.100.24',
+    location: 'San Francisco, CA',
+    lastActive: 'Active Now',
+    isCurrent: true,
+    iconType: 'laptop' as const,
+  },
+  {
+    id: 'sess-2',
+    device: 'iPhone 15 Pro • Mobile Safari',
+    ip: '198.51.100.24',
+    location: 'San Francisco, CA',
+    lastActive: '3 hours ago',
+    isCurrent: false,
+    iconType: 'smartphone' as const,
+  },
+];
+
+/* ==========================================================================
+   Subscription & Pricing Plans Mock Data
+   ========================================================================== */
+
+export const MOCK_SUBSCRIPTION_PLANS = [
+  {
+    id: 'basic' as const,
+    name: 'Basic Plan',
+    tierLabel: 'Starter',
+    badge: 'Free Forever',
+    monthlyPrice: 0,
+    annualPricePerMonth: 0,
+    annualTotal: 0,
+    description: 'Ideal for individual developers, solo project managers, and personal side projects.',
+    features: [
+      'Up to 3 Workspaces',
+      '10 Boards per workspace',
+      '5 Collaborators per board',
+      'Standard WebSocket cloud sync',
+      'Community support & issue tracker',
+    ],
+  },
+  {
+    id: 'pro' as const,
+    name: 'Pro Plan',
+    tierLabel: 'Professional',
+    badge: 'Most Popular',
+    isPopular: true,
+    monthlyPrice: 12,
+    annualPricePerMonth: 9.6,
+    annualTotal: 115.2,
+    description: 'Engineered for high-velocity software engineering teams, agencies, and cross-functional collaboration.',
+    features: [
+      'Unlimited Workspaces & Boards',
+      'Unlimited Team Members & Guests',
+      'Real-Time CRDT State Sync Engine',
+      'Custom Roles & Granular Permissions',
+      'Custom Workspace Themes & Gradients',
+      '24/7 Priority Engineer Support',
+    ],
+  },
+];
+
+/* ==========================================================================
+   Billing Information Mock Data
+   ========================================================================== */
+
+export const MOCK_BILLING_INFO = {
+  paymentCard: 'Mastercard •••• 4242',
+  cardBrand: 'Mastercard',
+  cardExpiry: '11/28',
+  nextInvoiceDate: 'September 22, 2026',
+  monthlyRate: '$12.00 USD',
+  annualRate: '$115.20 USD',
+};
+
+/* ==========================================================================
+   Common Gradient Color Options
+   ========================================================================== */
+
+export const COLOR_OPTIONS = [
+  { label: 'Indigo & Violet', value: 'from-indigo-600 to-violet-600' },
+  { label: 'Emerald & Teal', value: 'from-emerald-600 to-teal-600' },
+  { label: 'Fuchsia & Pink', value: 'from-fuchsia-600 to-pink-600' },
+  { label: 'Amber & Orange', value: 'from-amber-600 to-orange-600' },
+  { label: 'Sky & Cyan', value: 'from-sky-600 to-cyan-600' },
+];

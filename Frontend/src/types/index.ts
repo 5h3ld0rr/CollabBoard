@@ -58,3 +58,52 @@ export interface Workspace {
   role?: 'Owner' | 'Admin' | 'Member';
   members?: User[];
 }
+
+export interface UserProfile {
+  name: string;
+  username: string;
+  email: string;
+  role: string;
+  company: string;
+  location: string;
+  bio: string;
+  memberSince?: string;
+}
+
+export interface UserPreferences {
+  emailTaskAssignment: boolean;
+  emailWeeklyDigest: boolean;
+  desktopNotifications: boolean;
+  soundEffects: boolean;
+  compactBoardView: boolean;
+  offlineAutoSync: boolean;
+}
+
+export interface ActiveSession {
+  id: string;
+  device: string;
+  browser: string;
+  ip: string;
+  location: string;
+  lastActive: string;
+  isCurrent: boolean;
+  iconType: 'laptop' | 'smartphone';
+}
+
+export interface SubscriptionPlanItem {
+  id: 'basic' | 'pro';
+  name: string;
+  tierLabel: string;
+  monthlyPrice: number;
+  annualPricePerMonth: number;
+  annualTotal: number;
+  description: string;
+  isPopular?: boolean;
+  badge?: string;
+  features: string[];
+}
+
+export interface ColorOption {
+  label: string;
+  value: string;
+}

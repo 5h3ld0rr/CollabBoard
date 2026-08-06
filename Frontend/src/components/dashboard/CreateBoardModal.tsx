@@ -9,7 +9,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import type { Board, Workspace } from '../../types';
-import { MOCK_USERS } from '../../data/mockData';
+import { MOCK_USERS, COLOR_OPTIONS } from '../../data/mockData';
 
 interface CreateBoardModalProps {
   isOpen: boolean;
@@ -17,14 +17,6 @@ interface CreateBoardModalProps {
   workspaces: Workspace[];
   onCreateBoard: (board: Board) => void;
 }
-
-const COLOR_OPTIONS = [
-  { label: 'Indigo & Violet', value: 'from-indigo-600 to-violet-600' },
-  { label: 'Emerald & Teal', value: 'from-emerald-600 to-teal-600' },
-  { label: 'Fuchsia & Pink', value: 'from-fuchsia-600 to-pink-600' },
-  { label: 'Amber & Orange', value: 'from-amber-600 to-orange-600' },
-  { label: 'Sky & Cyan', value: 'from-sky-600 to-cyan-600' },
-];
 
 const ICON_OPTIONS = [
   { name: 'Kanban', icon: <Kanban className="w-4 h-4" /> },

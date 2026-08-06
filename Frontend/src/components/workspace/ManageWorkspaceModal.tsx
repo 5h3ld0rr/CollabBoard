@@ -9,7 +9,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import type { Workspace, User } from '../../types';
-import { MOCK_USERS } from '../../data/mockData';
+import { MOCK_USERS, COLOR_OPTIONS } from '../../data/mockData';
 
 interface ManageWorkspaceModalProps {
   isOpen: boolean;
@@ -18,14 +18,6 @@ interface ManageWorkspaceModalProps {
   onUpdateWorkspace: (updated: Workspace) => void;
   onDeleteWorkspace?: (id: string) => void;
 }
-
-const COLOR_OPTIONS = [
-  { label: 'Indigo & Violet', value: 'from-indigo-600 to-violet-600' },
-  { label: 'Emerald & Teal', value: 'from-emerald-600 to-teal-600' },
-  { label: 'Fuchsia & Pink', value: 'from-fuchsia-600 to-pink-600' },
-  { label: 'Amber & Orange', value: 'from-amber-600 to-orange-600' },
-  { label: 'Sky & Cyan', value: 'from-sky-600 to-cyan-600' },
-];
 
 export const ManageWorkspaceModal: React.FC<ManageWorkspaceModalProps> = ({
   isOpen,

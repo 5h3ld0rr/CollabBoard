@@ -50,17 +50,17 @@ export const Button: React.FC<ButtonProps> = ({
   disabled,
   ...rest
 }) => {
-  const baseClasses = `inline-flex items-center justify-center space-x-2 font-semibold transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none group select-none ${variantStyles[variant]} ${sizeStyles[size]} ${className}`;
+  const baseClasses = `inline-flex items-center justify-center gap-2 font-semibold transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none group select-none whitespace-nowrap ${variantStyles[variant]} ${sizeStyles[size]} ${className}`;
 
   const content = (
     <>
       {isLoading ? (
         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0" />
       ) : (
-        icon && <span className="shrink-0">{icon}</span>
+        icon && <span className="shrink-0 inline-flex items-center justify-center">{icon}</span>
       )}
-      {children && <span>{children}</span>}
-      {!isLoading && iconRight && <span className="shrink-0">{iconRight}</span>}
+      {children}
+      {!isLoading && iconRight && <span className="shrink-0 inline-flex items-center justify-center">{iconRight}</span>}
     </>
   );
 

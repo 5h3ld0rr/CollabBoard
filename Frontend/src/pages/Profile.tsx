@@ -4,7 +4,6 @@ import {
   User as UserIcon,
   Mail,
   MapPin,
-  Globe,
   Building2,
   CheckCircle2,
   ShieldCheck,
@@ -21,60 +20,57 @@ import {
   ChevronRight,
   Layers,
   Zap,
-  Code2,
-  AtSign,
+  Crown,
+  CreditCard,
 } from 'lucide-react';
 import { Navbar, AmbientBackground, Button } from '../components/common';
-import { MOCK_USERS, MOCK_WORKSPACES, MOCK_TASKS, MOCK_BOARDS } from '../data/mockData';
+import {
+  MOCK_WORKSPACES,
+  MOCK_TASKS,
+  MOCK_BOARDS,
+  MOCK_CURRENT_USER,
+  MOCK_USER_PROFILE,
+  MOCK_USER_PREFERENCES,
+  MOCK_ACTIVE_SESSIONS,
+  MOCK_SUBSCRIPTION_PLANS,
+  MOCK_BILLING_INFO,
+} from '../data/mockData';
 import type { Task, TaskStatus } from '../types';
 
-type ProfileTab = 'overview' | 'workspaces' | 'tasks' | 'preferences' | 'security';
-
-interface AvatarGradient {
-  id: string;
-  name: string;
-  gradient: string;
-}
-
-const AVATAR_GRADIENTS: AvatarGradient[] = [
-  { id: 'indigo', name: 'Indigo Dream', gradient: 'from-indigo-600 to-violet-600' },
-  { id: 'cyan', name: 'Ocean Cyan', gradient: 'from-cyan-500 to-blue-600' },
-  { id: 'emerald', name: 'Emerald Forest', gradient: 'from-emerald-500 to-teal-600' },
-  { id: 'rose', name: 'Rose Sunset', gradient: 'from-rose-500 to-pink-600' },
-  { id: 'amber', name: 'Amber Flare', gradient: 'from-amber-500 to-orange-600' },
-];
+type ProfileTab = 'overview' | 'workspaces' | 'subscription' | 'tasks' | 'preferences' | 'security';
 
 export const Profile: React.FC = () => {
   const navigate = useNavigate();
-  const currentUser = MOCK_USERS[0]; // Alex Chen
+  const currentUser = MOCK_CURRENT_USER;
 
   // Active tab state
   const [activeTab, setActiveTab] = useState<ProfileTab>('overview');
 
-  // Form State
-  const [name, setName] = useState(currentUser.name);
-  const [username, setUsername] = useState('alexchen');
-  const [email, setEmail] = useState(currentUser.email);
-  const [role, setRole] = useState('Principal Software Architect');
-  const [company, setCompany] = useState('CollabBoard Engine');
-  const [location, setLocation] = useState('San Francisco, CA');
-  const [bio, setBio] = useState(
-    'Specializing in real-time collaborative systems, CRDT state sync, and high-performance WebGL & React interfaces.'
-  );
-  const [website, setWebsite] = useState('https://alexchen.dev');
-  const [githubUser, setGithubUser] = useState('alexchen');
-  const [twitterUser, setTwitterUser] = useState('alexchen_dev');
-  const [selectedGradient, setSelectedGradient] = useState<string>('from-indigo-600 to-violet-600');
+  // Saved & Form State
+  const [savedProfile, setSavedProfile] = useState(MOCK_USER_PROFILE);
+
+  const [name, setName] = useState(savedProfile.name);
+  const [username, setUsername] = useState(savedProfile.username);
+  const [email, setEmail] = useState(savedProfile.email);
+  const [role, setRole] = useState(savedProfile.role);
+  const [company, setCompany] = useState(savedProfile.company);
+  const [location, setLocation] = useState(savedProfile.location);
+  const [bio, setBio] = useState(savedProfile.bio);
+  const [subscriptionPlan, setSubscriptionPlan] = useState<'basic' | 'pro'>('pro');
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+
+  // Check if any personal info field has unsaved changes
+  const isProfileDirty =
+    name !== savedProfile.name ||
+    username !== savedProfile.username ||
+    email !== savedProfile.email ||
+    role !== savedProfile.role ||
+    company !== savedProfile.company ||
+    location !== savedProfile.location ||
+    bio !== savedProfile.bio;
 
   // Preferences state
-  const [preferences, setPreferences] = useState({
-    emailTaskAssignment: true,
-    emailWeeklyDigest: false,
-    desktopNotifications: true,
-    soundEffects: true,
-    compactBoardView: false,
-    offlineAutoSync: true,
-  });
+  const [preferences, setPreferences] = useState(MOCK_USER_PREFERENCES);
 
   // Security state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -100,7 +96,28 @@ export const Profile: React.FC = () => {
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
+    setSavedProfile({
+      name,
+      username,
+      email,
+      role,
+      company,
+      location,
+      bio,
+      memberSince: savedProfile.memberSince,
+    });
     showToast('Profile details updated successfully!');
+  };
+
+  const handleCancelProfile = () => {
+    setName(savedProfile.name);
+    setUsername(savedProfile.username);
+    setEmail(savedProfile.email);
+    setRole(savedProfile.role);
+    setCompany(savedProfile.company);
+    setLocation(savedProfile.location);
+    setBio(savedProfile.bio);
+    showToast('Changes discarded', 'info');
   };
 
   const handlePreferenceToggle = (key: keyof typeof preferences) => {
@@ -209,7 +226,7 @@ export const Profile: React.FC = () => {
               {/* Avatar with Gradient selector indicator */}
               <div className="relative group">
                 <div
-                  className={`w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-linear-to-br ${selectedGradient} flex items-center justify-center text-white font-black text-2xl sm:text-3xl shadow-xl shadow-indigo-950/40 ring-4 ring-slate-800/80 transition-transform duration-300 group-hover:scale-105`}
+                  className={`w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-linear-to-br ${currentUser.color || 'from-indigo-600 to-violet-600'} flex items-center justify-center text-white font-black text-2xl sm:text-3xl shadow-xl shadow-indigo-950/40 ring-4 ring-slate-800/80 transition-transform duration-300 group-hover:scale-105`}
                 >
                   {getInitials(name)}
                 </div>
@@ -250,30 +267,6 @@ export const Profile: React.FC = () => {
                   </span>
                 </div>
               </div>
-            </div>
-
-            {/* Quick Action Badges */}
-            <div className="flex items-center gap-2.5 self-start md:self-center">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  navigator.clipboard.writeText(window.location.href);
-                  showToast('Profile link copied to clipboard!');
-                }}
-              >
-                Share Profile
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => {
-                  setActiveTab('overview');
-                  showToast('Ready to edit profile fields below', 'info');
-                }}
-              >
-                Edit Info
-              </Button>
             </div>
           </div>
 
@@ -348,6 +341,18 @@ export const Profile: React.FC = () => {
           </button>
 
           <button
+            onClick={() => setActiveTab('subscription')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === 'subscription'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-950/60'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <Crown className="w-3.5 h-3.5 text-amber-400" />
+            <span>Subscription & Plans</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('tasks')}
             className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'tasks'
@@ -387,221 +392,360 @@ export const Profile: React.FC = () => {
         {/* Tab 1: Overview & Personal Info */}
         {activeTab === 'overview' && (
           <form onSubmit={handleSaveProfile} className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
-              {/* Left 2 Cols: Form Inputs */}
-              <div className="lg:col-span-2 space-y-6">
-                
-                {/* General Information Card */}
-                <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-5">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                    <div>
-                      <h2 className="text-sm font-bold text-white">General Information</h2>
-                      <p className="text-xs text-slate-400">Update your public identity and profile details</p>
-                    </div>
-                    <span className="px-2 py-0.5 text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-md">
-                      Live Editable
-                    </span>
-                  </div>
+            {/* General Information Card */}
+            <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-5">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div>
+                  <h2 className="text-sm font-bold text-white">General Information</h2>
+                  <p className="text-xs text-slate-400">Update your public identity and profile details</p>
+                </div>
+              </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-slate-300">Full Name</label>
-                      <input
-                        type="text"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        required
-                        className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                      />
-                    </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-300">Full Name</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
+                  />
+                </div>
 
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-slate-300">Username / Handle</label>
-                      <div className="relative">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-500">@</span>
-                        <input
-                          type="text"
-                          value={username}
-                          onChange={(e) => setUsername(e.target.value)}
-                          required
-                          className="w-full pl-8 pr-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-slate-300">Primary Email</label>
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                        className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-slate-300">Job Title / Role</label>
-                      <input
-                        type="text"
-                        value={role}
-                        onChange={(e) => setRole(e.target.value)}
-                        className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-slate-300">Company / Organization</label>
-                      <input
-                        type="text"
-                        value={company}
-                        onChange={(e) => setCompany(e.target.value)}
-                        className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-slate-300">Location / Timezone</label>
-                      <input
-                        type="text"
-                        value={location}
-                        onChange={(e) => setLocation(e.target.value)}
-                        className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-slate-300">Bio / About Me</label>
-                    <textarea
-                      rows={3}
-                      value={bio}
-                      onChange={(e) => setBio(e.target.value)}
-                      className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition resize-none"
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-300">Username / Handle</label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-500">@</span>
+                    <input
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      required
+                      className="w-full pl-8 pr-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
                     />
                   </div>
                 </div>
 
-                {/* Social & Web Links */}
-                <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-4">
-                  <div className="pb-2 border-b border-slate-800">
-                    <h2 className="text-sm font-bold text-white">Social & Profiles</h2>
-                    <p className="text-xs text-slate-400">Connect your external developer and portfolio accounts</p>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-slate-300 flex items-center space-x-1.5">
-                        <Globe className="w-3.5 h-3.5 text-indigo-400" />
-                        <span>Website</span>
-                      </label>
-                      <input
-                        type="url"
-                        value={website}
-                        onChange={(e) => setWebsite(e.target.value)}
-                        className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-slate-300 flex items-center space-x-1.5">
-                        <Code2 className="w-3.5 h-3.5 text-slate-300" />
-                        <span>GitHub</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={githubUser}
-                        onChange={(e) => setGithubUser(e.target.value)}
-                        className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-slate-300 flex items-center space-x-1.5">
-                        <AtSign className="w-3.5 h-3.5 text-sky-400" />
-                        <span>Twitter / X</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={twitterUser}
-                        onChange={(e) => setTwitterUser(e.target.value)}
-                        className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition"
-                      />
-                    </div>
-                  </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-300">Primary Email</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
+                  />
                 </div>
 
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-300">Job Title / Role</label>
+                  <input
+                    type="text"
+                    value={role}
+                    onChange={(e) => setRole(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-300">Company / Organization</label>
+                  <input
+                    type="text"
+                    value={company}
+                    onChange={(e) => setCompany(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-300">Location / Timezone</label>
+                  <input
+                    type="text"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
+                  />
+                </div>
               </div>
 
-              {/* Right 1 Col: Avatar Customizer & Card */}
-              <div className="space-y-6">
-                
-                {/* Avatar Palette Picker */}
-                <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-4">
-                  <h3 className="text-sm font-bold text-white">Avatar Gradient Theme</h3>
-                  <p className="text-xs text-slate-400">Choose the signature gradient for your avatar and active indicators</p>
-
-                  <div className="grid grid-cols-1 gap-2.5">
-                    {AVATAR_GRADIENTS.map((item) => {
-                      const isSelected = selectedGradient === item.gradient;
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => setSelectedGradient(item.gradient)}
-                          className={`w-full flex items-center justify-between p-2.5 rounded-2xl border transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-slate-800/90 border-indigo-500 ring-1 ring-indigo-500/50'
-                              : 'bg-slate-950/60 border-slate-800/80 hover:border-slate-700'
-                          }`}
-                        >
-                          <div className="flex items-center space-x-3">
-                            <div className={`w-7 h-7 rounded-lg bg-linear-to-br ${item.gradient} shadow-sm`} />
-                            <span className="text-xs font-medium text-slate-200">{item.name}</span>
-                          </div>
-                          {isSelected && <Check className="w-4 h-4 text-indigo-400" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Account Status Card */}
-                <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-4">
-                  <h3 className="text-sm font-bold text-white">Account Status</h3>
-                  
-                  <div className="space-y-3 text-xs">
-                    <div className="flex items-center justify-between py-2 border-b border-slate-800/60">
-                      <span className="text-slate-400">Plan Tier</span>
-                      <span className="font-semibold text-indigo-400">Enterprise Pro</span>
-                    </div>
-                    <div className="flex items-center justify-between py-2 border-b border-slate-800/60">
-                      <span className="text-slate-400">WebSocket Node</span>
-                      <span className="font-mono text-emerald-400 text-[11px]">us-west-prod-01</span>
-                    </div>
-                    <div className="flex items-center justify-between py-2">
-                      <span className="text-slate-400">CRDT Sync Engine</span>
-                      <span className="font-medium text-slate-200">v2.4 Optimistic</span>
-                    </div>
-                  </div>
-                </div>
-
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-300">Bio / About Me</label>
+                <textarea
+                  rows={3}
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition resize-none"
+                />
               </div>
-
             </div>
 
-            {/* Save Button */}
-            <div className="flex items-center justify-end space-x-3 pt-4">
-              <Button type="button" variant="secondary" onClick={() => navigate('/boards')}>
-                Cancel
-              </Button>
-              <Button type="submit" variant="primary" className="space-x-2">
-                <Save className="w-4 h-4" />
-                <span>Save Profile Changes</span>
-              </Button>
-            </div>
+            {/* Save & Cancel Buttons - Visible only when form is modified */}
+            {isProfileDirty && (
+              <div className="flex items-center justify-end space-x-3 pt-4 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                <Button type="button" variant="secondary" onClick={handleCancelProfile}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="primary" icon={<Save className="w-4 h-4" />}>
+                  Save Profile Changes
+                </Button>
+              </div>
+            )}
           </form>
+        )}
+
+        {/* Tab: Subscription & Plans */}
+        {activeTab === 'subscription' && (
+          <div className="space-y-6">
+            {/* Header Banner */}
+            <div className="p-6 sm:p-8 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl">
+              <div className="flex items-center space-x-2">
+                <Crown className="w-5 h-5 text-amber-400" />
+                <h2 className="text-lg font-bold text-white">Subscription & Plans</h2>
+                <span
+                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                    subscriptionPlan === 'pro'
+                      ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                      : 'bg-slate-800 text-slate-300 border border-slate-700'
+                  }`}
+                >
+                  {subscriptionPlan === 'pro' ? 'Pro Tier Active' : 'Basic Tier Active'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-1">
+                Choose the plan that suits your collaboration needs. Upgrade, downgrade, or cancel anytime.
+              </p>
+            </div>
+
+            {/* Plans Comparison Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Basic Plan Card */}
+              {(() => {
+                const basicPlan = MOCK_SUBSCRIPTION_PLANS[0];
+                return (
+                  <div
+                    className={`rounded-3xl p-6 sm:p-8 border flex flex-col justify-between transition-all relative ${
+                      subscriptionPlan === 'basic'
+                        ? 'bg-slate-900/90 border-indigo-500 ring-2 ring-indigo-500/30 shadow-xl shadow-indigo-950/30'
+                        : 'bg-slate-900/60 border-slate-800/80 hover:border-slate-700'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                            {basicPlan.tierLabel}
+                          </span>
+                          <h3 className="text-xl font-black text-white mt-0.5">{basicPlan.name}</h3>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+                          {basicPlan.badge}
+                        </span>
+                      </div>
+
+                      <div className="flex items-baseline space-x-1 mb-4">
+                        <span className="text-3xl sm:text-4xl font-black text-white">${basicPlan.monthlyPrice}</span>
+                        <span className="text-xs text-slate-400">/ month</span>
+                      </div>
+
+                      <p className="text-xs text-slate-400 pb-6 mb-6 border-b border-slate-800/80">
+                        {basicPlan.description}
+                      </p>
+
+                      <div className="space-y-3 text-xs text-slate-300">
+                        {basicPlan.features.map((feat, idx) => (
+                          <div key={idx} className="flex items-center space-x-2.5">
+                            <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
+                            <span>{feat}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="pt-8">
+                      {subscriptionPlan === 'basic' ? (
+                        <div className="w-full py-2.5 px-4 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold text-center border border-slate-700">
+                          Current Active Plan
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="w-full"
+                          onClick={() => {
+                            setSubscriptionPlan('basic');
+                            showToast('Switched to Basic Plan', 'info');
+                          }}
+                        >
+                          Downgrade to Basic
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Pro Plan Card */}
+              {(() => {
+                const proPlan = MOCK_SUBSCRIPTION_PLANS[1];
+                return (
+                  <div
+                    className={`rounded-3xl p-6 sm:p-8 border flex flex-col justify-between transition-all relative overflow-hidden ${
+                      subscriptionPlan === 'pro'
+                        ? 'bg-linear-to-b from-indigo-950/40 via-slate-900/90 to-slate-900 border-indigo-500 ring-2 ring-indigo-500/50 shadow-2xl shadow-indigo-950/50'
+                        : 'bg-slate-900/60 border-slate-800/80 hover:border-slate-700'
+                    }`}
+                  >
+                    {/* Popular Pill */}
+                    {proPlan.badge && (
+                      <div className="absolute top-0 right-0 bg-linear-to-l from-indigo-600 to-violet-600 text-white text-[10px] font-black uppercase tracking-wider px-4 py-1 rounded-bl-2xl shadow-md">
+                        {proPlan.badge}
+                      </div>
+                    )}
+
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">
+                            {proPlan.tierLabel}
+                          </span>
+                          <h3 className="text-xl font-black text-white mt-0.5">{proPlan.name}</h3>
+                        </div>
+                      </div>
+
+                      {/* Pricing & Billing Cycle Toggle */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                        <div className="flex items-baseline space-x-1">
+                          <span className="text-3xl sm:text-4xl font-black text-white">
+                            {billingCycle === 'yearly'
+                              ? `$${proPlan.annualPricePerMonth.toFixed(2).replace(/\.00$/, '')}`
+                              : `$${proPlan.monthlyPrice}`}
+                          </span>
+                          <span className="text-xs text-slate-400">
+                            / mo {billingCycle === 'yearly' && '(billed annually)'}
+                          </span>
+                        </div>
+
+                        {/* Billing Switcher */}
+                        <div className="flex items-center space-x-1 p-1 rounded-2xl bg-slate-950/90 border border-slate-800 shrink-0 self-start sm:self-auto">
+                          <button
+                            type="button"
+                            onClick={() => setBillingCycle('monthly')}
+                            className={`px-3 py-1 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                              billingCycle === 'monthly'
+                                ? 'bg-indigo-600 text-white shadow-xs'
+                                : 'text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            Monthly
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setBillingCycle('yearly')}
+                            className={`flex items-center space-x-1.5 px-3 py-1 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                              billingCycle === 'yearly'
+                                ? 'bg-indigo-600 text-white shadow-xs'
+                                : 'text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            <span>Annual</span>
+                            <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              Save 20%
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-slate-400 pb-6 mb-6 border-b border-slate-800/80">
+                        {proPlan.description}
+                      </p>
+
+                      <div className="space-y-3 text-xs text-slate-200">
+                        {proPlan.features.map((feat, idx) => (
+                          <div key={idx} className="flex items-center space-x-2.5">
+                            <Zap className="w-4 h-4 text-indigo-400 shrink-0" />
+                            <span>{feat}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="pt-8">
+                      {subscriptionPlan === 'pro' ? (
+                        <div className="w-full py-2.5 px-4 rounded-xl bg-indigo-600/20 border border-indigo-500/40 text-indigo-300 text-xs font-semibold text-center flex items-center justify-center space-x-2">
+                          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                          <span>Current Active Subscription</span>
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="primary"
+                          className="w-full shadow-xl shadow-indigo-950/60"
+                          icon={<Sparkles className="w-4 h-4" />}
+                          onClick={() => {
+                            setSubscriptionPlan('pro');
+                            showToast('Upgraded to Pro Plan!');
+                          }}
+                        >
+                          Upgrade to Pro ({billingCycle === 'yearly' ? '$115.20/yr' : '$12/mo'})
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Billing & Payment Details Card */}
+            <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-5">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center space-x-2">
+                    <CreditCard className="w-4 h-4 text-indigo-400" />
+                    <span>Billing & Payment Method</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Manage your card details and billing addresses</p>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => showToast('Redirecting to secure billing portal...', 'info')}
+                >
+                  Manage Billing
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/70 space-y-1">
+                  <span className="text-slate-400 text-[11px] block">Payment Card</span>
+                  <div className="flex items-center space-x-2 font-semibold text-white">
+                    <CreditCard className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>{MOCK_BILLING_INFO.paymentCard}</span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 block">Expires {MOCK_BILLING_INFO.cardExpiry}</span>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/70 space-y-1">
+                  <span className="text-slate-400 text-[11px] block">Next Invoice</span>
+                  <p className="font-semibold text-white">{MOCK_BILLING_INFO.nextInvoiceDate}</p>
+                  <span className="text-[10px] text-emerald-400 block font-mono">
+                    {subscriptionPlan === 'pro'
+                      ? billingCycle === 'yearly'
+                        ? MOCK_BILLING_INFO.annualRate
+                        : MOCK_BILLING_INFO.monthlyRate
+                      : '$0.00 USD'}
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/70 space-y-1">
+                  <span className="text-slate-400 text-[11px] block">Active Workspaces</span>
+                  <p className="font-semibold text-white">{MOCK_WORKSPACES.length} of {subscriptionPlan === 'pro' ? 'Unlimited' : '3'}</p>
+                  <span className="text-[10px] text-indigo-400 block font-mono">Status: Healthy</span>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Tab 2: Workspaces */}
@@ -991,9 +1135,8 @@ export const Profile: React.FC = () => {
               </div>
 
               <div className="flex justify-end pt-2">
-                <Button type="submit" variant="primary" size="sm" className="space-x-1.5">
-                  <KeyRound className="w-3.5 h-3.5" />
-                  <span>Update Password</span>
+                <Button type="submit" variant="primary" size="sm" icon={<KeyRound className="w-3.5 h-3.5" />}>
+                  Update Password
                 </Button>
               </div>
             </form>
@@ -1029,41 +1172,50 @@ export const Profile: React.FC = () => {
               </div>
 
               <div className="space-y-3">
-                <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/70 flex items-center justify-between text-xs">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400">
-                      <Laptop className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-slate-200 flex items-center space-x-2">
-                        <span>Windows 11 • Chrome 124</span>
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400">
-                          Current Device
-                        </span>
-                      </p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">San Francisco, CA • IP: 198.51.100.24</p>
-                    </div>
-                  </div>
-                  <span className="text-[11px] font-medium text-emerald-400">Active Now</span>
-                </div>
-
-                <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/70 flex items-center justify-between text-xs">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-2 rounded-xl bg-slate-800 text-slate-400">
-                      <Smartphone className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-slate-200">iPhone 15 Pro • Mobile Safari</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">San Francisco, CA • 3 hours ago</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => showToast('Device logged out')}
-                    className="text-xs text-rose-400 hover:text-rose-300 font-medium cursor-pointer"
+                {MOCK_ACTIVE_SESSIONS.map((session) => (
+                  <div
+                    key={session.id}
+                    className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/70 flex items-center justify-between text-xs"
                   >
-                    Log Out
-                  </button>
-                </div>
+                    <div className="flex items-center space-x-3">
+                      <div
+                        className={`p-2 rounded-xl ${
+                          session.isCurrent ? 'bg-indigo-500/10 text-indigo-400' : 'bg-slate-800 text-slate-400'
+                        }`}
+                      >
+                        {session.iconType === 'laptop' ? (
+                          <Laptop className="w-4 h-4" />
+                        ) : (
+                          <Smartphone className="w-4 h-4" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-slate-200 flex items-center space-x-2">
+                          <span>{session.device}</span>
+                          {session.isCurrent && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400">
+                              Current Device
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          {session.location} • IP: {session.ip}
+                          {!session.isCurrent && ` • ${session.lastActive}`}
+                        </p>
+                      </div>
+                    </div>
+                    {session.isCurrent ? (
+                      <span className="text-[11px] font-medium text-emerald-400">Active Now</span>
+                    ) : (
+                      <button
+                        onClick={() => showToast('Device logged out')}
+                        className="text-xs text-rose-400 hover:text-rose-300 font-medium cursor-pointer"
+                      >
+                        Log Out
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
 
