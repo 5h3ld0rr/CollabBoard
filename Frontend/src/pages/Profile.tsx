@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   User as UserIcon,
   Mail,
@@ -22,9 +22,14 @@ import {
   Crown,
   CreditCard,
   Settings,
-} from 'lucide-react';
-import { Navbar, AmbientBackground, Button, BackButton } from '../components/common';
-import { ManageWorkspaceModal } from '../components/workspace';
+} from "lucide-react";
+import {
+  Navbar,
+  AmbientBackground,
+  Button,
+  BackButton,
+} from "../components/common";
+import { ManageWorkspaceModal } from "../components/workspace";
 import {
   MOCK_WORKSPACES,
   MOCK_TASKS,
@@ -35,17 +40,23 @@ import {
   MOCK_ACTIVE_SESSIONS,
   MOCK_SUBSCRIPTION_PLANS,
   MOCK_BILLING_INFO,
-} from '../data/mockData';
-import type { Task, TaskStatus, Workspace } from '../types';
+} from "../data/mockData";
+import type { Task, TaskStatus, Workspace } from "../types";
 
-type ProfileTab = 'overview' | 'workspaces' | 'subscription' | 'tasks' | 'preferences' | 'security';
+type ProfileTab =
+  | "overview"
+  | "workspaces"
+  | "subscription"
+  | "tasks"
+  | "preferences"
+  | "security";
 
 export const Profile: React.FC = () => {
   const navigate = useNavigate();
   const currentUser = MOCK_CURRENT_USER;
 
   // Active tab state
-  const [activeTab, setActiveTab] = useState<ProfileTab>('overview');
+  const [activeTab, setActiveTab] = useState<ProfileTab>("overview");
 
   // Saved & Form State
   const [savedProfile, setSavedProfile] = useState(MOCK_USER_PROFILE);
@@ -57,8 +68,12 @@ export const Profile: React.FC = () => {
   const [company, setCompany] = useState(savedProfile.company);
   const [location, setLocation] = useState(savedProfile.location);
   const [bio, setBio] = useState(savedProfile.bio);
-  const [subscriptionPlan, setSubscriptionPlan] = useState<'basic' | 'pro'>('pro');
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+  const [subscriptionPlan, setSubscriptionPlan] = useState<"basic" | "pro">(
+    "pro",
+  );
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">(
+    "monthly",
+  );
 
   // Check if any personal info field has unsaved changes
   const isProfileDirty =
@@ -75,25 +90,37 @@ export const Profile: React.FC = () => {
 
   // Workspaces state
   const [workspaces, setWorkspaces] = useState<Workspace[]>(MOCK_WORKSPACES);
-  const [managingWorkspace, setManagingWorkspace] = useState<Workspace | null>(null);
-  const [isManageWorkspaceModalOpen, setIsManageWorkspaceModalOpen] = useState(false);
+  const [managingWorkspace, setManagingWorkspace] = useState<Workspace | null>(
+    null,
+  );
+  const [isManageWorkspaceModalOpen, setIsManageWorkspaceModalOpen] =
+    useState(false);
 
   // Security state
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   // Toast feedback state
-  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' } | null>(null);
+  const [toastMessage, setToastMessage] = useState<{
+    text: string;
+    type: "success" | "info";
+  } | null>(null);
 
   // User tasks state
   const allTasksList: Task[] = Object.values(MOCK_TASKS).flat();
   const [userTasks, setUserTasks] = useState<Task[]>(() =>
-    allTasksList.filter((t) => t.assignee?.id === currentUser.id || t.assignee?.name === currentUser.name)
+    allTasksList.filter(
+      (t) =>
+        t.assignee?.id === currentUser.id ||
+        t.assignee?.name === currentUser.name,
+    ),
   );
-  const [taskFilter, setTaskFilter] = useState<'all' | 'in-progress' | 'todo' | 'done'>('all');
+  const [taskFilter, setTaskFilter] = useState<
+    "all" | "in-progress" | "todo" | "done"
+  >("all");
 
-  const showToast = (text: string, type: 'success' | 'info' = 'success') => {
+  const showToast = (text: string, type: "success" | "info" = "success") => {
     setToastMessage({ text, type });
     setTimeout(() => {
       setToastMessage(null);
@@ -112,7 +139,7 @@ export const Profile: React.FC = () => {
       bio,
       memberSince: savedProfile.memberSince,
     });
-    showToast('Profile details updated successfully!');
+    showToast("Profile details updated successfully!");
   };
 
   const handleCancelProfile = () => {
@@ -123,13 +150,18 @@ export const Profile: React.FC = () => {
     setCompany(savedProfile.company);
     setLocation(savedProfile.location);
     setBio(savedProfile.bio);
-    showToast('Changes discarded', 'info');
+    showToast("Changes discarded", "info");
   };
 
   const handlePreferenceToggle = (key: keyof typeof preferences) => {
     setPreferences((prev) => {
       const next = { ...prev, [key]: !prev[key] };
-      showToast(`Preference updated: ${String(key).replace(/([A-Z])/g, ' $1').toLowerCase()}`, 'info');
+      showToast(
+        `Preference updated: ${String(key)
+          .replace(/([A-Z])/g, " $1")
+          .toLowerCase()}`,
+        "info",
+      );
       return next;
     });
   };
@@ -137,47 +169,48 @@ export const Profile: React.FC = () => {
   const handlePasswordUpdate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentPassword) {
-      showToast('Please enter your current password', 'info');
+      showToast("Please enter your current password", "info");
       return;
     }
     if (!newPassword || newPassword.length < 8) {
-      showToast('New password must be at least 8 characters', 'info');
+      showToast("New password must be at least 8 characters", "info");
       return;
     }
     if (newPassword !== confirmPassword) {
-      showToast('Passwords do not match', 'info');
+      showToast("Passwords do not match", "info");
       return;
     }
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    showToast('Password updated securely!');
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    showToast("Password updated securely!");
   };
 
   const toggleTaskStatus = (taskId: string) => {
     setUserTasks((prev) =>
       prev.map((task) => {
         if (task.id === taskId) {
-          const nextStatus: TaskStatus = task.status === 'done' ? 'in-progress' : 'done';
+          const nextStatus: TaskStatus =
+            task.status === "done" ? "in-progress" : "done";
           return { ...task, status: nextStatus };
         }
         return task;
-      })
+      }),
     );
-    showToast('Task status updated');
+    showToast("Task status updated");
   };
 
   // Filter tasks based on selected tab
   const filteredTasks = userTasks.filter((task) => {
-    if (taskFilter === 'all') return true;
+    if (taskFilter === "all") return true;
     return task.status === taskFilter;
   });
 
   const getInitials = (fullName: string) => {
     return fullName
-      .split(' ')
+      .split(" ")
       .map((n) => n[0])
-      .join('')
+      .join("")
       .toUpperCase()
       .slice(0, 2);
   };
@@ -194,10 +227,14 @@ export const Profile: React.FC = () => {
         <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-2.5 px-4 py-3 rounded-xl bg-slate-900/95 border border-slate-700 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-5 duration-200">
           <div
             className={`w-2 h-2 rounded-full ${
-              toastMessage.type === 'success' ? 'bg-emerald-400 animate-pulse' : 'bg-indigo-400'
+              toastMessage.type === "success"
+                ? "bg-emerald-400 animate-pulse"
+                : "bg-indigo-400"
             }`}
           />
-          <span className="text-xs font-medium text-slate-200">{toastMessage.text}</span>
+          <span className="text-xs font-medium text-slate-200">
+            {toastMessage.text}
+          </span>
         </div>
       )}
 
@@ -205,7 +242,7 @@ export const Profile: React.FC = () => {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         {/* Back Navigation Button */}
         <div>
-          <BackButton to="/boards" label="Back to Boards" />
+          <BackButton to="/dashboard" label="Back to Boards" />
         </div>
 
         {/* Profile Header Hero Card */}
@@ -218,7 +255,7 @@ export const Profile: React.FC = () => {
               {/* Avatar with Gradient selector indicator */}
               <div className="relative group">
                 <div
-                  className={`w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-linear-to-br ${currentUser.color || 'from-indigo-600 to-violet-600'} flex items-center justify-center text-white font-black text-2xl sm:text-3xl shadow-xl shadow-indigo-950/40 ring-4 ring-slate-800/80 transition-transform duration-300 group-hover:scale-105`}
+                  className={`w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-linear-to-br ${currentUser.color || "from-indigo-600 to-violet-600"} flex items-center justify-center text-white font-black text-2xl sm:text-3xl shadow-xl shadow-indigo-950/40 ring-4 ring-slate-800/80 transition-transform duration-300 group-hover:scale-105`}
                 >
                   {getInitials(name)}
                 </div>
@@ -231,7 +268,9 @@ export const Profile: React.FC = () => {
               {/* Name & Basic Info */}
               <div className="space-y-1.5">
                 <div className="flex flex-wrap items-center gap-2.5">
-                  <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">{name}</h1>
+                  <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+                    {name}
+                  </h1>
                   <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
                     <Sparkles className="w-3 h-3 text-indigo-400" />
                     <span>Workspace Owner</span>
@@ -270,7 +309,9 @@ export const Profile: React.FC = () => {
               </div>
               <div>
                 <p className="text-xs text-slate-400">Workspaces</p>
-                <p className="text-sm sm:text-base font-bold text-white">{MOCK_WORKSPACES.length}</p>
+                <p className="text-sm sm:text-base font-bold text-white">
+                  {MOCK_WORKSPACES.length}
+                </p>
               </div>
             </div>
 
@@ -280,7 +321,9 @@ export const Profile: React.FC = () => {
               </div>
               <div>
                 <p className="text-xs text-slate-400">Active Boards</p>
-                <p className="text-sm sm:text-base font-bold text-white">{MOCK_BOARDS.length}</p>
+                <p className="text-sm sm:text-base font-bold text-white">
+                  {MOCK_BOARDS.length}
+                </p>
               </div>
             </div>
 
@@ -290,7 +333,9 @@ export const Profile: React.FC = () => {
               </div>
               <div>
                 <p className="text-xs text-slate-400">Assigned Tasks</p>
-                <p className="text-sm sm:text-base font-bold text-white">{userTasks.length}</p>
+                <p className="text-sm sm:text-base font-bold text-white">
+                  {userTasks.length}
+                </p>
               </div>
             </div>
 
@@ -300,7 +345,9 @@ export const Profile: React.FC = () => {
               </div>
               <div>
                 <p className="text-xs text-slate-400">Sync Health</p>
-                <p className="text-sm sm:text-base font-bold text-emerald-400">100% Live</p>
+                <p className="text-sm sm:text-base font-bold text-emerald-400">
+                  100% Live
+                </p>
               </div>
             </div>
           </div>
@@ -309,11 +356,11 @@ export const Profile: React.FC = () => {
         {/* Tab Navigation Pill Bar */}
         <div className="flex items-center space-x-1.5 p-1 rounded-2xl bg-slate-900/90 border border-slate-800/80 backdrop-blur-md overflow-x-auto">
           <button
-            onClick={() => setActiveTab('overview')}
+            onClick={() => setActiveTab("overview")}
             className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === 'overview'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-950/60'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              activeTab === "overview"
+                ? "bg-indigo-600 text-white shadow-md shadow-indigo-950/60"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
             }`}
           >
             <UserIcon className="w-3.5 h-3.5" />
@@ -321,11 +368,11 @@ export const Profile: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab('workspaces')}
+            onClick={() => setActiveTab("workspaces")}
             className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === 'workspaces'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-950/60'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              activeTab === "workspaces"
+                ? "bg-indigo-600 text-white shadow-md shadow-indigo-950/60"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
             }`}
           >
             <Building2 className="w-3.5 h-3.5" />
@@ -333,11 +380,11 @@ export const Profile: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab('subscription')}
+            onClick={() => setActiveTab("subscription")}
             className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === 'subscription'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-950/60'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              activeTab === "subscription"
+                ? "bg-indigo-600 text-white shadow-md shadow-indigo-950/60"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
             }`}
           >
             <Crown className="w-3.5 h-3.5 text-amber-400" />
@@ -345,11 +392,11 @@ export const Profile: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab('tasks')}
+            onClick={() => setActiveTab("tasks")}
             className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === 'tasks'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-950/60'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              activeTab === "tasks"
+                ? "bg-indigo-600 text-white shadow-md shadow-indigo-950/60"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
             }`}
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
@@ -357,11 +404,11 @@ export const Profile: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab('preferences')}
+            onClick={() => setActiveTab("preferences")}
             className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === 'preferences'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-950/60'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              activeTab === "preferences"
+                ? "bg-indigo-600 text-white shadow-md shadow-indigo-950/60"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
             }`}
           >
             <Sliders className="w-3.5 h-3.5" />
@@ -369,11 +416,11 @@ export const Profile: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab('security')}
+            onClick={() => setActiveTab("security")}
             className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === 'security'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-950/60'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              activeTab === "security"
+                ? "bg-indigo-600 text-white shadow-md shadow-indigo-950/60"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
             }`}
           >
             <ShieldCheck className="w-3.5 h-3.5" />
@@ -382,20 +429,26 @@ export const Profile: React.FC = () => {
         </div>
 
         {/* Tab 1: Overview & Personal Info */}
-        {activeTab === 'overview' && (
+        {activeTab === "overview" && (
           <form onSubmit={handleSaveProfile} className="space-y-6">
             {/* General Information Card */}
             <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-5">
               <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                 <div>
-                  <h2 className="text-sm font-bold text-white">General Information</h2>
-                  <p className="text-xs text-slate-400">Update your public identity and profile details</p>
+                  <h2 className="text-sm font-bold text-white">
+                    General Information
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Update your public identity and profile details
+                  </p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">Full Name</label>
+                  <label className="text-xs font-medium text-slate-300">
+                    Full Name
+                  </label>
                   <input
                     type="text"
                     value={name}
@@ -406,9 +459,13 @@ export const Profile: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">Username / Handle</label>
+                  <label className="text-xs font-medium text-slate-300">
+                    Username / Handle
+                  </label>
                   <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-500">@</span>
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-500">
+                      @
+                    </span>
                     <input
                       type="text"
                       value={username}
@@ -420,7 +477,9 @@ export const Profile: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">Primary Email</label>
+                  <label className="text-xs font-medium text-slate-300">
+                    Primary Email
+                  </label>
                   <input
                     type="email"
                     value={email}
@@ -431,7 +490,9 @@ export const Profile: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">Job Title / Role</label>
+                  <label className="text-xs font-medium text-slate-300">
+                    Job Title / Role
+                  </label>
                   <input
                     type="text"
                     value={role}
@@ -441,7 +502,9 @@ export const Profile: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">Company / Organization</label>
+                  <label className="text-xs font-medium text-slate-300">
+                    Company / Organization
+                  </label>
                   <input
                     type="text"
                     value={company}
@@ -451,7 +514,9 @@ export const Profile: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">Location / Timezone</label>
+                  <label className="text-xs font-medium text-slate-300">
+                    Location / Timezone
+                  </label>
                   <input
                     type="text"
                     value={location}
@@ -462,7 +527,9 @@ export const Profile: React.FC = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-300">Bio / About Me</label>
+                <label className="text-xs font-medium text-slate-300">
+                  Bio / About Me
+                </label>
                 <textarea
                   rows={3}
                   value={bio}
@@ -475,10 +542,18 @@ export const Profile: React.FC = () => {
             {/* Save & Cancel Buttons - Visible only when form is modified */}
             {isProfileDirty && (
               <div className="flex items-center justify-end space-x-3 pt-4 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                <Button type="button" variant="secondary" onClick={handleCancelProfile}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleCancelProfile}
+                >
                   Cancel
                 </Button>
-                <Button type="submit" variant="primary" icon={<Save className="w-4 h-4" />}>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  icon={<Save className="w-4 h-4" />}
+                >
                   Save Profile Changes
                 </Button>
               </div>
@@ -487,25 +562,30 @@ export const Profile: React.FC = () => {
         )}
 
         {/* Tab: Subscription & Plans */}
-        {activeTab === 'subscription' && (
+        {activeTab === "subscription" && (
           <div className="space-y-6">
             {/* Header Banner */}
             <div className="p-6 sm:p-8 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl">
               <div className="flex items-center space-x-2">
                 <Crown className="w-5 h-5 text-amber-400" />
-                <h2 className="text-lg font-bold text-white">Subscription & Plans</h2>
+                <h2 className="text-lg font-bold text-white">
+                  Subscription & Plans
+                </h2>
                 <span
                   className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                    subscriptionPlan === 'pro'
-                      ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
-                      : 'bg-slate-800 text-slate-300 border border-slate-700'
+                    subscriptionPlan === "pro"
+                      ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+                      : "bg-slate-800 text-slate-300 border border-slate-700"
                   }`}
                 >
-                  {subscriptionPlan === 'pro' ? 'Pro Tier Active' : 'Basic Tier Active'}
+                  {subscriptionPlan === "pro"
+                    ? "Pro Tier Active"
+                    : "Basic Tier Active"}
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-1">
-                Choose the plan that suits your collaboration needs. Upgrade, downgrade, or cancel anytime.
+                Choose the plan that suits your collaboration needs. Upgrade,
+                downgrade, or cancel anytime.
               </p>
             </div>
 
@@ -517,9 +597,9 @@ export const Profile: React.FC = () => {
                 return (
                   <div
                     className={`rounded-3xl p-6 sm:p-8 border flex flex-col justify-between transition-all relative ${
-                      subscriptionPlan === 'basic'
-                        ? 'bg-slate-900/90 border-indigo-500 ring-2 ring-indigo-500/30 shadow-xl shadow-indigo-950/30'
-                        : 'bg-slate-900/60 border-slate-800/80 hover:border-slate-700'
+                      subscriptionPlan === "basic"
+                        ? "bg-slate-900/90 border-indigo-500 ring-2 ring-indigo-500/30 shadow-xl shadow-indigo-950/30"
+                        : "bg-slate-900/60 border-slate-800/80 hover:border-slate-700"
                     }`}
                   >
                     <div>
@@ -528,7 +608,9 @@ export const Profile: React.FC = () => {
                           <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                             {basicPlan.tierLabel}
                           </span>
-                          <h3 className="text-xl font-black text-white mt-0.5">{basicPlan.name}</h3>
+                          <h3 className="text-xl font-black text-white mt-0.5">
+                            {basicPlan.name}
+                          </h3>
                         </div>
                         <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700">
                           {basicPlan.badge}
@@ -536,7 +618,9 @@ export const Profile: React.FC = () => {
                       </div>
 
                       <div className="flex items-baseline space-x-1 mb-4">
-                        <span className="text-3xl sm:text-4xl font-black text-white">${basicPlan.monthlyPrice}</span>
+                        <span className="text-3xl sm:text-4xl font-black text-white">
+                          ${basicPlan.monthlyPrice}
+                        </span>
                         <span className="text-xs text-slate-400">/ month</span>
                       </div>
 
@@ -546,7 +630,10 @@ export const Profile: React.FC = () => {
 
                       <div className="space-y-3 text-xs text-slate-300">
                         {basicPlan.features.map((feat, idx) => (
-                          <div key={idx} className="flex items-center space-x-2.5">
+                          <div
+                            key={idx}
+                            className="flex items-center space-x-2.5"
+                          >
                             <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
                             <span>{feat}</span>
                           </div>
@@ -555,7 +642,7 @@ export const Profile: React.FC = () => {
                     </div>
 
                     <div className="pt-8">
-                      {subscriptionPlan === 'basic' ? (
+                      {subscriptionPlan === "basic" ? (
                         <div className="w-full py-2.5 px-4 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold text-center border border-slate-700">
                           Current Active Plan
                         </div>
@@ -565,8 +652,8 @@ export const Profile: React.FC = () => {
                           variant="secondary"
                           className="w-full"
                           onClick={() => {
-                            setSubscriptionPlan('basic');
-                            showToast('Switched to Basic Plan', 'info');
+                            setSubscriptionPlan("basic");
+                            showToast("Switched to Basic Plan", "info");
                           }}
                         >
                           Downgrade to Basic
@@ -583,9 +670,9 @@ export const Profile: React.FC = () => {
                 return (
                   <div
                     className={`rounded-3xl p-6 sm:p-8 border flex flex-col justify-between transition-all relative overflow-hidden ${
-                      subscriptionPlan === 'pro'
-                        ? 'bg-linear-to-b from-indigo-950/40 via-slate-900/90 to-slate-900 border-indigo-500 ring-2 ring-indigo-500/50 shadow-2xl shadow-indigo-950/50'
-                        : 'bg-slate-900/60 border-slate-800/80 hover:border-slate-700'
+                      subscriptionPlan === "pro"
+                        ? "bg-linear-to-b from-indigo-950/40 via-slate-900/90 to-slate-900 border-indigo-500 ring-2 ring-indigo-500/50 shadow-2xl shadow-indigo-950/50"
+                        : "bg-slate-900/60 border-slate-800/80 hover:border-slate-700"
                     }`}
                   >
                     {/* Popular Pill */}
@@ -601,7 +688,9 @@ export const Profile: React.FC = () => {
                           <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">
                             {proPlan.tierLabel}
                           </span>
-                          <h3 className="text-xl font-black text-white mt-0.5">{proPlan.name}</h3>
+                          <h3 className="text-xl font-black text-white mt-0.5">
+                            {proPlan.name}
+                          </h3>
                         </div>
                       </div>
 
@@ -609,12 +698,13 @@ export const Profile: React.FC = () => {
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                         <div className="flex items-baseline space-x-1">
                           <span className="text-3xl sm:text-4xl font-black text-white">
-                            {billingCycle === 'yearly'
-                              ? `$${proPlan.annualPricePerMonth.toFixed(2).replace(/\.00$/, '')}`
+                            {billingCycle === "yearly"
+                              ? `$${proPlan.annualPricePerMonth.toFixed(2).replace(/\.00$/, "")}`
                               : `$${proPlan.monthlyPrice}`}
                           </span>
                           <span className="text-xs text-slate-400">
-                            / mo {billingCycle === 'yearly' && '(billed annually)'}
+                            / mo{" "}
+                            {billingCycle === "yearly" && "(billed annually)"}
                           </span>
                         </div>
 
@@ -622,22 +712,22 @@ export const Profile: React.FC = () => {
                         <div className="flex items-center space-x-1 p-1 rounded-2xl bg-slate-950/90 border border-slate-800 shrink-0 self-start sm:self-auto">
                           <button
                             type="button"
-                            onClick={() => setBillingCycle('monthly')}
+                            onClick={() => setBillingCycle("monthly")}
                             className={`px-3 py-1 rounded-xl text-xs font-semibold transition cursor-pointer ${
-                              billingCycle === 'monthly'
-                                ? 'bg-indigo-600 text-white shadow-xs'
-                                : 'text-slate-400 hover:text-white'
+                              billingCycle === "monthly"
+                                ? "bg-indigo-600 text-white shadow-xs"
+                                : "text-slate-400 hover:text-white"
                             }`}
                           >
                             Monthly
                           </button>
                           <button
                             type="button"
-                            onClick={() => setBillingCycle('yearly')}
+                            onClick={() => setBillingCycle("yearly")}
                             className={`flex items-center space-x-1.5 px-3 py-1 rounded-xl text-xs font-semibold transition cursor-pointer ${
-                              billingCycle === 'yearly'
-                                ? 'bg-indigo-600 text-white shadow-xs'
-                                : 'text-slate-400 hover:text-white'
+                              billingCycle === "yearly"
+                                ? "bg-indigo-600 text-white shadow-xs"
+                                : "text-slate-400 hover:text-white"
                             }`}
                           >
                             <span>Annual</span>
@@ -654,7 +744,10 @@ export const Profile: React.FC = () => {
 
                       <div className="space-y-3 text-xs text-slate-200">
                         {proPlan.features.map((feat, idx) => (
-                          <div key={idx} className="flex items-center space-x-2.5">
+                          <div
+                            key={idx}
+                            className="flex items-center space-x-2.5"
+                          >
                             <Zap className="w-4 h-4 text-indigo-400 shrink-0" />
                             <span>{feat}</span>
                           </div>
@@ -663,7 +756,7 @@ export const Profile: React.FC = () => {
                     </div>
 
                     <div className="pt-8">
-                      {subscriptionPlan === 'pro' ? (
+                      {subscriptionPlan === "pro" ? (
                         <div className="w-full py-2.5 px-4 rounded-xl bg-indigo-600/20 border border-indigo-500/40 text-indigo-300 text-xs font-semibold text-center flex items-center justify-center space-x-2">
                           <ShieldCheck className="w-4 h-4 text-emerald-400" />
                           <span>Current Active Subscription</span>
@@ -675,11 +768,12 @@ export const Profile: React.FC = () => {
                           className="w-full shadow-xl shadow-indigo-950/60"
                           icon={<Sparkles className="w-4 h-4" />}
                           onClick={() => {
-                            setSubscriptionPlan('pro');
-                            showToast('Upgraded to Pro Plan!');
+                            setSubscriptionPlan("pro");
+                            showToast("Upgraded to Pro Plan!");
                           }}
                         >
-                          Upgrade to Pro ({billingCycle === 'yearly' ? '$115.20/yr' : '$12/mo'})
+                          Upgrade to Pro (
+                          {billingCycle === "yearly" ? "$115.20/yr" : "$12/mo"})
                         </Button>
                       )}
                     </div>
@@ -696,13 +790,17 @@ export const Profile: React.FC = () => {
                     <CreditCard className="w-4 h-4 text-indigo-400" />
                     <span>Billing & Payment Method</span>
                   </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">Manage your card details and billing addresses</p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Manage your card details and billing addresses
+                  </p>
                 </div>
                 <Button
                   type="button"
                   variant="secondary"
                   size="sm"
-                  onClick={() => showToast('Redirecting to secure billing portal...', 'info')}
+                  onClick={() =>
+                    showToast("Redirecting to secure billing portal...", "info")
+                  }
                 >
                   Manage Billing
                 </Button>
@@ -710,30 +808,45 @@ export const Profile: React.FC = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
                 <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/70 space-y-1">
-                  <span className="text-slate-400 text-[11px] block">Payment Card</span>
+                  <span className="text-slate-400 text-[11px] block">
+                    Payment Card
+                  </span>
                   <div className="flex items-center space-x-2 font-semibold text-white">
                     <CreditCard className="w-3.5 h-3.5 text-indigo-400" />
                     <span>{MOCK_BILLING_INFO.paymentCard}</span>
                   </div>
-                  <span className="text-[10px] text-slate-500 block">Expires {MOCK_BILLING_INFO.cardExpiry}</span>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/70 space-y-1">
-                  <span className="text-slate-400 text-[11px] block">Next Invoice</span>
-                  <p className="font-semibold text-white">{MOCK_BILLING_INFO.nextInvoiceDate}</p>
-                  <span className="text-[10px] text-emerald-400 block font-mono">
-                    {subscriptionPlan === 'pro'
-                      ? billingCycle === 'yearly'
-                        ? MOCK_BILLING_INFO.annualRate
-                        : MOCK_BILLING_INFO.monthlyRate
-                      : '$0.00 USD'}
+                  <span className="text-[10px] text-slate-500 block">
+                    Expires {MOCK_BILLING_INFO.cardExpiry}
                   </span>
                 </div>
 
                 <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/70 space-y-1">
-                  <span className="text-slate-400 text-[11px] block">Active Workspaces</span>
-                  <p className="font-semibold text-white">{MOCK_WORKSPACES.length} of {subscriptionPlan === 'pro' ? 'Unlimited' : '3'}</p>
-                  <span className="text-[10px] text-indigo-400 block font-mono">Status: Healthy</span>
+                  <span className="text-slate-400 text-[11px] block">
+                    Next Invoice
+                  </span>
+                  <p className="font-semibold text-white">
+                    {MOCK_BILLING_INFO.nextInvoiceDate}
+                  </p>
+                  <span className="text-[10px] text-emerald-400 block font-mono">
+                    {subscriptionPlan === "pro"
+                      ? billingCycle === "yearly"
+                        ? MOCK_BILLING_INFO.annualRate
+                        : MOCK_BILLING_INFO.monthlyRate
+                      : "$0.00 USD"}
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/70 space-y-1">
+                  <span className="text-slate-400 text-[11px] block">
+                    Active Workspaces
+                  </span>
+                  <p className="font-semibold text-white">
+                    {MOCK_WORKSPACES.length} of{" "}
+                    {subscriptionPlan === "pro" ? "Unlimited" : "3"}
+                  </p>
+                  <span className="text-[10px] text-indigo-400 block font-mono">
+                    Status: Healthy
+                  </span>
                 </div>
               </div>
             </div>
@@ -741,17 +854,22 @@ export const Profile: React.FC = () => {
         )}
 
         {/* Tab 2: Workspaces */}
-        {activeTab === 'workspaces' && (
+        {activeTab === "workspaces" && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-base font-bold text-white">Your Workspaces</h2>
-                <p className="text-xs text-slate-400">You are a collaborator or administrator in {MOCK_WORKSPACES.length} team spaces</p>
+                <h2 className="text-base font-bold text-white">
+                  Your Workspaces
+                </h2>
+                <p className="text-xs text-slate-400">
+                  You are a collaborator or administrator in{" "}
+                  {MOCK_WORKSPACES.length} team spaces
+                </p>
               </div>
               <Button
                 variant="primary"
                 size="sm"
-                onClick={() => navigate('/boards')}
+                onClick={() => navigate("/boards")}
               >
                 Open Dashboard
               </Button>
@@ -765,7 +883,9 @@ export const Profile: React.FC = () => {
                 >
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className={`w-10 h-10 rounded-xl bg-linear-to-br ${ws.color || 'from-indigo-600 to-violet-600'} flex items-center justify-center text-white font-bold text-sm shadow-md`}>
+                      <div
+                        className={`w-10 h-10 rounded-xl bg-linear-to-br ${ws.color || "from-indigo-600 to-violet-600"} flex items-center justify-center text-white font-bold text-sm shadow-md`}
+                      >
                         <Building2 className="w-5 h-5 text-white" />
                       </div>
                       <div className="flex items-center space-x-2">
@@ -782,11 +902,11 @@ export const Profile: React.FC = () => {
                         </button>
                         <span
                           className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
-                            ws.role === 'Owner'
-                              ? 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30'
-                              : ws.role === 'Admin'
-                              ? 'bg-violet-500/10 text-violet-300 border-violet-500/30'
-                              : 'bg-slate-800 text-slate-300 border border-slate-700'
+                            ws.role === "Owner"
+                              ? "bg-indigo-500/10 text-indigo-300 border-indigo-500/30"
+                              : ws.role === "Admin"
+                                ? "bg-violet-500/10 text-violet-300 border-violet-500/30"
+                                : "bg-slate-800 text-slate-300 border border-slate-700"
                           }`}
                         >
                           {ws.role}
@@ -798,7 +918,9 @@ export const Profile: React.FC = () => {
                       <h3 className="text-sm font-bold text-white group-hover:text-indigo-400 transition-colors">
                         {ws.name}
                       </h3>
-                      <p className="text-xs text-slate-400 mt-1 line-clamp-2">{ws.description}</p>
+                      <p className="text-xs text-slate-400 mt-1 line-clamp-2">
+                        {ws.description}
+                      </p>
                     </div>
                   </div>
 
@@ -809,7 +931,7 @@ export const Profile: React.FC = () => {
                       <span>{ws.memberCount} members</span>
                     </div>
                     <Link
-                      to="/boards"
+                      to="/dashboard"
                       className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center space-x-1"
                     >
                       <span>Enter</span>
@@ -823,44 +945,56 @@ export const Profile: React.FC = () => {
         )}
 
         {/* Tab 3: My Assigned Tasks */}
-        {activeTab === 'tasks' && (
+        {activeTab === "tasks" && (
           <div className="space-y-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h2 className="text-base font-bold text-white">Assigned Tasks</h2>
-                <p className="text-xs text-slate-400">Tasks assigned to {name} across all active boards</p>
+                <h2 className="text-base font-bold text-white">
+                  Assigned Tasks
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Tasks assigned to {name} across all active boards
+                </p>
               </div>
 
               {/* Task status filter */}
               <div className="flex items-center space-x-1 p-1 rounded-xl bg-slate-900 border border-slate-800 text-xs">
                 <button
-                  onClick={() => setTaskFilter('all')}
+                  onClick={() => setTaskFilter("all")}
                   className={`px-3 py-1 rounded-lg font-medium transition cursor-pointer ${
-                    taskFilter === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                    taskFilter === "all"
+                      ? "bg-indigo-600 text-white"
+                      : "text-slate-400 hover:text-white"
                   }`}
                 >
                   All ({userTasks.length})
                 </button>
                 <button
-                  onClick={() => setTaskFilter('in-progress')}
+                  onClick={() => setTaskFilter("in-progress")}
                   className={`px-3 py-1 rounded-lg font-medium transition cursor-pointer ${
-                    taskFilter === 'in-progress' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                    taskFilter === "in-progress"
+                      ? "bg-indigo-600 text-white"
+                      : "text-slate-400 hover:text-white"
                   }`}
                 >
                   In Progress
                 </button>
                 <button
-                  onClick={() => setTaskFilter('todo')}
+                  onClick={() => setTaskFilter("todo")}
                   className={`px-3 py-1 rounded-lg font-medium transition cursor-pointer ${
-                    taskFilter === 'todo' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                    taskFilter === "todo"
+                      ? "bg-indigo-600 text-white"
+                      : "text-slate-400 hover:text-white"
                   }`}
                 >
                   To Do
                 </button>
                 <button
-                  onClick={() => setTaskFilter('done')}
+                  onClick={() => setTaskFilter("done")}
                   className={`px-3 py-1 rounded-lg font-medium transition cursor-pointer ${
-                    taskFilter === 'done' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                    taskFilter === "done"
+                      ? "bg-indigo-600 text-white"
+                      : "text-slate-400 hover:text-white"
                   }`}
                 >
                   Completed
@@ -871,13 +1005,17 @@ export const Profile: React.FC = () => {
             {filteredTasks.length === 0 ? (
               <div className="p-12 text-center rounded-3xl bg-slate-900/40 border border-slate-800 space-y-3">
                 <CheckCircle2 className="w-8 h-8 text-slate-600 mx-auto" />
-                <p className="text-sm font-semibold text-slate-300">No tasks in this view</p>
-                <p className="text-xs text-slate-500">You're all caught up on your assigned items</p>
+                <p className="text-sm font-semibold text-slate-300">
+                  No tasks in this view
+                </p>
+                <p className="text-xs text-slate-500">
+                  You're all caught up on your assigned items
+                </p>
               </div>
             ) : (
               <div className="space-y-3">
                 {filteredTasks.map((task) => {
-                  const isDone = task.status === 'done';
+                  const isDone = task.status === "done";
                   return (
                     <div
                       key={task.id}
@@ -889,8 +1027,8 @@ export const Profile: React.FC = () => {
                           onClick={() => toggleTaskStatus(task.id)}
                           className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
                             isDone
-                              ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
-                              : 'border-slate-700 hover:border-indigo-500 text-transparent'
+                              ? "bg-emerald-500/20 border-emerald-500 text-emerald-400"
+                              : "border-slate-700 hover:border-indigo-500 text-transparent"
                           }`}
                         >
                           <Check className="w-3.5 h-3.5" />
@@ -899,21 +1037,25 @@ export const Profile: React.FC = () => {
                         <div className="min-w-0">
                           <p
                             className={`text-xs font-semibold truncate ${
-                              isDone ? 'text-slate-500 line-through' : 'text-slate-200'
+                              isDone
+                                ? "text-slate-500 line-through"
+                                : "text-slate-200"
                             }`}
                           >
                             {task.title}
                           </p>
                           <div className="flex items-center space-x-2 text-[11px] text-slate-400 mt-0.5">
-                            <span className="text-indigo-400 font-medium">Board #{task.boardId}</span>
+                            <span className="text-indigo-400 font-medium">
+                              Board #{task.boardId}
+                            </span>
                             <span>•</span>
                             <span
                               className={`px-1.5 py-0.2 rounded text-[10px] uppercase font-bold ${
-                                task.priority === 'urgent'
-                                  ? 'bg-rose-500/20 text-rose-400'
-                                  : task.priority === 'high'
-                                  ? 'bg-amber-500/20 text-amber-400'
-                                  : 'bg-slate-800 text-slate-400'
+                                task.priority === "urgent"
+                                  ? "bg-rose-500/20 text-rose-400"
+                                  : task.priority === "high"
+                                    ? "bg-amber-500/20 text-amber-400"
+                                    : "bg-slate-800 text-slate-400"
                               }`}
                             >
                               {task.priority}
@@ -925,14 +1067,18 @@ export const Profile: React.FC = () => {
                       <div className="flex items-center space-x-3 shrink-0">
                         <span
                           className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${
-                            task.status === 'done'
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                              : task.status === 'in-progress'
-                              ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
-                              : 'bg-slate-800 text-slate-400'
+                            task.status === "done"
+                              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                              : task.status === "in-progress"
+                                ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
+                                : "bg-slate-800 text-slate-400"
                           }`}
                         >
-                          {task.status === 'in-progress' ? 'In Progress' : task.status === 'done' ? 'Done' : 'To Do'}
+                          {task.status === "in-progress"
+                            ? "In Progress"
+                            : task.status === "done"
+                              ? "Done"
+                              : "To Do"}
                         </span>
                         <Link
                           to={`/boards/${task.boardId}`}
@@ -951,30 +1097,45 @@ export const Profile: React.FC = () => {
         )}
 
         {/* Tab 4: Preferences */}
-        {activeTab === 'preferences' && (
+        {activeTab === "preferences" && (
           <div className="space-y-6 max-w-4xl">
             <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-6">
               <div className="pb-3 border-b border-slate-800">
-                <h2 className="text-sm font-bold text-white">Notifications & Alerts</h2>
-                <p className="text-xs text-slate-400">Control how and when you receive workspace notifications</p>
+                <h2 className="text-sm font-bold text-white">
+                  Notifications & Alerts
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Control how and when you receive workspace notifications
+                </p>
               </div>
 
               <div className="space-y-4">
                 <div className="flex items-center justify-between py-2">
                   <div>
-                    <p className="text-xs font-semibold text-slate-200">Email task assignments</p>
-                    <p className="text-[11px] text-slate-400">Receive an email when you are assigned or mentioned in a card</p>
+                    <p className="text-xs font-semibold text-slate-200">
+                      Email task assignments
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Receive an email when you are assigned or mentioned in a
+                      card
+                    </p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => handlePreferenceToggle('emailTaskAssignment')}
+                    onClick={() =>
+                      handlePreferenceToggle("emailTaskAssignment")
+                    }
                     className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
-                      preferences.emailTaskAssignment ? 'bg-indigo-600' : 'bg-slate-800'
+                      preferences.emailTaskAssignment
+                        ? "bg-indigo-600"
+                        : "bg-slate-800"
                     }`}
                   >
                     <div
                       className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                        preferences.emailTaskAssignment ? 'translate-x-5' : 'translate-x-0'
+                        preferences.emailTaskAssignment
+                          ? "translate-x-5"
+                          : "translate-x-0"
                       }`}
                     />
                   </button>
@@ -982,19 +1143,27 @@ export const Profile: React.FC = () => {
 
                 <div className="flex items-center justify-between py-2">
                   <div>
-                    <p className="text-xs font-semibold text-slate-200">Weekly activity summary digest</p>
-                    <p className="text-[11px] text-slate-400">Receive weekly email roundup of workspace velocity</p>
+                    <p className="text-xs font-semibold text-slate-200">
+                      Weekly activity summary digest
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Receive weekly email roundup of workspace velocity
+                    </p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => handlePreferenceToggle('emailWeeklyDigest')}
+                    onClick={() => handlePreferenceToggle("emailWeeklyDigest")}
                     className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
-                      preferences.emailWeeklyDigest ? 'bg-indigo-600' : 'bg-slate-800'
+                      preferences.emailWeeklyDigest
+                        ? "bg-indigo-600"
+                        : "bg-slate-800"
                     }`}
                   >
                     <div
                       className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                        preferences.emailWeeklyDigest ? 'translate-x-5' : 'translate-x-0'
+                        preferences.emailWeeklyDigest
+                          ? "translate-x-5"
+                          : "translate-x-0"
                       }`}
                     />
                   </button>
@@ -1002,19 +1171,29 @@ export const Profile: React.FC = () => {
 
                 <div className="flex items-center justify-between py-2">
                   <div>
-                    <p className="text-xs font-semibold text-slate-200">Desktop push notifications</p>
-                    <p className="text-[11px] text-slate-400">Show native browser toasts for real-time task moves</p>
+                    <p className="text-xs font-semibold text-slate-200">
+                      Desktop push notifications
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Show native browser toasts for real-time task moves
+                    </p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => handlePreferenceToggle('desktopNotifications')}
+                    onClick={() =>
+                      handlePreferenceToggle("desktopNotifications")
+                    }
                     className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
-                      preferences.desktopNotifications ? 'bg-indigo-600' : 'bg-slate-800'
+                      preferences.desktopNotifications
+                        ? "bg-indigo-600"
+                        : "bg-slate-800"
                     }`}
                   >
                     <div
                       className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                        preferences.desktopNotifications ? 'translate-x-5' : 'translate-x-0'
+                        preferences.desktopNotifications
+                          ? "translate-x-5"
+                          : "translate-x-0"
                       }`}
                     />
                   </button>
@@ -1022,19 +1201,27 @@ export const Profile: React.FC = () => {
 
                 <div className="flex items-center justify-between py-2">
                   <div>
-                    <p className="text-xs font-semibold text-slate-200">Real-time sound cues</p>
-                    <p className="text-[11px] text-slate-400">Play subtle audio chime when teammates drop cards</p>
+                    <p className="text-xs font-semibold text-slate-200">
+                      Real-time sound cues
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Play subtle audio chime when teammates drop cards
+                    </p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => handlePreferenceToggle('soundEffects')}
+                    onClick={() => handlePreferenceToggle("soundEffects")}
                     className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
-                      preferences.soundEffects ? 'bg-indigo-600' : 'bg-slate-800'
+                      preferences.soundEffects
+                        ? "bg-indigo-600"
+                        : "bg-slate-800"
                     }`}
                   >
                     <div
                       className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                        preferences.soundEffects ? 'translate-x-5' : 'translate-x-0'
+                        preferences.soundEffects
+                          ? "translate-x-5"
+                          : "translate-x-0"
                       }`}
                     />
                   </button>
@@ -1044,26 +1231,38 @@ export const Profile: React.FC = () => {
 
             <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-6">
               <div className="pb-3 border-b border-slate-800">
-                <h2 className="text-sm font-bold text-white">Board Display & Sync</h2>
-                <p className="text-xs text-slate-400">Customize your board viewing experience and offline behavior</p>
+                <h2 className="text-sm font-bold text-white">
+                  Board Display & Sync
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Customize your board viewing experience and offline behavior
+                </p>
               </div>
 
               <div className="space-y-4">
                 <div className="flex items-center justify-between py-2">
                   <div>
-                    <p className="text-xs font-semibold text-slate-200">Compact Kanban density</p>
-                    <p className="text-[11px] text-slate-400">Reduce task card padding to fit more items on screen</p>
+                    <p className="text-xs font-semibold text-slate-200">
+                      Compact Kanban density
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Reduce task card padding to fit more items on screen
+                    </p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => handlePreferenceToggle('compactBoardView')}
+                    onClick={() => handlePreferenceToggle("compactBoardView")}
                     className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
-                      preferences.compactBoardView ? 'bg-indigo-600' : 'bg-slate-800'
+                      preferences.compactBoardView
+                        ? "bg-indigo-600"
+                        : "bg-slate-800"
                     }`}
                   >
                     <div
                       className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                        preferences.compactBoardView ? 'translate-x-5' : 'translate-x-0'
+                        preferences.compactBoardView
+                          ? "translate-x-5"
+                          : "translate-x-0"
                       }`}
                     />
                   </button>
@@ -1071,19 +1270,28 @@ export const Profile: React.FC = () => {
 
                 <div className="flex items-center justify-between py-2">
                   <div>
-                    <p className="text-xs font-semibold text-slate-200">Offline Automatic Sync</p>
-                    <p className="text-[11px] text-slate-400">Queue mutations in IndexedDB when disconnected and flush on reconnect</p>
+                    <p className="text-xs font-semibold text-slate-200">
+                      Offline Automatic Sync
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Queue mutations in IndexedDB when disconnected and flush
+                      on reconnect
+                    </p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => handlePreferenceToggle('offlineAutoSync')}
+                    onClick={() => handlePreferenceToggle("offlineAutoSync")}
                     className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
-                      preferences.offlineAutoSync ? 'bg-indigo-600' : 'bg-slate-800'
+                      preferences.offlineAutoSync
+                        ? "bg-indigo-600"
+                        : "bg-slate-800"
                     }`}
                   >
                     <div
                       className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                        preferences.offlineAutoSync ? 'translate-x-5' : 'translate-x-0'
+                        preferences.offlineAutoSync
+                          ? "translate-x-5"
+                          : "translate-x-0"
                       }`}
                     />
                   </button>
@@ -1094,19 +1302,27 @@ export const Profile: React.FC = () => {
         )}
 
         {/* Tab 5: Security & Active Sessions */}
-        {activeTab === 'security' && (
+        {activeTab === "security" && (
           <div className="space-y-6 max-w-4xl">
-            
             {/* Change Password */}
-            <form onSubmit={handlePasswordUpdate} className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-5">
+            <form
+              onSubmit={handlePasswordUpdate}
+              className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-5"
+            >
               <div className="pb-3 border-b border-slate-800">
-                <h2 className="text-sm font-bold text-white">Update Password</h2>
-                <p className="text-xs text-slate-400">Ensure your account is using a secure and unique password</p>
+                <h2 className="text-sm font-bold text-white">
+                  Update Password
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Ensure your account is using a secure and unique password
+                </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">Current Password</label>
+                  <label className="text-xs font-medium text-slate-300">
+                    Current Password
+                  </label>
                   <input
                     type="password"
                     value={currentPassword}
@@ -1117,7 +1333,9 @@ export const Profile: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">New Password</label>
+                  <label className="text-xs font-medium text-slate-300">
+                    New Password
+                  </label>
                   <input
                     type="password"
                     value={newPassword}
@@ -1128,7 +1346,9 @@ export const Profile: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">Confirm Password</label>
+                  <label className="text-xs font-medium text-slate-300">
+                    Confirm Password
+                  </label>
                   <input
                     type="password"
                     value={confirmPassword}
@@ -1140,7 +1360,12 @@ export const Profile: React.FC = () => {
               </div>
 
               <div className="flex justify-end pt-2">
-                <Button type="submit" variant="primary" size="sm" icon={<KeyRound className="w-3.5 h-3.5" />}>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  icon={<KeyRound className="w-3.5 h-3.5" />}
+                >
                   Update Password
                 </Button>
               </div>
@@ -1150,8 +1375,13 @@ export const Profile: React.FC = () => {
             <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-sm font-bold text-white">Two-Factor Authentication (2FA)</h2>
-                  <p className="text-xs text-slate-400">Protect your CollabBoard workspaces with hardware or app-based 2FA</p>
+                  <h2 className="text-sm font-bold text-white">
+                    Two-Factor Authentication (2FA)
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Protect your CollabBoard workspaces with hardware or
+                    app-based 2FA
+                  </p>
                 </div>
                 <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                   <ShieldCheck className="w-3.5 h-3.5" />
@@ -1164,13 +1394,19 @@ export const Profile: React.FC = () => {
             <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                 <div>
-                  <h2 className="text-sm font-bold text-white">Active Device Sessions</h2>
-                  <p className="text-xs text-slate-400">Devices currently authenticated to your account</p>
+                  <h2 className="text-sm font-bold text-white">
+                    Active Device Sessions
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Devices currently authenticated to your account
+                  </p>
                 </div>
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => showToast('All other sessions revoked successfully')}
+                  onClick={() =>
+                    showToast("All other sessions revoked successfully")
+                  }
                 >
                   Revoke Other Sessions
                 </Button>
@@ -1185,10 +1421,12 @@ export const Profile: React.FC = () => {
                     <div className="flex items-center space-x-3">
                       <div
                         className={`p-2 rounded-xl ${
-                          session.isCurrent ? 'bg-indigo-500/10 text-indigo-400' : 'bg-slate-800 text-slate-400'
+                          session.isCurrent
+                            ? "bg-indigo-500/10 text-indigo-400"
+                            : "bg-slate-800 text-slate-400"
                         }`}
                       >
-                        {session.iconType === 'laptop' ? (
+                        {session.iconType === "laptop" ? (
                           <Laptop className="w-4 h-4" />
                         ) : (
                           <Smartphone className="w-4 h-4" />
@@ -1210,10 +1448,12 @@ export const Profile: React.FC = () => {
                       </div>
                     </div>
                     {session.isCurrent ? (
-                      <span className="text-[11px] font-medium text-emerald-400">Active Now</span>
+                      <span className="text-[11px] font-medium text-emerald-400">
+                        Active Now
+                      </span>
                     ) : (
                       <button
-                        onClick={() => showToast('Device logged out')}
+                        onClick={() => showToast("Device logged out")}
                         className="text-xs text-rose-400 hover:text-rose-300 font-medium cursor-pointer"
                       >
                         Log Out
@@ -1223,10 +1463,8 @@ export const Profile: React.FC = () => {
                 ))}
               </div>
             </div>
-
           </div>
         )}
-
       </main>
 
       {/* Manage Workspace Settings Modal */}
@@ -1236,14 +1474,16 @@ export const Profile: React.FC = () => {
           onClose={() => setIsManageWorkspaceModalOpen(false)}
           workspace={managingWorkspace}
           onUpdateWorkspace={(updatedWs) => {
-            setWorkspaces((prev) => prev.map((w) => (w.id === updatedWs.id ? updatedWs : w)));
+            setWorkspaces((prev) =>
+              prev.map((w) => (w.id === updatedWs.id ? updatedWs : w)),
+            );
             setManagingWorkspace(updatedWs);
             showToast(`Workspace "${updatedWs.name}" updated!`);
           }}
           onDeleteWorkspace={(id) => {
             setWorkspaces((prev) => prev.filter((w) => w.id !== id));
             setIsManageWorkspaceModalOpen(false);
-            showToast('Workspace deleted', 'info');
+            showToast("Workspace deleted", "info");
           }}
         />
       )}

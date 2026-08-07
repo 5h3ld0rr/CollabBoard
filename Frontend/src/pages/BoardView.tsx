@@ -1,5 +1,10 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom';
+import React, { useState, useMemo, useEffect, useRef } from "react";
+import {
+  useParams,
+  useSearchParams,
+  Link,
+  useNavigate,
+} from "react-router-dom";
 import {
   ArrowLeft,
   Plus,
@@ -13,11 +18,13 @@ import {
   RotateCcw,
   Check,
   ChevronDown,
-} from 'lucide-react';
-import { Navbar, AmbientBackground } from '../components/common';
-import { Column, TaskModal, BoardSettingsModal } from '../components/board';
-import { MOCK_BOARDS, MOCK_TASKS, MOCK_USERS } from '../data/mockData';
-import type { Board, Task, TaskStatus, User } from '../types';
+  AlertTriangle,
+  Trash2,
+} from "lucide-react";
+import { Navbar, AmbientBackground } from "../components/common";
+import { Column, TaskModal, BoardSettingsModal } from "../components/board";
+import { MOCK_BOARDS, MOCK_TASKS, MOCK_USERS } from "../data/mockData";
+import type { Board, Task, TaskStatus, User } from "../types";
 
 export const BoardView: React.FC = () => {
   const { boardId } = useParams<{ boardId: string }>();
@@ -29,16 +36,17 @@ export const BoardView: React.FC = () => {
     const found = MOCK_BOARDS.find((b) => b.id === boardId);
     return (
       found || {
-        id: boardId || 'board-1',
-        title: 'Sprint 1: Real-time Core',
-        description: 'WebSocket pipelines, live cursor broadcasting, and optimistic locking engine',
-        workspaceId: 'ws-1',
-        workspaceName: 'Core Engineering',
-        color: 'from-indigo-600 to-violet-600',
-        icon: 'Kanban',
+        id: boardId || "board-1",
+        title: "Sprint 1: Real-time Core",
+        description:
+          "WebSocket pipelines, live cursor broadcasting, and optimistic locking engine",
+        workspaceId: "ws-1",
+        workspaceName: "Core Engineering",
+        color: "from-indigo-600 to-violet-600",
+        icon: "Kanban",
         isFavorite: true,
         members: MOCK_USERS.slice(0, 3),
-        tags: ['Backend', 'WebSocket', 'Priority'],
+        tags: ["Backend", "WebSocket", "Priority"],
         stats: {
           totalTasks: 5,
           todoCount: 2,
@@ -46,66 +54,87 @@ export const BoardView: React.FC = () => {
           doneCount: 1,
         },
         createdAt: new Date().toISOString(),
-        updatedAt: 'Just now',
+        updatedAt: "Just now",
       }
     );
   }, [boardId]);
 
   // Board reactive state
   const [boardData, setBoardData] = useState<Board>(initialBoard);
-
-  useEffect(() => {
-    setBoardData(initialBoard);
-  }, [initialBoard]);
-
-  // Board members state
   const [boardMembers, setBoardMembers] = useState<User[]>(boardData.members);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState<number>(0);
 
   useEffect(() => {
-    setBoardMembers(boardData.members);
-  }, [boardData.members]);
+    setIsLoading(true);
+    setLoadError(null);
 
-  // Tasks state for this board
-  const [tasks, setTasks] = useState<Task[]>(() => {
-    const initial = boardId ? MOCK_TASKS[boardId] : null;
-    return initial || MOCK_TASKS['board-1'] || [];
-  });
+    const timer = setTimeout(() => {
+      // Check if board exists
+      const found =
+        MOCK_BOARDS.find((b) => b.id === boardId) ||
+        (boardId?.startsWith("board-") ? initialBoard : null);
+      if (boardId && !found && !initialBoard) {
+        setLoadError(
+          `Unable to load board "${boardId}". The requested board may have been removed or does not exist.`,
+        );
+      } else {
+        setBoardData(initialBoard);
+        setBoardMembers(initialBoard.members);
+        const initialTasks = boardId ? MOCK_TASKS[boardId] : null;
+        setTasks(initialTasks || MOCK_TASKS["board-1"] || []);
+      }
+      setIsLoading(false);
+    }, 550); // Artificial delay to visibly handle loading state
+
+    return () => clearTimeout(timer);
+  }, [boardId, reloadKey, initialBoard]);
 
   // URL-Reflected Filter States
-  const searchQuery = searchParams.get('search') || searchParams.get('q') || '';
-  const selectedAssignee = searchParams.get('assignee') || 'all';
-  const selectedStatus = (searchParams.get('status') as TaskStatus | 'all') || 'all';
-  const isOverdueFilter = searchParams.get('overdue') === 'true';
-  const selectedTag = searchParams.get('tag') || 'all';
+  const searchQuery = searchParams.get("search") || searchParams.get("q") || "";
+  const selectedAssignee = searchParams.get("assignee") || "all";
+  const selectedStatus =
+    (searchParams.get("status") as TaskStatus | "all") || "all";
+  const isOverdueFilter = searchParams.get("overdue") === "true";
+  const selectedTag = searchParams.get("tag") || "all";
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [modalDefaultStatus, setModalDefaultStatus] = useState<TaskStatus>('todo');
+  const [modalDefaultStatus, setModalDefaultStatus] =
+    useState<TaskStatus>("todo");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
 
   // Searchable Assignee Dropdown State
   const [isAssigneeDropdownOpen, setIsAssigneeDropdownOpen] = useState(false);
-  const [assigneeSearchQuery, setAssigneeSearchQuery] = useState('');
+  const [assigneeSearchQuery, setAssigneeSearchQuery] = useState("");
   const assigneeDropdownRef = useRef<HTMLDivElement>(null);
 
   // Custom Status Dropdown State
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
   const statusDropdownRef = useRef<HTMLDivElement>(null);
 
-  const STATUS_OPTIONS: { id: TaskStatus | 'all'; label: string; dot: string }[] = useMemo(
+  const STATUS_OPTIONS: {
+    id: TaskStatus | "all";
+    label: string;
+    dot: string;
+  }[] = useMemo(
     () => [
-      { id: 'all', label: 'All Statuses', dot: 'bg-slate-400' },
-      { id: 'todo', label: 'To Do', dot: 'bg-blue-400' },
-      { id: 'in-progress', label: 'In Progress', dot: 'bg-amber-400' },
-      { id: 'done', label: 'Completed', dot: 'bg-emerald-400' },
+      { id: "all", label: "All Statuses", dot: "bg-slate-400" },
+      { id: "todo", label: "To Do", dot: "bg-blue-400" },
+      { id: "in-progress", label: "In Progress", dot: "bg-amber-400" },
+      { id: "done", label: "Completed", dot: "bg-emerald-400" },
     ],
-    []
+    [],
   );
 
   const currentStatusOption = useMemo(
-    () => STATUS_OPTIONS.find((s) => s.id === selectedStatus) || STATUS_OPTIONS[0],
-    [STATUS_OPTIONS, selectedStatus]
+    () =>
+      STATUS_OPTIONS.find((s) => s.id === selectedStatus) || STATUS_OPTIONS[0],
+    [STATUS_OPTIONS, selectedStatus],
   );
 
   useEffect(() => {
@@ -125,16 +154,37 @@ export const BoardView: React.FC = () => {
     };
 
     if (isAssigneeDropdownOpen || isStatusDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener("mousedown", handleClickOutside);
     }
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [isAssigneeDropdownOpen, isStatusDropdownOpen]);
 
+  // Task Search Input Ref & Keyboard Shortcut
+  const taskSearchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        taskSearchInputRef.current?.focus();
+        taskSearchInputRef.current?.select();
+      } else if (
+        e.key === "Escape" &&
+        document.activeElement === taskSearchInputRef.current
+      ) {
+        taskSearchInputRef.current?.blur();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const selectedUser = useMemo(
     () => boardMembers.find((u) => u.id === selectedAssignee),
-    [boardMembers, selectedAssignee]
+    [boardMembers, selectedAssignee],
   );
 
   const filteredMembersForDropdown = useMemo(() => {
@@ -144,7 +194,7 @@ export const BoardView: React.FC = () => {
       (m) =>
         m.name.toLowerCase().includes(q) ||
         m.initials.toLowerCase().includes(q) ||
-        (m.email && m.email.toLowerCase().includes(q))
+        (m.email && m.email.toLowerCase().includes(q)),
     );
   }, [boardMembers, assigneeSearchQuery]);
 
@@ -159,7 +209,7 @@ export const BoardView: React.FC = () => {
   const updateFilters = (updates: {
     search?: string;
     assignee?: string;
-    status?: TaskStatus | 'all';
+    status?: TaskStatus | "all";
     overdue?: boolean;
     tag?: string;
   }) => {
@@ -169,48 +219,48 @@ export const BoardView: React.FC = () => {
 
         if (updates.search !== undefined) {
           if (updates.search.trim()) {
-            next.set('search', updates.search);
+            next.set("search", updates.search);
           } else {
-            next.delete('search');
+            next.delete("search");
           }
-          next.delete('q'); // remove legacy q if present
+          next.delete("q"); // remove legacy q if present
         }
 
         if (updates.assignee !== undefined) {
-          if (updates.assignee && updates.assignee !== 'all') {
-            next.set('assignee', updates.assignee);
+          if (updates.assignee && updates.assignee !== "all") {
+            next.set("assignee", updates.assignee);
           } else {
-            next.delete('assignee');
+            next.delete("assignee");
           }
         }
 
         if (updates.status !== undefined) {
-          if (updates.status && updates.status !== 'all') {
-            next.set('status', updates.status);
+          if (updates.status && updates.status !== "all") {
+            next.set("status", updates.status);
           } else {
-            next.delete('status');
+            next.delete("status");
           }
         }
 
         if (updates.overdue !== undefined) {
           if (updates.overdue) {
-            next.set('overdue', 'true');
+            next.set("overdue", "true");
           } else {
-            next.delete('overdue');
+            next.delete("overdue");
           }
         }
 
         if (updates.tag !== undefined) {
-          if (updates.tag && updates.tag !== 'all') {
-            next.set('tag', updates.tag);
+          if (updates.tag && updates.tag !== "all") {
+            next.set("tag", updates.tag);
           } else {
-            next.delete('tag');
+            next.delete("tag");
           }
         }
 
         return next;
       },
-      { replace: true }
+      { replace: true },
     );
   };
 
@@ -220,16 +270,19 @@ export const BoardView: React.FC = () => {
 
   const hasActiveFilters =
     Boolean(searchQuery.trim()) ||
-    selectedAssignee !== 'all' ||
-    selectedStatus !== 'all' ||
+    selectedAssignee !== "all" ||
+    selectedStatus !== "all" ||
     isOverdueFilter ||
-    selectedTag !== 'all';
+    selectedTag !== "all";
 
   // Count total overdue tasks across board
   const overdueTasksCount = useMemo(() => {
     const today = new Date().setHours(0, 0, 0, 0);
     return tasks.filter(
-      (t) => t.status !== 'done' && Boolean(t.dueDate) && new Date(t.dueDate!).getTime() < today
+      (t) =>
+        t.status !== "done" &&
+        Boolean(t.dueDate) &&
+        new Date(t.dueDate!).getTime() < today,
     ).length;
   }, [tasks]);
 
@@ -253,53 +306,61 @@ export const BoardView: React.FC = () => {
       }
 
       // 2. Filter by Assignee
-      if (selectedAssignee !== 'all') {
-        if (selectedAssignee === 'unassigned') {
+      if (selectedAssignee !== "all") {
+        if (selectedAssignee === "unassigned") {
           if (task.assignee) return false;
         } else {
-          if (!task.assignee || task.assignee.id !== selectedAssignee) return false;
+          if (!task.assignee || task.assignee.id !== selectedAssignee)
+            return false;
         }
       }
 
       // 3. Filter by Status
-      if (selectedStatus !== 'all' && task.status !== selectedStatus) {
+      if (selectedStatus !== "all" && task.status !== selectedStatus) {
         return false;
       }
 
       // 4. Filter by Overdue
       if (isOverdueFilter) {
         const isTaskOverdue =
-          task.status !== 'done' &&
+          task.status !== "done" &&
           Boolean(task.dueDate) &&
           new Date(task.dueDate!).getTime() < today;
         if (!isTaskOverdue) return false;
       }
 
       // 5. Filter by Tag
-      if (selectedTag !== 'all' && !task.tags.includes(selectedTag)) {
+      if (selectedTag !== "all" && !task.tags.includes(selectedTag)) {
         return false;
       }
 
       return true;
     });
-  }, [tasks, searchQuery, selectedAssignee, selectedStatus, isOverdueFilter, selectedTag]);
+  }, [
+    tasks,
+    searchQuery,
+    selectedAssignee,
+    selectedStatus,
+    isOverdueFilter,
+    selectedTag,
+  ]);
 
   // Column grouped tasks
   const todoTasks = useMemo(
-    () => filteredTasks.filter((t) => t.status === 'todo'),
-    [filteredTasks]
+    () => filteredTasks.filter((t) => t.status === "todo"),
+    [filteredTasks],
   );
   const inProgressTasks = useMemo(
-    () => filteredTasks.filter((t) => t.status === 'in-progress'),
-    [filteredTasks]
+    () => filteredTasks.filter((t) => t.status === "in-progress"),
+    [filteredTasks],
   );
   const doneTasks = useMemo(
-    () => filteredTasks.filter((t) => t.status === 'done'),
-    [filteredTasks]
+    () => filteredTasks.filter((t) => t.status === "done"),
+    [filteredTasks],
   );
 
   // Task mutation handlers
-  const handleOpenCreateTask = (status: TaskStatus = 'todo') => {
+  const handleOpenCreateTask = (status: TaskStatus = "todo") => {
     setEditingTask(null);
     setModalDefaultStatus(status);
     setIsModalOpen(true);
@@ -310,16 +371,29 @@ export const BoardView: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleDeleteTask = (taskId: string) => {
-    setTasks((prev) => prev.filter((t) => t.id !== taskId));
-    showToast('Task removed from board');
+  const handleRequestDeleteTask = (taskId: string) => {
+    const found = tasks.find((t) => t.id === taskId);
+    if (found) {
+      setTaskToDelete(found);
+    }
+  };
+
+  const handleConfirmDeleteTask = () => {
+    if (!taskToDelete) return;
+    setTasks((prev) => prev.filter((t) => t.id !== taskToDelete.id));
+    showToast(`Task "${taskToDelete.title}" deleted`);
+    setTaskToDelete(null);
   };
 
   const handleMoveStatus = (taskId: string, newStatus: TaskStatus) => {
     setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, status: newStatus, updatedAt: new Date().toISOString() } : t))
+      prev.map((t) =>
+        t.id === taskId
+          ? { ...t, status: newStatus, updatedAt: new Date().toISOString() }
+          : t,
+      ),
     );
-    showToast(`Task moved to ${newStatus.replace('-', ' ')}`);
+    showToast(`Task moved to ${newStatus.replace("-", " ")}`);
   };
 
   const handleDropTask = (taskId: string, targetStatus: TaskStatus) => {
@@ -330,10 +404,10 @@ export const BoardView: React.FC = () => {
     setTasks((prev) => {
       const exists = prev.some((t) => t.id === savedTask.id);
       if (exists) {
-        showToast('Task updated successfully');
+        showToast("Task updated successfully");
         return prev.map((t) => (t.id === savedTask.id ? savedTask : t));
       } else {
-        showToast('New task added to board');
+        showToast("New task added to board");
         return [savedTask, ...prev];
       }
     });
@@ -342,17 +416,17 @@ export const BoardView: React.FC = () => {
   const handleUpdateBoard = (updatedBoard: Board) => {
     setBoardData(updatedBoard);
     setBoardMembers(updatedBoard.members);
-    showToast('Board updated successfully');
+    showToast("Board updated successfully");
   };
 
   const handleDeleteBoard = (_deletedBoardId: string) => {
-    showToast('Board deleted');
-    navigate('/boards');
+    showToast("Board deleted");
+    navigate("/boards");
   };
 
   const handleClearTasks = () => {
     setTasks([]);
-    showToast('All tasks cleared from board');
+    showToast("All tasks cleared from board");
   };
 
   return (
@@ -372,277 +446,369 @@ export const BoardView: React.FC = () => {
 
       {/* Main Board Canvas */}
       <main className="flex-1 flex flex-col max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
-        
-        {/* Board Header Bar */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800/80 mb-6">
-          <div className="space-y-1.5">
-            <div className="flex items-center space-x-3">
-              <Link
-                to="/boards"
-                className="p-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition flex items-center space-x-1"
-                title="Back to Dashboard"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </Link>
-              <span className="px-2.5 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">
-                {boardData.workspaceName}
-              </span>
+        {isLoading ? (
+          /* Loading State Skeleton */
+          <div className="flex-1 flex flex-col space-y-6 animate-pulse">
+            {/* Header Skeleton */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800/80">
+              <div className="space-y-2">
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 rounded-xl bg-slate-800" />
+                  <div className="w-24 h-4 rounded-md bg-slate-800" />
+                </div>
+                <div className="w-64 h-8 rounded-xl bg-slate-800" />
+                <div className="w-96 max-w-full h-4 rounded-md bg-slate-800/60" />
+              </div>
+              <div className="flex items-center space-x-3">
+                <div className="w-9 h-9 rounded-xl bg-slate-800" />
+                <div className="w-28 h-9 rounded-xl bg-slate-800" />
+              </div>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              {boardData.title}
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-400 max-w-2xl">
-              {boardData.description}
-            </p>
+            {/* Filter Bar Skeleton */}
+            <div className="h-14 rounded-2xl bg-slate-900/60 border border-slate-800/80" />
+
+            {/* Columns Skeleton */}
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-5 pb-6">
+              {[1, 2, 3].map((col) => (
+                <div
+                  key={col}
+                  className="rounded-2xl bg-slate-900/40 border border-slate-800/60 p-4 space-y-4"
+                >
+                  <div className="flex items-center justify-between pb-3.5 border-b border-slate-800/60">
+                    <div className="w-24 h-4 rounded-md bg-slate-800" />
+                    <div className="w-6 h-6 rounded-lg bg-slate-800" />
+                  </div>
+                  <div className="space-y-3">
+                    <div className="h-32 rounded-xl bg-slate-900/80 border border-slate-800/60 p-3 space-y-2">
+                      <div className="w-16 h-3 rounded bg-slate-800" />
+                      <div className="w-3/4 h-4 rounded bg-slate-800" />
+                      <div className="w-full h-3 rounded bg-slate-800/50" />
+                    </div>
+                    <div className="h-28 rounded-xl bg-slate-900/80 border border-slate-800/60 p-3 space-y-2">
+                      <div className="w-16 h-3 rounded bg-slate-800" />
+                      <div className="w-2/3 h-4 rounded bg-slate-800" />
+                      <div className="w-5/6 h-3 rounded bg-slate-800/50" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-
-          {/* Right Action Tools */}
-          <div className="flex items-center space-x-3">
-            {/* Board Settings Action Button */}
-            <button
-              onClick={() => setIsSettingsModalOpen(true)}
-              className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition cursor-pointer"
-              title="Board Settings (General, Members, Danger Zone)"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-
-            {/* Create Task Button */}
-            <button
-              onClick={() => handleOpenCreateTask('todo')}
-              className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 hover:shadow-indigo-500/20 transition-all active:scale-95 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add Task</span>
-            </button>
+        ) : loadError ? (
+          /* Error State */
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center max-w-md mx-auto my-12 rounded-3xl bg-slate-900/60 border border-rose-500/20 shadow-2xl">
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 mb-4">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <h2 className="text-lg font-bold text-white mb-1">
+              Failed to Load Board
+            </h2>
+            <p className="text-xs text-slate-400 mb-6">{loadError}</p>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setReloadKey((prev) => prev + 1)}
+                className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 transition cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Retry</span>
+              </button>
+              <Link
+                to="/dashboard"
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition"
+              >
+                Back to Dashboard
+              </Link>
+            </div>
           </div>
-        </div>
-
-        {/* Board Search & Filter Controls Strip */}
-        <div className="relative z-30 space-y-3 mb-6">
-          {/* Main Filter Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-slate-900/90 border border-slate-800 backdrop-blur-xl">
-            {/* Left Controls: Title Search & Dropdowns */}
-            <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-[280px]">
-              {/* Free-text Search on Title */}
-              <div className="relative flex-1 min-w-[180px] max-w-xs">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => updateFilters({ search: e.target.value })}
-                  placeholder="Search by task title..."
-                  className="w-full pl-8.5 pr-8 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition shadow-inner"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => updateFilters({ search: '' })}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 p-0.5 transition cursor-pointer"
-                    title="Clear search"
+        ) : (
+          /* Loaded Success State */
+          <>
+            {/* Board Header Bar */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800/80 mb-6">
+              <div className="space-y-1.5">
+                <div className="flex items-center space-x-3">
+                  <Link
+                    to="/dashboard"
+                    className="p-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition flex items-center space-x-1"
+                    title="Back to Dashboard"
                   >
-                    <X className="w-3 h-3" />
-                  </button>
-                )}
+                    <ArrowLeft className="w-4 h-4" />
+                  </Link>
+                  <span className="px-2.5 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">
+                    {boardData.workspaceName}
+                  </span>
+                </div>
+
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                  {boardData.title}
+                </h1>
+                <p className="text-xs sm:text-sm text-slate-400 max-w-2xl">
+                  {boardData.description}
+                </p>
               </div>
 
-              {/* Searchable Assignee Filter Popover */}
-              <div className="relative" ref={assigneeDropdownRef}>
+              {/* Right Action Tools */}
+              <div className="flex items-center space-x-3">
+                {/* Board Settings Action Button */}
                 <button
-                  type="button"
-                  onClick={() => {
-                    setIsAssigneeDropdownOpen((prev) => !prev);
-                    setAssigneeSearchQuery('');
-                  }}
-                  className={`inline-flex items-center space-x-2 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
-                    selectedAssignee !== 'all'
-                      ? 'bg-indigo-600/20 text-indigo-200 border-indigo-500/50 shadow-md shadow-indigo-950/40'
-                      : 'bg-slate-950 text-slate-300 border-slate-800 hover:text-white hover:border-slate-700'
-                  }`}
-                  title="Filter by assigned member"
+                  onClick={() => setIsSettingsModalOpen(true)}
+                  className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition cursor-pointer"
+                  title="Board Settings (General, Members, Danger Zone)"
                 >
-                  {selectedUser ? (
-                    <>
-                      <div
-                        className={`w-4 h-4 rounded-full ${selectedUser.color} text-white font-bold text-[8px] flex items-center justify-center`}
-                      >
-                        {selectedUser.initials}
-                      </div>
-                      <span className="truncate max-w-[110px]">{selectedUser.name}</span>
-                    </>
-                  ) : selectedAssignee === 'unassigned' ? (
-                    <>
-                      <div className="w-4 h-4 rounded-full bg-slate-700 text-slate-300 text-[8px] flex items-center justify-center font-bold">
-                        ?
-                      </div>
-                      <span>Unassigned</span>
-                    </>
-                  ) : (
-                    <>
-                      <UserIcon className="w-3.5 h-3.5 text-slate-400" />
-                      <span>All Assignees</span>
-                    </>
-                  )}
-                  <ChevronDown
-                    className={`w-3 h-3 text-slate-400 transition-transform ${
-                      isAssigneeDropdownOpen ? 'rotate-180 text-indigo-400' : ''
-                    }`}
-                  />
+                  <Settings className="w-4 h-4" />
                 </button>
 
-                {/* Dropdown Popover Menu */}
-                {isAssigneeDropdownOpen && (
-                  <div className="absolute left-0 mt-2 w-64 rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl shadow-black p-2 z-50 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-white/10">
-                    {/* Search Input */}
-                    <div className="relative mb-2">
-                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      <input
-                        type="text"
-                        autoFocus
-                        value={assigneeSearchQuery}
-                        onChange={(e) => setAssigneeSearchQuery(e.target.value)}
-                        placeholder="Search members..."
-                        className="w-full pl-8 pr-7 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition"
-                      />
-                      {assigneeSearchQuery && (
-                        <button
-                          type="button"
-                          onClick={() => setAssigneeSearchQuery('')}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 p-0.5"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
+                {/* Create Task Button */}
+                <button
+                  onClick={() => handleOpenCreateTask("todo")}
+                  className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 hover:shadow-indigo-500/20 transition-all active:scale-95 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Task</span>
+                </button>
+              </div>
+            </div>
 
-                    {/* Options List */}
-                    <div className="max-h-52 overflow-y-auto space-y-0.5 scrollbar-thin">
-                      {/* All Assignees Option */}
+            {/* Board Search & Filter Controls Strip */}
+            <div className="relative z-30 space-y-3 mb-6">
+              {/* Main Filter Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-slate-900/90 border border-slate-800 backdrop-blur-xl">
+                {/* Left Controls: Title Search & Dropdowns */}
+                <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-70">
+                  {/* Free-text Search on Title */}
+                  <div className="relative flex-1 min-w-45 max-w-xs">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      ref={taskSearchInputRef}
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) =>
+                        updateFilters({ search: e.target.value })
+                      }
+                      placeholder="Search by task title..."
+                      className="w-full pl-8.5 pr-14 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition shadow-inner"
+                    />
+                    {searchQuery ? (
                       <button
-                        type="button"
-                        onClick={() => {
-                          updateFilters({ assignee: 'all' });
-                          setIsAssigneeDropdownOpen(false);
-                        }}
-                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition cursor-pointer ${
-                          selectedAssignee === 'all'
-                            ? 'bg-indigo-600 text-white font-semibold'
-                            : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
-                        }`}
+                        onClick={() => updateFilters({ search: "" })}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 p-0.5 transition cursor-pointer"
+                        title="Clear search"
                       >
-                        <div className="flex items-center space-x-2">
-                          <UserIcon className="w-3.5 h-3.5 text-slate-400" />
-                          <span>All Assignees</span>
-                        </div>
-                        {selectedAssignee === 'all' && <Check className="w-3.5 h-3.5" />}
+                        <X className="w-3 h-3" />
                       </button>
+                    ) : (
+                      <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                        <kbd className="px-1.5 py-0.5 text-[9px] font-mono font-semibold text-slate-500 bg-slate-900 rounded border border-slate-800">
+                          Ctrl K
+                        </kbd>
+                      </div>
+                    )}
+                  </div>
 
-                      {/* Unassigned Option */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          updateFilters({ assignee: 'unassigned' });
-                          setIsAssigneeDropdownOpen(false);
-                        }}
-                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition cursor-pointer ${
-                          selectedAssignee === 'unassigned'
-                            ? 'bg-indigo-600 text-white font-semibold'
-                            : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
-                        }`}
-                      >
-                        <div className="flex items-center space-x-2">
+                  {/* Searchable Assignee Filter Popover */}
+                  <div className="relative" ref={assigneeDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAssigneeDropdownOpen((prev) => !prev);
+                        setAssigneeSearchQuery("");
+                      }}
+                      className={`inline-flex items-center space-x-2 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
+                        selectedAssignee !== "all"
+                          ? "bg-indigo-600/20 text-indigo-200 border-indigo-500/50 shadow-md shadow-indigo-950/40"
+                          : "bg-slate-950 text-slate-300 border-slate-800 hover:text-white hover:border-slate-700"
+                      }`}
+                      title="Filter by assigned member"
+                    >
+                      {selectedUser ? (
+                        <>
+                          <div
+                            className={`w-4 h-4 rounded-full ${selectedUser.color} text-white font-bold text-[8px] flex items-center justify-center`}
+                          >
+                            {selectedUser.initials}
+                          </div>
+                          <span className="truncate max-w-27.5">
+                            {selectedUser.name}
+                          </span>
+                        </>
+                      ) : selectedAssignee === "unassigned" ? (
+                        <>
                           <div className="w-4 h-4 rounded-full bg-slate-700 text-slate-300 text-[8px] flex items-center justify-center font-bold">
                             ?
                           </div>
                           <span>Unassigned</span>
-                        </div>
-                        {selectedAssignee === 'unassigned' && <Check className="w-3.5 h-3.5" />}
-                      </button>
+                        </>
+                      ) : (
+                        <>
+                          <UserIcon className="w-3.5 h-3.5 text-slate-400" />
+                          <span>All Assignees</span>
+                        </>
+                      )}
+                      <ChevronDown
+                        className={`w-3 h-3 text-slate-400 transition-transform ${
+                          isAssigneeDropdownOpen
+                            ? "rotate-180 text-indigo-400"
+                            : ""
+                        }`}
+                      />
+                    </button>
 
-                      <div className="my-1 border-t border-slate-800" />
-
-                      {/* Members list */}
-                      {filteredMembersForDropdown.length > 0 ? (
-                        filteredMembersForDropdown.map((user) => {
-                          const isSelected = selectedAssignee === user.id;
-                          return (
+                    {/* Dropdown Popover Menu */}
+                    {isAssigneeDropdownOpen && (
+                      <div className="absolute left-0 mt-2 w-64 rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl shadow-black p-2 z-50 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-white/10">
+                        {/* Search Input */}
+                        <div className="relative mb-2">
+                          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          <input
+                            type="text"
+                            autoFocus
+                            value={assigneeSearchQuery}
+                            onChange={(e) =>
+                              setAssigneeSearchQuery(e.target.value)
+                            }
+                            placeholder="Search members..."
+                            className="w-full pl-8 pr-7 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition"
+                          />
+                          {assigneeSearchQuery && (
                             <button
-                              key={user.id}
                               type="button"
-                              onClick={() => {
-                                updateFilters({ assignee: user.id });
-                                setIsAssigneeDropdownOpen(false);
-                              }}
-                              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition cursor-pointer ${
-                                isSelected
-                                  ? 'bg-indigo-600 text-white font-semibold'
-                                  : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
-                              }`}
+                              onClick={() => setAssigneeSearchQuery("")}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 p-0.5"
                             >
-                              <div className="flex items-center space-x-2 min-w-0">
-                                <div
-                                  className={`w-5 h-5 rounded-full ${user.color} text-white font-bold text-[9px] flex items-center justify-center shrink-0 ring-1 ring-slate-700`}
-                                >
-                                  {user.initials}
-                                </div>
-                                <div className="text-left truncate">
-                                  <p className="truncate font-medium">{user.name}</p>
-                                  {user.email && (
-                                    <p
-                                      className={`text-[10px] truncate ${
-                                        isSelected ? 'text-indigo-200' : 'text-slate-500'
-                                      }`}
-                                    >
+                              <X className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Options List */}
+                        <div className="max-h-52 overflow-y-auto space-y-0.5 scrollbar-thin">
+                          {/* All Assignees Option */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateFilters({ assignee: "all" });
+                              setIsAssigneeDropdownOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition cursor-pointer ${
+                              selectedAssignee === "all"
+                                ? "bg-indigo-600 text-white font-semibold"
+                                : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
+                            }`}
+                          >
+                            <div className="flex items-center space-x-2">
+                              <UserIcon className="w-3.5 h-3.5 text-slate-400" />
+                              <span>All Assignees</span>
+                            </div>
+                            {selectedAssignee === "all" && (
+                              <Check className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+
+                          {/* Unassigned Option */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateFilters({ assignee: "unassigned" });
+                              setIsAssigneeDropdownOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition cursor-pointer ${
+                              selectedAssignee === "unassigned"
+                                ? "bg-indigo-600 text-white font-semibold"
+                                : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
+                            }`}
+                          >
+                            <div className="flex items-center space-x-2">
+                              <div className="w-4 h-4 rounded-full bg-slate-700 text-slate-300 text-[8px] flex items-center justify-center font-bold">
+                                ?
+                              </div>
+                              <span>Unassigned</span>
+                            </div>
+                            {selectedAssignee === "unassigned" && (
+                              <Check className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+
+                          <div className="my-1 border-t border-slate-800" />
+
+                          {/* Member List */}
+                          {filteredMembersForDropdown.length === 0 ? (
+                            <p className="text-center py-3 text-xs text-slate-500">
+                              No members found
+                            </p>
+                          ) : (
+                            filteredMembersForDropdown.map((user) => (
+                              <button
+                                key={user.id}
+                                type="button"
+                                onClick={() => {
+                                  updateFilters({ assignee: user.id });
+                                  setIsAssigneeDropdownOpen(false);
+                                }}
+                                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition cursor-pointer ${
+                                  selectedAssignee === user.id
+                                    ? "bg-indigo-600 text-white font-semibold"
+                                    : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
+                                }`}
+                              >
+                                <div className="flex items-center space-x-2 min-w-0">
+                                  <div
+                                    className={`w-5 h-5 rounded-full ${user.color} text-white font-bold text-[9px] flex items-center justify-center shrink-0`}
+                                  >
+                                    {user.initials}
+                                  </div>
+                                  <div className="text-left min-w-0">
+                                    <p className="truncate text-xs">
+                                      {user.name}
+                                    </p>
+                                    <p className="truncate text-[10px] text-slate-400">
                                       {user.email}
                                     </p>
-                                  )}
+                                  </div>
                                 </div>
-                              </div>
-                              {isSelected && <Check className="w-3.5 h-3.5 shrink-0 ml-2" />}
-                            </button>
-                          );
-                        })
-                      ) : (
-                        <p className="text-center text-xs text-slate-500 py-3">No members found</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Custom Status Filter Popover */}
-              <div className="relative" ref={statusDropdownRef}>
-                <button
-                  type="button"
-                  onClick={() => setIsStatusDropdownOpen((prev) => !prev)}
-                  className={`inline-flex items-center space-x-2 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
-                    selectedStatus !== 'all'
-                      ? 'bg-indigo-600/20 text-indigo-200 border-indigo-500/50 shadow-md shadow-indigo-950/40'
-                      : 'bg-slate-950 text-slate-300 border-slate-800 hover:text-white hover:border-slate-700'
-                  }`}
-                  title="Filter by status"
-                >
-                  <Filter className="w-3.5 h-3.5 text-slate-400" />
-                  <div className="flex items-center space-x-1.5">
-                    {selectedStatus !== 'all' && (
-                      <span className={`w-2 h-2 rounded-full ${currentStatusOption.dot}`} />
+                                {selectedAssignee === user.id && (
+                                  <Check className="w-3.5 h-3.5 shrink-0 ml-1" />
+                                )}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
                     )}
-                    <span>{currentStatusOption.label}</span>
                   </div>
-                  <ChevronDown
-                    className={`w-3 h-3 text-slate-400 transition-transform ${
-                      isStatusDropdownOpen ? 'rotate-180 text-indigo-400' : ''
-                    }`}
-                  />
-                </button>
 
-                {/* Status Dropdown Menu */}
-                {isStatusDropdownOpen && (
-                  <div className="absolute left-0 mt-2 w-48 rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black/90 p-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-white/10">
-                    <div className="space-y-0.5">
-                      {STATUS_OPTIONS.map((opt) => {
-                        const isSelected = selectedStatus === opt.id;
-                        return (
+                  {/* Custom Status Dropdown Filter */}
+                  <div className="relative" ref={statusDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => setIsStatusDropdownOpen((prev) => !prev)}
+                      className={`inline-flex items-center space-x-2 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
+                        selectedStatus !== "all"
+                          ? "bg-indigo-600/20 text-indigo-200 border-indigo-500/50 shadow-md shadow-indigo-950/40"
+                          : "bg-slate-950 text-slate-300 border-slate-800 hover:text-white hover:border-slate-700"
+                      }`}
+                      title="Filter by status"
+                    >
+                      <Filter className="w-3.5 h-3.5 text-slate-400" />
+                      <div className="flex items-center space-x-1.5">
+                        <span
+                          className={`w-2 h-2 rounded-full ${currentStatusOption.dot}`}
+                        />
+                        <span>{currentStatusOption.label}</span>
+                      </div>
+                      <ChevronDown
+                        className={`w-3 h-3 text-slate-400 transition-transform ${
+                          isStatusDropdownOpen
+                            ? "rotate-180 text-indigo-400"
+                            : ""
+                        }`}
+                      />
+                    </button>
+
+                    {/* Status Dropdown Popover */}
+                    {isStatusDropdownOpen && (
+                      <div className="absolute left-0 mt-2 w-44 rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl shadow-black p-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-white/10">
+                        {STATUS_OPTIONS.map((opt) => (
                           <button
                             key={opt.id}
                             type="button"
@@ -651,150 +817,181 @@ export const BoardView: React.FC = () => {
                               setIsStatusDropdownOpen(false);
                             }}
                             className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition cursor-pointer ${
-                              isSelected
-                                ? 'bg-indigo-600 text-white font-semibold'
-                                : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+                              selectedStatus === opt.id
+                                ? "bg-indigo-600 text-white font-semibold"
+                                : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
                             }`}
                           >
                             <div className="flex items-center space-x-2">
-                              <span className={`w-2 h-2 rounded-full ${opt.dot}`} />
+                              <span
+                                className={`w-2 h-2 rounded-full ${opt.dot}`}
+                              />
                               <span>{opt.label}</span>
                             </div>
-                            {isSelected && <Check className="w-3.5 h-3.5" />}
+                            {selectedStatus === opt.id && (
+                              <Check className="w-3.5 h-3.5" />
+                            )}
                           </button>
-                        );
-                      })}
-                    </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
 
-              {/* Overdue Quick Toggle Button */}
-              <button
-                type="button"
-                onClick={() => updateFilters({ overdue: !isOverdueFilter })}
-                className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                  isOverdueFilter
-                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-md shadow-rose-950/40'
-                    : 'bg-slate-950/80 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700'
-                }`}
-                title="Filter tasks that are past their due date"
-              >
-                <Clock className={`w-3.5 h-3.5 ${isOverdueFilter ? 'text-rose-400' : 'text-slate-400'}`} />
-                <span>Overdue</span>
-                {overdueTasksCount > 0 && (
-                  <span
-                    className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                  {/* Overdue Quick Toggle */}
+                  <button
+                    onClick={() => updateFilters({ overdue: !isOverdueFilter })}
+                    className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
                       isOverdueFilter
-                        ? 'bg-rose-500 text-white'
-                        : 'bg-slate-800 text-slate-400'
+                        ? "bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-sm shadow-rose-950/50"
+                        : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700"
                     }`}
                   >
-                    {overdueTasksCount}
+                    <Clock className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Overdue</span>
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-950 text-rose-400 font-bold border border-rose-800/50">
+                      {overdueTasksCount}
+                    </span>
+                  </button>
+
+                  {/* Reset All Filters Button */}
+                  {hasActiveFilters && (
+                    <button
+                      onClick={handleClearFilters}
+                      className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-medium border border-slate-700/50 transition cursor-pointer"
+                      title="Clear all active filters"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Reset</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Right Stat Summary */}
+                <div className="text-xs text-slate-400 hidden sm:block">
+                  Showing{" "}
+                  <span className="font-semibold text-white">
+                    {filteredTasks.length}
+                  </span>{" "}
+                  of {tasks.length} cards
+                </div>
+              </div>
+
+              {/* Tag Quick Filter Pills Bar */}
+              {allTags.length > 0 && (
+                <div className="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-none text-xs">
+                  <span className="text-slate-500 font-semibold uppercase tracking-wider text-[10px] shrink-0">
+                    Tags:
                   </span>
-                )}
-              </button>
-            </div>
-
-            {/* Right Controls: Task count & Reset button */}
-            <div className="flex items-center space-x-2.5 text-xs text-slate-400">
-              <span className="text-[11px]">
-                Showing <strong className="text-slate-200 font-semibold">{filteredTasks.length}</strong> of{' '}
-                {tasks.length} cards
-              </span>
-
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  onClick={handleClearFilters}
-                  className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-slate-300 hover:text-rose-300 hover:bg-rose-500/10 border border-slate-800 hover:border-rose-500/30 transition cursor-pointer"
-                  title="Clear all active filters"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>Clear Filters</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => updateFilters({ tag: "all" })}
+                    className={`px-2.5 py-0.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+                      selectedTag === "all"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800"
+                    }`}
+                  >
+                    All
+                  </button>
+                  {allTags.map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() =>
+                        updateFilters({
+                          tag: selectedTag === tag ? "all" : tag,
+                        })
+                      }
+                      className={`px-2.5 py-0.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+                        selectedTag === tag
+                          ? "bg-indigo-600/30 text-indigo-300 border border-indigo-500/40"
+                          : "bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800"
+                      }`}
+                    >
+                      #{tag}
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
-          </div>
 
-          {/* Secondary Tag Filter Strip (if board has tags) */}
-          {allTags.length > 0 && (
-            <div className="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-none">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider pl-1">
-                Tags:
-              </span>
-              <button
-                type="button"
-                onClick={() => updateFilters({ tag: 'all' })}
-                className={`px-2.5 py-0.5 rounded-lg text-xs font-medium transition cursor-pointer ${
-                  selectedTag === 'all'
-                    ? 'bg-slate-800 text-white border border-slate-700'
-                    : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800'
-                }`}
-              >
-                All
-              </button>
+            {/* Empty Search/Filter State Banner if 0 cards match */}
+            {filteredTasks.length === 0 && (
+              <div className="p-8 mb-6 text-center rounded-2xl bg-slate-900/40 border border-slate-800/80 flex flex-col items-center justify-center space-y-3 animate-in fade-in duration-200">
+                <div className="w-10 h-10 rounded-xl bg-slate-800/70 border border-slate-700/60 flex items-center justify-center text-slate-400">
+                  <Search className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">
+                    No tasks match your filters
+                  </h4>
+                  <p className="text-xs text-slate-400 mt-1 max-w-sm">
+                    Try clearing some of your search queries, tag, status, or
+                    assignee filters to see more cards.
+                  </p>
+                </div>
+                <div className="flex items-center space-x-3 pt-2">
+                  <button
+                    onClick={handleClearFilters}
+                    className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md transition cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reset Filters</span>
+                  </button>
+                  <button
+                    onClick={() => handleOpenCreateTask("todo")}
+                    className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add New Task</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
-              {allTags.map((tag) => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => updateFilters({ tag: selectedTag === tag ? 'all' : tag })}
-                  className={`px-2.5 py-0.5 rounded-lg text-xs font-medium transition cursor-pointer ${
-                    selectedTag === tag
-                      ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/40'
-                      : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800'
-                  }`}
-                >
-                  #{tag}
-                </button>
-              ))}
+            {/* Kanban Columns Canvas */}
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-5 pb-6">
+              <Column
+                title="To Do"
+                status="todo"
+                colorDot="bg-slate-400"
+                accentBadge="bg-slate-800 text-slate-300"
+                tasks={todoTasks}
+                onAddTask={handleOpenCreateTask}
+                onEditTask={handleEditTask}
+                onDeleteTask={handleRequestDeleteTask}
+                onMoveStatus={handleMoveStatus}
+                onDropTask={handleDropTask}
+              />
+
+              <Column
+                title="In Progress"
+                status="in-progress"
+                colorDot="bg-indigo-400"
+                accentBadge="bg-indigo-950 text-indigo-300 border border-indigo-800/60"
+                tasks={inProgressTasks}
+                onAddTask={handleOpenCreateTask}
+                onEditTask={handleEditTask}
+                onDeleteTask={handleRequestDeleteTask}
+                onMoveStatus={handleMoveStatus}
+                onDropTask={handleDropTask}
+              />
+
+              <Column
+                title="Completed"
+                status="done"
+                colorDot="bg-emerald-400"
+                accentBadge="bg-emerald-950 text-emerald-300 border border-emerald-800/60"
+                tasks={doneTasks}
+                onAddTask={handleOpenCreateTask}
+                onEditTask={handleEditTask}
+                onDeleteTask={handleRequestDeleteTask}
+                onMoveStatus={handleMoveStatus}
+                onDropTask={handleDropTask}
+              />
             </div>
-          )}
-        </div>
-
-        {/* Kanban Columns Canvas */}
-        <div className="flex-1 flex gap-5 overflow-x-auto pb-6 scrollbar-thin">
-          <Column
-            title="To Do"
-            status="todo"
-            colorDot="bg-slate-400"
-            accentBadge="bg-slate-800 text-slate-300"
-            tasks={todoTasks}
-            onAddTask={handleOpenCreateTask}
-            onEditTask={handleEditTask}
-            onDeleteTask={handleDeleteTask}
-            onMoveStatus={handleMoveStatus}
-            onDropTask={handleDropTask}
-          />
-
-          <Column
-            title="In Progress"
-            status="in-progress"
-            colorDot="bg-indigo-400"
-            accentBadge="bg-indigo-950 text-indigo-300 border border-indigo-800/60"
-            tasks={inProgressTasks}
-            onAddTask={handleOpenCreateTask}
-            onEditTask={handleEditTask}
-            onDeleteTask={handleDeleteTask}
-            onMoveStatus={handleMoveStatus}
-            onDropTask={handleDropTask}
-          />
-
-          <Column
-            title="Completed"
-            status="done"
-            colorDot="bg-emerald-400"
-            accentBadge="bg-emerald-950 text-emerald-300 border border-emerald-800/60"
-            tasks={doneTasks}
-            onAddTask={handleOpenCreateTask}
-            onEditTask={handleEditTask}
-            onDeleteTask={handleDeleteTask}
-            onMoveStatus={handleMoveStatus}
-            onDropTask={handleDropTask}
-          />
-        </div>
-
+          </>
+        )}
       </main>
 
       {/* Task Create / Edit Modal */}
@@ -806,6 +1003,7 @@ export const BoardView: React.FC = () => {
         boardId={boardData.id}
         availableAssignees={boardMembers}
         onSaveTask={handleSaveTask}
+        onDeleteTask={handleRequestDeleteTask}
       />
 
       {/* Board Settings Modal (General, Members, Danger Zone) */}
@@ -817,6 +1015,47 @@ export const BoardView: React.FC = () => {
         onDeleteBoard={handleDeleteBoard}
         onClearTasks={handleClearTasks}
       />
+
+      {/* Task Deletion Confirmation Dialog */}
+      {taskToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
+          <div className="relative w-full max-w-sm rounded-3xl bg-slate-900 border border-slate-700/80 p-6 shadow-2xl shadow-black/90 text-slate-100 ring-1 ring-white/10 animate-in fade-in zoom-in-95 duration-100">
+            {/* Modal Icon & Heading */}
+            <div className="flex items-center space-x-3.5 mb-6">
+              <div className="w-11 h-11 rounded-2xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0 shadow-inner">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white leading-snug">
+                  Delete Task?
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Are you sure? This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => setTaskToDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteTask}
+                className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-lg shadow-rose-950/50 transition-all active:scale-95 cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete Task</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

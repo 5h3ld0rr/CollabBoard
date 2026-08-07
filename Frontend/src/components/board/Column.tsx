@@ -57,7 +57,7 @@ export const Column: React.FC<ColumnProps> = ({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`flex flex-col rounded-2xl bg-slate-900/60 border transition-all duration-200 min-w-75 sm:min-w-85 max-w-95 flex-1 p-4 shadow-sm ${
+      className={`flex flex-col rounded-2xl bg-slate-900/60 border transition-all duration-200 w-full flex-1 min-w-0 p-4 shadow-sm ${
         isDragOver
           ? 'border-indigo-500 bg-slate-900/90 ring-2 ring-indigo-500/20'
           : 'border-slate-800/80 hover:border-slate-700/80'

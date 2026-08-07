@@ -158,7 +158,6 @@ export const Dashboard: React.FC = () => {
           }
           setIsManageWorkspaceModalOpen(true);
         }}
-        onOpenCreateBoard={() => setIsCreateBoardModalOpen(true)}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
       />
@@ -175,7 +174,7 @@ export const Dashboard: React.FC = () => {
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
         
         {/* Header Title Section */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        <div className="mb-8">
           <div>
             <div className="flex items-center space-x-2 text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-1">
               <Sparkles className="w-3.5 h-3.5" />
@@ -187,16 +186,6 @@ export const Dashboard: React.FC = () => {
             <p className="text-sm text-slate-400 mt-1 max-w-2xl">
               {currentWorkspace.description}
             </p>
-          </div>
-
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={() => setIsCreateBoardModalOpen(true)}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 hover:shadow-indigo-500/20 transition-all transform active:scale-95"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create New Board</span>
-            </button>
           </div>
         </div>
 

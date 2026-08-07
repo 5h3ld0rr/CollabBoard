@@ -13,10 +13,9 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/boards" element={<Dashboard />} />
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/boards/:boardId" element={<BoardView />} />
         <Route path="/profile" element={<Profile />} />
-        <Route path="/dashboard" element={<Navigate to="/boards" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>

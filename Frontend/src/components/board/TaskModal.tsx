@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Sparkles, Check } from 'lucide-react';
+import { X, Sparkles, Check, Trash2, Loader2 } from 'lucide-react';
 import type { Task, TaskPriority, TaskStatus, User } from '../../types';
 import { MOCK_USERS } from '../../data/mockData';
 
@@ -11,6 +11,7 @@ interface TaskModalProps {
   boardId: string;
   availableAssignees?: User[];
   onSaveTask: (task: Task) => void;
+  onDeleteTask?: (taskId: string) => void;
 }
 
 export const TaskModal: React.FC<TaskModalProps> = ({
@@ -21,15 +22,17 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   boardId,
   availableAssignees = MOCK_USERS,
   onSaveTask,
+  onDeleteTask,
 }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<TaskStatus>(defaultStatus);
   const [priority, setPriority] = useState<TaskPriority>('medium');
-  const [assigneeId, setAssigneeId] = useState<string>(MOCK_USERS[0].id);
+  const [assigneeId, setAssigneeId] = useState<string>('');
   const [tagInput, setTagInput] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (initialTask) {
@@ -37,7 +40,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setDescription(initialTask.description || '');
       setStatus(initialTask.status);
       setPriority(initialTask.priority);
-      setAssigneeId(initialTask.assignee?.id || MOCK_USERS[0].id);
+      setAssigneeId(initialTask.assignee?.id || '');
       setTagInput(initialTask.tags.join(', '));
       setDueDate(initialTask.dueDate || '');
     } else {
@@ -45,23 +48,47 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setDescription('');
       setStatus(defaultStatus);
       setPriority('medium');
-      setAssigneeId(MOCK_USERS[0].id);
+      setAssigneeId('');
       setTagInput('Frontend, Feature');
       setDueDate('');
     }
     setError(null);
+    setIsSubmitting(false);
   }, [initialTask, defaultStatus, isOpen]);
 
   if (!isOpen) return null;
 
+  const getTodayString = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) {
-      setError('Please provide a task title.');
+    const trimmedTitle = title.trim();
+
+    if (!trimmedTitle) {
+      setError('Task title is required.');
       return;
     }
 
-    const assignedUser: User | undefined = availableAssignees.find((u) => u.id === assigneeId) || MOCK_USERS.find((u) => u.id === assigneeId);
+    if (trimmedTitle.length < 3) {
+      setError('Task title must be at least 3 characters.');
+      return;
+    }
+
+    const todayStr = getTodayString();
+    if (dueDate.trim() && dueDate.trim() < todayStr) {
+      setError('Due date cannot be in the past.');
+      return;
+    }
+
+    const assignedUser: User | undefined = assigneeId
+      ? availableAssignees.find((u) => u.id === assigneeId) || MOCK_USERS.find((u) => u.id === assigneeId)
+      : undefined;
     const parsedTags = tagInput
       .split(',')
       .map((t) => t.trim())
@@ -69,7 +96,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
     const taskData: Task = {
       id: initialTask ? initialTask.id : `task-${Date.now()}`,
-      title: title.trim(),
+      title: trimmedTitle,
       description: description.trim(),
       status,
       priority,
@@ -83,8 +110,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       updatedAt: new Date().toISOString(),
     };
 
-    onSaveTask(taskData);
-    onClose();
+    setIsSubmitting(true);
+    setTimeout(() => {
+      onSaveTask(taskData);
+      setIsSubmitting(false);
+      onClose();
+    }, 350); // Visible loading state on save
   };
 
   return (
@@ -201,6 +232,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 onChange={(e) => setAssigneeId(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
               >
+                <option value="">Unassigned</option>
                 {availableAssignees.map((user) => (
                   <option key={user.id} value={user.id}>
                     {user.name} ({user.initials})
@@ -232,27 +264,59 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             <input
               type="date"
               value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
+              min={getTodayString()}
+              onChange={(e) => {
+                setDueDate(e.target.value);
+                if (error) setError(null);
+              }}
               className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition scheme-dark"
             />
           </div>
 
           {/* Modal Actions */}
-          <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-800">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="inline-flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 transition-all active:scale-95"
-            >
-              <Check className="w-4 h-4" />
-              <span>{initialTask ? 'Save Changes' : 'Create Task'}</span>
-            </button>
+          <div className="flex items-center justify-between pt-4 border-t border-slate-800">
+            {initialTask && onDeleteTask ? (
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteTask(initialTask.id);
+                  onClose();
+                }}
+                className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/30 transition cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete Task</span>
+              </button>
+            ) : (
+              <div />
+            )}
+
+            <div className="flex items-center space-x-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="inline-flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 transition-all active:scale-95 cursor-pointer"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>{initialTask ? 'Save Changes' : 'Create Task'}</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
 

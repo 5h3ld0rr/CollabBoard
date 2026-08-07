@@ -12,7 +12,12 @@ import {
   AlertCircle,
   Sparkles,
 } from "lucide-react";
-import { AmbientBackground, BackButton, Button, Logo } from "../components/common";
+import {
+  AmbientBackground,
+  BackButton,
+  Button,
+  Logo,
+} from "../components/common";
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -55,7 +60,7 @@ export const Login: React.FC = () => {
     // Simulate authentication flow (M1 static flow)
     setTimeout(() => {
       setIsLoading(false);
-      navigate("/boards");
+      navigate("/dashboard");
     }, 800);
   };
 
@@ -82,8 +87,8 @@ export const Login: React.FC = () => {
               </span>
             </h1>
             <p className="text-slate-400 text-sm sm:text-base leading-relaxed">
-              Pick up right where you left off. Jump back into live collaboration,
-              active sprints, and shared workspaces.
+              Pick up right where you left off. Jump back into live
+              collaboration, active sprints, and shared workspaces.
             </p>
           </div>
 
@@ -184,7 +189,9 @@ export const Login: React.FC = () => {
                     href="#forgot"
                     onClick={(e) => {
                       e.preventDefault();
-                      alert("Password reset functionality will be available in milestone 2.");
+                      alert(
+                        "Password reset functionality will be available in milestone 2.",
+                      );
                     }}
                     className="text-xs text-indigo-400 hover:text-indigo-300 transition underline underline-offset-2"
                   >
@@ -245,7 +252,9 @@ export const Login: React.FC = () => {
                 variant="primary"
                 size="md"
                 className="w-full mt-2"
-                iconRight={<ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />}
+                iconRight={
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                }
               >
                 Sign In
               </Button>
