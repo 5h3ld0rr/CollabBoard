@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import BoardView from './pages/BoardView';
 import Profile from './pages/Profile';
+import TaskDetails from './pages/TaskDetails';
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/boards/:boardId" element={<BoardView />} />
+        <Route path="/tasks/:id" element={<TaskDetails />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

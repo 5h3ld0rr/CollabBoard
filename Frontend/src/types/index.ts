@@ -12,6 +12,14 @@ export interface User {
   boardRole?: 'Admin' | 'Editor' | 'Viewer';
 }
 
+export interface TaskComment {
+  id: string;
+  taskId: string;
+  author: User;
+  content: string;
+  createdAt: string;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -24,6 +32,7 @@ export interface Task {
   order: number;
   version: number;
   dueDate?: string;
+  commentCount?: number;
   createdAt: string;
   updatedAt: string;
 }

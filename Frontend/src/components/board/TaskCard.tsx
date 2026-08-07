@@ -1,21 +1,20 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { Link } from 'react-router-dom';
 import {
-  MoreHorizontal,
-  Trash2,
-  Edit2,
-  ArrowRight,
-  ArrowLeft,
   GripVertical,
   CheckCircle2,
   Calendar,
+  ExternalLink,
+  MessageSquare,
 } from 'lucide-react';
+import { MOCK_COMMENTS } from '../../data/mockData';
 import type { Task, TaskPriority, TaskStatus } from '../../types';
 
 interface TaskCardProps {
   task: Task;
-  onEdit: (task: Task) => void;
-  onDelete: (taskId: string) => void;
-  onMoveStatus: (taskId: string, newStatus: TaskStatus) => void;
+  onEdit?: (task: Task) => void;
+  onDelete?: (taskId: string) => void;
+  onMoveStatus?: (taskId: string, newStatus: TaskStatus) => void;
   onDragStart?: (e: React.DragEvent, taskId: string) => void;
 }
 
@@ -48,42 +47,9 @@ const PRIORITY_BADGES: Record<TaskPriority, { label: string; bg: string; text: s
 
 export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   task,
-  onEdit,
-  onDelete,
-  onMoveStatus,
   onDragStart,
 }) => {
-  const [showMenu, setShowMenu] = useState(false);
-  const menuRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setShowMenu(false);
-      }
-    };
-
-    if (showMenu) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showMenu]);
-
   const priorityInfo = PRIORITY_BADGES[task.priority] || PRIORITY_BADGES.medium;
-
-  const handleNextStatus = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (task.status === 'todo') onMoveStatus(task.id, 'in-progress');
-    else if (task.status === 'in-progress') onMoveStatus(task.id, 'done');
-  };
-
-  const handlePrevStatus = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (task.status === 'done') onMoveStatus(task.id, 'in-progress');
-    else if (task.status === 'in-progress') onMoveStatus(task.id, 'todo');
-  };
 
   const isDone = task.status === 'done';
   const isOverdue =
@@ -103,7 +69,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           : 'bg-slate-800/80 hover:bg-slate-800 border-slate-700/60 hover:border-indigo-500/40 hover:shadow-lg hover:shadow-indigo-950/30'
       }`}
     >
-      {/* Top Strip: Priority / Done Badge & Menu */}
+      {/* Top Strip: Priority / Done Badge & View Details Link */}
       <div className="flex items-center justify-between gap-2 mb-2.5">
         <div className="flex items-center space-x-2">
           <GripVertical className="w-3.5 h-3.5 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -125,44 +91,15 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           )}
         </div>
 
-        <div className="relative" ref={menuRef}>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowMenu((prev) => !prev);
-            }}
-            className="p-1 rounded-lg hover:bg-slate-700/60 text-slate-400 hover:text-white transition cursor-pointer"
-          >
-            <MoreHorizontal className="w-3.5 h-3.5" />
-          </button>
-
-          {showMenu && (
-            <div className="absolute right-0 mt-1 w-36 rounded-xl bg-slate-900/95 border border-slate-700/80 shadow-2xl shadow-black/90 backdrop-blur-xl py-1 z-30 ring-1 ring-white/10 animate-in fade-in zoom-in-95 duration-100">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowMenu(false);
-                  onEdit(task);
-                }}
-                className="w-full flex items-center space-x-2 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800 hover:text-white"
-              >
-                <Edit2 className="w-3.5 h-3.5" />
-                <span>Edit Task</span>
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowMenu(false);
-                  onDelete(task.id);
-                }}
-                className="w-full flex items-center space-x-2 px-3 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete Task</span>
-              </button>
-            </div>
-          )}
-        </div>
+        {/* View Details Link */}
+        <Link
+          to={`/tasks/${task.id}`}
+          onClick={(e) => e.stopPropagation()}
+          className="p-1 rounded-lg hover:bg-slate-700/60 text-slate-400 hover:text-white transition cursor-pointer flex items-center"
+          title="View Details"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+        </Link>
       </div>
 
       {/* Task Title */}
@@ -201,28 +138,29 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         </div>
       )}
 
-      {/* Card Footer: Assignee, Due Date & Quick Move Buttons */}
+      {/* Card Footer: Assignee, Due Date & Comment Pill */}
       <div className="pt-2.5 border-t border-slate-700/40 flex items-center justify-between text-xs text-slate-400">
-        {/* Assignee & Due Date */}
-        <div className="flex items-center space-x-2">
-          <div className="flex items-center space-x-1.5">
-            {task.assignee ? (
-              <div
-                title={task.assignee.name}
-                className={`w-5 h-5 rounded-full ${task.assignee.color} text-white font-bold text-[9px] flex items-center justify-center ring-1 ring-slate-800`}
-              >
-                {task.assignee.initials}
-              </div>
-            ) : (
-              <div className="w-5 h-5 rounded-full bg-slate-700 text-slate-400 text-[9px] flex items-center justify-center">
-                ?
-              </div>
-            )}
-            <span className="text-[11px] truncate max-w-20">
-              {task.assignee ? task.assignee.name.split(' ')[0] : 'Unassigned'}
-            </span>
-          </div>
+        {/* Assignee */}
+        <div className="flex items-center space-x-1.5">
+          {task.assignee ? (
+            <div
+              title={task.assignee.name}
+              className={`w-5 h-5 rounded-full ${task.assignee.color} text-white font-bold text-[9px] flex items-center justify-center ring-1 ring-slate-800`}
+            >
+              {task.assignee.initials}
+            </div>
+          ) : (
+            <div className="w-5 h-5 rounded-full bg-slate-700 text-slate-400 text-[9px] flex items-center justify-center">
+              ?
+            </div>
+          )}
+          <span className="text-[11px] truncate max-w-24">
+            {task.assignee ? task.assignee.name.split(' ')[0] : 'Unassigned'}
+          </span>
+        </div>
 
+        {/* Right side: Due Date & Comments */}
+        <div className="flex items-center space-x-1.5">
           {task.dueDate && (
             <span
               title={isOverdue ? `Overdue: Due on ${task.dueDate}` : `Due date: ${task.dueDate}`}
@@ -236,27 +174,15 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               <span>{task.dueDate.slice(5)}</span>
             </span>
           )}
-        </div>
 
-        {/* Quick Shift buttons */}
-        <div className="flex items-center space-x-1">
-          {task.status !== 'todo' && (
-            <button
-              onClick={handlePrevStatus}
-              title="Move left"
-              className="p-1 rounded bg-slate-700/50 hover:bg-slate-700 text-slate-400 hover:text-white transition"
+          {Boolean(MOCK_COMMENTS[task.id]?.length) && (
+            <span
+              title={`${MOCK_COMMENTS[task.id].length} comments`}
+              className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-slate-900/80 text-indigo-300 border border-slate-700/50"
             >
-              <ArrowLeft className="w-3 h-3" />
-            </button>
-          )}
-          {task.status !== 'done' && (
-            <button
-              onClick={handleNextStatus}
-              title="Move right"
-              className="p-1 rounded bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 hover:text-white transition border border-indigo-500/30"
-            >
-              <ArrowRight className="w-3 h-3" />
-            </button>
+              <MessageSquare className="w-2.5 h-2.5" />
+              <span>{MOCK_COMMENTS[task.id].length}</span>
+            </span>
           )}
         </div>
       </div>

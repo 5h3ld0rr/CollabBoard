@@ -1,4 +1,4 @@
-import type { Board, Task, User, Workspace } from '../types';
+import type { Board, Task, TaskComment, User, Workspace } from '../types';
 
 export const MOCK_USERS: User[] = [
   {
@@ -383,6 +383,54 @@ export const MOCK_TASKS: Record<string, Task[]> = {
       version: 1,
       createdAt: '2026-08-05T15:00:00Z',
       updatedAt: '2026-08-05T15:00:00Z',
+    },
+  ],
+};
+
+/* ==========================================================================
+   Task Discussion Comments Mock Data
+   ========================================================================== */
+
+export const MOCK_COMMENTS: Record<string, TaskComment[]> = {
+  'task-101': [
+    {
+      id: 'comm-101-1',
+      taskId: 'task-101',
+      author: MOCK_USERS[1],
+      content: 'Make sure we cap the reconnection backoff interval at 30 seconds to prevent hanging sockets.',
+      createdAt: '2026-08-07T19:30:00Z',
+    },
+    {
+      id: 'comm-101-2',
+      taskId: 'task-101',
+      author: MOCK_USERS[0],
+      content: 'Good call Clara. I added jitter and clamped the maximum backoff to 30s with auto reconnect on focus.',
+      createdAt: '2026-08-07T20:15:00Z',
+    },
+  ],
+  'task-103': [
+    {
+      id: 'comm-103-1',
+      taskId: 'task-103',
+      author: MOCK_USERS[2],
+      content: 'Are we broadcasting cursor positions through raw WebSockets or using WebRTC data channels for lower latency?',
+      createdAt: '2026-08-07T21:20:00Z',
+    },
+    {
+      id: 'comm-103-2',
+      taskId: 'task-103',
+      author: MOCK_USERS[1],
+      content: 'Using WebSocket binary packets throttled at 60Hz. It stays well under 15ms latency across our staging nodes.',
+      createdAt: '2026-08-07T22:05:00Z',
+    },
+  ],
+  'task-104': [
+    {
+      id: 'comm-104-1',
+      taskId: 'task-104',
+      author: MOCK_USERS[0],
+      content: 'Conflict resolution should give priority to the most recent server timestamp if optimistic lock fails.',
+      createdAt: '2026-08-07T22:45:00Z',
     },
   ],
 };
