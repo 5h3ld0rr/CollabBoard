@@ -24,45 +24,30 @@ import {
 } from "lucide-react";
 import { Navbar, AmbientBackground } from "../components/common";
 import { Column, TaskModal, BoardSettingsModal } from "../components/board";
-import { MOCK_BOARDS, MOCK_TASKS, MOCK_USERS } from "../data/mockData";
-import type { Board, Task, TaskStatus, User } from "../types";
+import { useBoard } from "../context";
+import type { Board, Task, TaskStatus } from "../types";
 
 export const BoardView: React.FC = () => {
   const { id: boardId } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // Board reactive state
-  const [boardData, setBoardData] = useState<Board | null>(null);
-  const [boardMembers, setBoardMembers] = useState<User[]>(MOCK_USERS);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const {
+    state: { activeBoard: boardData, tasks, boardMembers, isLoading },
+    loadBoard,
+    addTask,
+    updateTask,
+    deleteTask,
+    moveTaskStatus,
+    clearBoardTasks,
+    updateBoard,
+    deleteBoard,
+  } = useBoard();
 
   useEffect(() => {
-    setIsLoading(true);
-
-    const timer = setTimeout(() => {
-      if (!boardId) {
-        setBoardData(null);
-        setTasks([]);
-        setIsLoading(false);
-        return;
-      }
-
-      const found = MOCK_BOARDS.find((b) => b.id === boardId);
-      if (!found) {
-        setBoardData(null);
-        setTasks([]);
-      } else {
-        setBoardData(found);
-        setBoardMembers(found.members || MOCK_USERS);
-        const initialTasks = MOCK_TASKS[found.id];
-        setTasks(initialTasks || []);
-      }
-      setIsLoading(false);
-    }, 450); // Artificial delay to ensure consistent loading feedback
-
-    return () => clearTimeout(timer);
+    if (boardId) {
+      loadBoard(boardId);
+    }
   }, [boardId]);
 
   // URL-Reflected Filter States
@@ -353,19 +338,13 @@ export const BoardView: React.FC = () => {
 
   const handleConfirmDeleteTask = () => {
     if (!taskToDelete) return;
-    setTasks((prev) => prev.filter((t) => t.id !== taskToDelete.id));
+    deleteTask(taskToDelete.id);
     showToast(`Task "${taskToDelete.title}" deleted`);
     setTaskToDelete(null);
   };
 
   const handleMoveStatus = (taskId: string, newStatus: TaskStatus) => {
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === taskId
-          ? { ...t, status: newStatus, updatedAt: new Date().toISOString() }
-          : t,
-      ),
-    );
+    moveTaskStatus(taskId, newStatus);
     showToast(`Task moved to ${newStatus.replace("-", " ")}`);
   };
 
@@ -374,32 +353,32 @@ export const BoardView: React.FC = () => {
   };
 
   const handleSaveTask = (savedTask: Task) => {
-    setTasks((prev) => {
-      const exists = prev.some((t) => t.id === savedTask.id);
-      if (exists) {
-        showToast("Task updated successfully");
-        return prev.map((t) => (t.id === savedTask.id ? savedTask : t));
-      } else {
-        showToast("New task added to board");
-        return [savedTask, ...prev];
-      }
-    });
+    const exists = tasks.some((t) => t.id === savedTask.id);
+    if (exists) {
+      updateTask(savedTask);
+      showToast("Task updated successfully");
+    } else {
+      addTask(savedTask);
+      showToast("New task added to board");
+    }
   };
 
   const handleUpdateBoard = (updatedBoard: Board) => {
-    setBoardData(updatedBoard);
-    setBoardMembers(updatedBoard.members);
+    updateBoard(updatedBoard);
     showToast("Board updated successfully");
   };
 
-  const handleDeleteBoard = (_deletedBoardId: string) => {
+  const handleDeleteBoard = (deletedBoardId: string) => {
+    deleteBoard(deletedBoardId);
     showToast("Board deleted");
-    navigate("/boards");
+    navigate("/dashboard");
   };
 
   const handleClearTasks = () => {
-    setTasks([]);
-    showToast("All tasks cleared from board");
+    if (boardData) {
+      clearBoardTasks(boardData.id);
+      showToast("All tasks cleared from board");
+    }
   };
 
   return (
