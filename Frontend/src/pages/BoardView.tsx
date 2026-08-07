@@ -20,6 +20,7 @@ import {
   ChevronDown,
   AlertTriangle,
   Trash2,
+  FileQuestion,
 } from "lucide-react";
 import { Navbar, AmbientBackground } from "../components/common";
 import { Column, TaskModal, BoardSettingsModal } from "../components/board";
@@ -27,70 +28,42 @@ import { MOCK_BOARDS, MOCK_TASKS, MOCK_USERS } from "../data/mockData";
 import type { Board, Task, TaskStatus, User } from "../types";
 
 export const BoardView: React.FC = () => {
-  const { boardId } = useParams<{ boardId: string }>();
+  const { id: boardId } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // Find board or fallback to first
-  const initialBoard: Board = useMemo(() => {
-    const found = MOCK_BOARDS.find((b) => b.id === boardId);
-    return (
-      found || {
-        id: boardId || "board-1",
-        title: "Sprint 1: Real-time Core",
-        description:
-          "WebSocket pipelines, live cursor broadcasting, and optimistic locking engine",
-        workspaceId: "ws-1",
-        workspaceName: "Core Engineering",
-        color: "from-indigo-600 to-violet-600",
-        icon: "Kanban",
-        isFavorite: true,
-        members: MOCK_USERS.slice(0, 3),
-        tags: ["Backend", "WebSocket", "Priority"],
-        stats: {
-          totalTasks: 5,
-          todoCount: 2,
-          inProgressCount: 2,
-          doneCount: 1,
-        },
-        createdAt: new Date().toISOString(),
-        updatedAt: "Just now",
-      }
-    );
-  }, [boardId]);
-
   // Board reactive state
-  const [boardData, setBoardData] = useState<Board>(initialBoard);
-  const [boardMembers, setBoardMembers] = useState<User[]>(boardData.members);
+  const [boardData, setBoardData] = useState<Board | null>(null);
+  const [boardMembers, setBoardMembers] = useState<User[]>(MOCK_USERS);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState<number>(0);
 
   useEffect(() => {
     setIsLoading(true);
-    setLoadError(null);
 
     const timer = setTimeout(() => {
-      // Check if board exists
-      const found =
-        MOCK_BOARDS.find((b) => b.id === boardId) ||
-        (boardId?.startsWith("board-") ? initialBoard : null);
-      if (boardId && !found && !initialBoard) {
-        setLoadError(
-          `Unable to load board "${boardId}". The requested board may have been removed or does not exist.`,
-        );
+      if (!boardId) {
+        setBoardData(null);
+        setTasks([]);
+        setIsLoading(false);
+        return;
+      }
+
+      const found = MOCK_BOARDS.find((b) => b.id === boardId);
+      if (!found) {
+        setBoardData(null);
+        setTasks([]);
       } else {
-        setBoardData(initialBoard);
-        setBoardMembers(initialBoard.members);
-        const initialTasks = boardId ? MOCK_TASKS[boardId] : null;
-        setTasks(initialTasks || MOCK_TASKS["board-1"] || []);
+        setBoardData(found);
+        setBoardMembers(found.members || MOCK_USERS);
+        const initialTasks = MOCK_TASKS[found.id];
+        setTasks(initialTasks || []);
       }
       setIsLoading(false);
-    }, 550); // Artificial delay to visibly handle loading state
+    }, 450); // Artificial delay to ensure consistent loading feedback
 
     return () => clearTimeout(timer);
-  }, [boardId, reloadKey, initialBoard]);
+  }, [boardId]);
 
   // URL-Reflected Filter States
   const searchQuery = searchParams.get("search") || searchParams.get("q") || "";
@@ -434,7 +407,7 @@ export const BoardView: React.FC = () => {
       <AmbientBackground variant="minimal" />
 
       {/* Top Navbar */}
-      <Navbar currentWorkspace={boardData.workspaceName} hideSearch />
+      <Navbar currentWorkspace={boardData?.workspaceName || "CollabBoard"} hideSearch />
 
       {/* Toast Notification */}
       {toastMessage && (
@@ -495,30 +468,35 @@ export const BoardView: React.FC = () => {
               ))}
             </div>
           </div>
-        ) : loadError ? (
-          /* Error State */
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center max-w-md mx-auto my-12 rounded-3xl bg-slate-900/60 border border-rose-500/20 shadow-2xl">
-            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 mb-4">
-              <AlertTriangle className="w-6 h-6" />
+        ) : !boardData ? (
+          /* Not Found State (Bad ID Handling) */
+          <div className="flex-1 flex flex-col items-center justify-center py-16 px-4 text-center max-w-md mx-auto my-auto animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 mb-5 shadow-xl shadow-black/40">
+              <FileQuestion className="w-8 h-8 text-indigo-400" />
             </div>
-            <h2 className="text-lg font-bold text-white mb-1">
-              Failed to Load Board
-            </h2>
-            <p className="text-xs text-slate-400 mb-6">{loadError}</p>
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={() => setReloadKey((prev) => prev + 1)}
-                className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 transition cursor-pointer"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Retry</span>
-              </button>
+            <span className="px-3 py-1 rounded-full text-[11px] font-semibold bg-rose-500/10 text-rose-300 border border-rose-500/20 mb-3">
+              404 Not Found
+            </span>
+            <h1 className="text-2xl font-extrabold text-white tracking-tight mb-2">
+              Board Not Found
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-400 mb-8 leading-relaxed">
+              The board with ID <code className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-indigo-300 font-mono text-xs">{boardId}</code> could not be found. It may have been moved, deleted, or never existed.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-3">
               <Link
                 to="/dashboard"
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition"
+                className="inline-flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 transition cursor-pointer"
               >
-                Back to Dashboard
+                <ArrowLeft className="w-4 h-4" />
+                <span>Go to Dashboard</span>
               </Link>
+              <button
+                onClick={() => navigate(-1)}
+                className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white text-xs font-semibold transition cursor-pointer"
+              >
+                Go Back
+              </button>
             </div>
           </div>
         ) : (
@@ -995,26 +973,30 @@ export const BoardView: React.FC = () => {
       </main>
 
       {/* Task Create / Edit Modal */}
-      <TaskModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        initialTask={editingTask}
-        defaultStatus={modalDefaultStatus}
-        boardId={boardData.id}
-        availableAssignees={boardMembers}
-        onSaveTask={handleSaveTask}
-        onDeleteTask={handleRequestDeleteTask}
-      />
+      {boardData && (
+        <TaskModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          initialTask={editingTask}
+          defaultStatus={modalDefaultStatus}
+          boardId={boardData.id}
+          availableAssignees={boardMembers}
+          onSaveTask={handleSaveTask}
+          onDeleteTask={handleRequestDeleteTask}
+        />
+      )}
 
       {/* Board Settings Modal (General, Members, Danger Zone) */}
-      <BoardSettingsModal
-        isOpen={isSettingsModalOpen}
-        onClose={() => setIsSettingsModalOpen(false)}
-        board={boardData}
-        onUpdateBoard={handleUpdateBoard}
-        onDeleteBoard={handleDeleteBoard}
-        onClearTasks={handleClearTasks}
-      />
+      {boardData && (
+        <BoardSettingsModal
+          isOpen={isSettingsModalOpen}
+          onClose={() => setIsSettingsModalOpen(false)}
+          board={boardData}
+          onUpdateBoard={handleUpdateBoard}
+          onDeleteBoard={handleDeleteBoard}
+          onClearTasks={handleClearTasks}
+        />
+      )}
 
       {/* Task Deletion Confirmation Dialog */}
       {taskToDelete && (
