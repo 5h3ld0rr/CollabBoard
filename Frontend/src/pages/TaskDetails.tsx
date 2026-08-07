@@ -22,7 +22,16 @@ import {
 } from 'lucide-react';
 import { Navbar, AmbientBackground } from '../components/common';
 import { TaskModal } from '../components/board';
-import { MOCK_BOARDS, MOCK_TASKS, MOCK_USERS, MOCK_COMMENTS, MOCK_CURRENT_USER } from '../data/mockData';
+import {
+  getTaskById,
+  getBoardById,
+  getTaskComments,
+  addComment,
+  deleteComment,
+  updateTask as apiUpdateTask,
+  deleteTask as apiDeleteTask,
+} from '../api';
+import { MOCK_USERS, MOCK_CURRENT_USER } from '../data/mockData';
 import type { Task, Board, TaskStatus, TaskPriority, User, TaskComment } from '../types';
 
 const PRIORITY_CONFIG: Record<
@@ -114,37 +123,49 @@ export const TaskDetails: React.FC = () => {
     }, 3000);
   };
 
-  // Find task across all mock boards
+  // Find task across all mock boards via API
   useEffect(() => {
+    let isMounted = true;
     setIsLoading(true);
-    const timer = setTimeout(() => {
-      let foundTask: Task | null = null;
-      let foundBoard: Board | null = null;
 
-      if (id) {
-        // Search through all boards
-        for (const [boardId, taskList] of Object.entries(MOCK_TASKS)) {
-          const matched = taskList.find((t) => t.id === id);
-          if (matched) {
-            foundTask = matched;
-            foundBoard = MOCK_BOARDS.find((b) => b.id === boardId) || null;
-            break;
+    async function loadData() {
+      if (!id) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const foundTask = await getTaskById(id);
+        if (!isMounted) return;
+
+        if (foundTask) {
+          setTask(foundTask);
+          const [foundBoard, taskComments] = await Promise.all([
+            getBoardById(foundTask.boardId),
+            getTaskComments(foundTask.id),
+          ]);
+          if (!isMounted) return;
+
+          setBoard(foundBoard);
+          if (foundBoard) {
+            setBoardMembers(foundBoard.members || MOCK_USERS);
           }
+          setComments(taskComments);
+        } else {
+          setTask(null);
+          setBoard(null);
+          setComments([]);
         }
+      } finally {
+        if (isMounted) setIsLoading(false);
       }
+    }
 
-      setTask(foundTask);
-      setBoard(foundBoard);
-      if (foundBoard) {
-        setBoardMembers(foundBoard.members || MOCK_USERS);
-      }
-      if (foundTask) {
-        setComments(MOCK_COMMENTS[foundTask.id] || []);
-      }
-      setIsLoading(false);
-    }, 450); // Artificial delay to ensure consistent loading feedback
+    loadData();
 
-    return () => clearTimeout(timer);
+    return () => {
+      isMounted = false;
+    };
   }, [id]);
 
   const priorityInfo = task ? PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium : PRIORITY_CONFIG.medium;
@@ -156,20 +177,31 @@ export const TaskDetails: React.FC = () => {
     return new Date(task.dueDate).getTime() < today;
   }, [task, isDone]);
 
-  const handleStatusChange = (newStatus: TaskStatus) => {
+  const handleStatusChange = async (newStatus: TaskStatus) => {
     if (!task) return;
-    setTask((prev) => (prev ? { ...prev, status: newStatus, updatedAt: new Date().toISOString() } : null));
-    showToast(`Status updated to ${newStatus === 'in-progress' ? 'In Progress' : newStatus === 'done' ? 'Completed' : 'To Do'}`);
+    try {
+      const updated = await apiUpdateTask(task.id, { status: newStatus });
+      setTask(updated);
+      showToast(`Status updated to ${newStatus === 'in-progress' ? 'In Progress' : newStatus === 'done' ? 'Completed' : 'To Do'}`);
+    } catch {
+      setTask((prev) => (prev ? { ...prev, status: newStatus, updatedAt: new Date().toISOString() } : null));
+    }
   };
 
-  const handleSaveTask = (savedTask: Task) => {
-    setTask(savedTask);
+  const handleSaveTask = async (savedTask: Task) => {
+    try {
+      const updated = await apiUpdateTask(savedTask.id, savedTask);
+      setTask(updated);
+    } catch {
+      setTask(savedTask);
+    }
     setIsEditModalOpen(false);
     showToast('Task updated successfully');
   };
 
-  const handleDeleteTask = () => {
+  const handleDeleteTask = async () => {
     if (!task) return;
+    await apiDeleteTask(task.id);
     showToast('Task deleted successfully');
     setIsDeleteModalOpen(false);
     if (board) {
@@ -179,24 +211,19 @@ export const TaskDetails: React.FC = () => {
     }
   };
 
-  const handleAddComment = (e: React.FormEvent) => {
+  const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!commentInput.trim() || !task) return;
 
     setIsSubmittingComment(true);
-    setTimeout(() => {
-      const newComment: TaskComment = {
-        id: `comm-${Date.now()}`,
-        taskId: task.id,
-        author: MOCK_CURRENT_USER,
-        content: commentInput.trim(),
-        createdAt: new Date().toISOString(),
-      };
+    try {
+      const newComment = await addComment(task.id, commentInput.trim(), MOCK_CURRENT_USER);
       setComments((prev) => [newComment, ...prev]);
       setCommentInput('');
-      setIsSubmittingComment(false);
       showToast('Comment posted successfully');
-    }, 250);
+    } finally {
+      setIsSubmittingComment(false);
+    }
   };
 
   const handleStartEditComment = (comment: TaskComment) => {
@@ -219,8 +246,9 @@ export const TaskDetails: React.FC = () => {
     setIsDeleteCommentModalOpen(true);
   };
 
-  const handleConfirmDeleteComment = () => {
-    if (!commentToDelete) return;
+  const handleConfirmDeleteComment = async () => {
+    if (!commentToDelete || !task) return;
+    await deleteComment(task.id, commentToDelete.id);
     setComments((prev) => prev.filter((c) => c.id !== commentToDelete.id));
     setIsDeleteCommentModalOpen(false);
     setCommentToDelete(null);
