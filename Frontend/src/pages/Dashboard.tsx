@@ -136,6 +136,9 @@ export const Dashboard: React.FC = () => {
         if (sortBy === 'tasks') {
           return b.stats.totalTasks - a.stats.totalTasks;
         }
+        if (sortBy === 'updated') {
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        }
         return 0;
       });
   }, [boards, activeTab, searchQuery, sortBy]);
