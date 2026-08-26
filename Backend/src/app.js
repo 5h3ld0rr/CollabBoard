@@ -4,6 +4,7 @@ import { config } from './config.js';
 import { requestId } from './middleware/requestId.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import authRoutes from './routes/authRoutes.js';
 
 const app = express();
 
@@ -27,6 +28,9 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+/* API Routes */
+app.use('/api/auth', authRoutes);
 
 /* Central Error Catchers (Always registered last) */
 app.use(notFoundHandler);
