@@ -5,6 +5,7 @@ import { requestId } from './middleware/requestId.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import authRoutes from './routes/authRoutes.js';
+import boardRoutes from './routes/boardRoutes.js';
 
 const app = express();
 
@@ -31,6 +32,7 @@ app.get('/api/health', (req, res) => {
 
 /* API Routes */
 app.use('/api/auth', authRoutes);
+app.use('/api/boards', boardRoutes);
 
 /* Central Error Catchers (Always registered last) */
 app.use(notFoundHandler);
