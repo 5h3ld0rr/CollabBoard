@@ -1,10 +1,10 @@
-# SyncBoard / CollabBoard API
+# CollabBoard API
 
 A full-stack collaborative kanban board application built with Node.js, Express, and React.
 
 ---
 
-## 📋 SyncBoard API Contract
+## 📋 CollabBoard API Contract
 
 | Method & Path | Purpose | Request Body | Success | Errors |
 | :--- | :--- | :--- | :--- | :--- |

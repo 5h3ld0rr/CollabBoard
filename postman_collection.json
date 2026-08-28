@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "SyncBoard API Collection",
-    "description": "Postman test suite for Session 2 Assignment - SyncBoard API with Auth, Boards, and Tasks",
+    "name": "CollabBoard API Collection",
+    "description": "Postman test suite for Session 2 Assignment - CollabBoard API with Auth, Boards, and Tasks",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [

@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: SyncBoard / CollabBoard API
+  title: CollabBoard API
   description: >
-    RESTful API specification for SyncBoard collaborative workspace and task management.
+    RESTful API specification for CollabBoard collaborative workspace and task management.
     Built for Session 2 Server-Side Technology workshop and assignment.
   version: 1.0.0
 servers:
