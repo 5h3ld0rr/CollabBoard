@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, LayoutGrid, Plus, Mail } from 'lucide-react';
 import type { Workspace } from '../../types';
-import { MOCK_USERS, COLOR_OPTIONS } from '../../data/mockData';
+import { COLOR_OPTIONS } from '../../constants';
 
 interface CreateWorkspaceModalProps {
   isOpen: boolean;
@@ -37,7 +37,7 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({
       memberCount: inviteEmail.trim() ? 2 : 1,
       color: selectedColor,
       role: 'Owner',
-      members: [MOCK_USERS[0]],
+      members: [],
     };
 
     onCreateWorkspace(newWorkspace);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Plus,
@@ -9,12 +9,13 @@ import {
   Sparkles,
 } from 'lucide-react';
 import type { Board, Workspace } from '../../types';
-import { MOCK_USERS, COLOR_OPTIONS } from '../../data/mockData';
+import { COLOR_OPTIONS } from '../../constants';
 
 interface CreateBoardModalProps {
   isOpen: boolean;
   onClose: () => void;
   workspaces: Workspace[];
+  currentWorkspaceId?: string;
   onCreateBoard: (board: Board) => void;
 }
 
@@ -29,15 +30,25 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
   isOpen,
   onClose,
   workspaces,
+  currentWorkspaceId,
   onCreateBoard,
 }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id || 'ws-1');
+  const [workspaceId, setWorkspaceId] = useState(currentWorkspaceId || workspaces[0]?.id || 'ws-1');
   const [selectedColor, setSelectedColor] = useState(COLOR_OPTIONS[0].value);
   const [selectedIcon, setSelectedIcon] = useState(ICON_OPTIONS[0].name);
   const [tagInput, setTagInput] = useState('Frontend, Core');
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setWorkspaceId(currentWorkspaceId || workspaces[0]?.id || 'ws-1');
+      setTitle('');
+      setDescription('');
+      setError(null);
+    }
+  }, [isOpen, currentWorkspaceId, workspaces]);
 
   if (!isOpen) return null;
 
@@ -63,7 +74,7 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
       color: selectedColor,
       icon: selectedIcon,
       isFavorite: false,
-      members: [MOCK_USERS[0]],
+      members: [],
       tags: parsedTags.length > 0 ? parsedTags : ['General'],
       stats: {
         totalTasks: 0,

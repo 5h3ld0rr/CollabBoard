@@ -1,5 +1,4 @@
 import { request } from './client';
-import { MOCK_COMMENTS, MOCK_CURRENT_USER } from '../data/mockData';
 import type { Task, TaskStatus, TaskComment, User } from '../types';
 
 export interface TaskListResponse {
@@ -15,7 +14,15 @@ export interface TaskResponse {
   data: Task;
 }
 
-let commentsStorage: Record<string, TaskComment[]> = JSON.parse(JSON.stringify(MOCK_COMMENTS));
+const DEFAULT_COMMENT_AUTHOR: User = {
+  id: 'usr-current',
+  name: 'Team Member',
+  email: 'member@collabboard.io',
+  initials: 'TM',
+  color: 'bg-indigo-600',
+};
+
+const commentsStorage: Record<string, TaskComment[]> = {};
 
 /**
  * Fetch all tasks, optionally filtered by board ID and query parameters
@@ -119,7 +126,7 @@ export async function getTaskComments(taskId: string): Promise<TaskComment[]> {
 export async function addComment(
   taskId: string,
   content: string,
-  author: User = MOCK_CURRENT_USER
+  author: User = DEFAULT_COMMENT_AUTHOR
 ): Promise<TaskComment> {
   const newComment: TaskComment = {
     id: `comm-${Date.now()}`,

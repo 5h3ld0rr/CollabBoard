@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { config } from '../config.js';
 import { AppError, NotFoundError } from '../utils/AppError.js';
 import { userRepo, publicUser } from '../repos/userRepo.js';
+import { workspaceRepo } from '../repos/workspaceRepo.js';
 
 /**
  * Register a new user with hashed password and return auth token
@@ -18,6 +19,14 @@ export async function register({ email, password, name }) {
     email,
     passwordHash,
     name: name || 'User',
+  });
+
+  // Automatically provision a default workspace on the backend for the new user
+  await workspaceRepo.create({
+    name: `${newUser.name}'s Workspace`,
+    description: 'Default team workspace for boards and tasks',
+    ownerId: newUser.id,
+    members: [newUser.id],
   });
 
   const token = jwt.sign(

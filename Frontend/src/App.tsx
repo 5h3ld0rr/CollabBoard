@@ -7,6 +7,7 @@ import BoardView from './pages/BoardView';
 import Profile from './pages/Profile';
 import TaskDetails from './pages/TaskDetails';
 import NotFound from './pages/NotFound';
+import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { BoardProvider, AuthProvider } from './context';
 
 function App() {
@@ -18,10 +19,38 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/boards/:id" element={<BoardView />} />
-            <Route path="/tasks/:id" element={<TaskDetails />} />
-            <Route path="/profile" element={<Profile />} />
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/boards/:id"
+              element={
+                <ProtectedRoute>
+                  <BoardView />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/tasks/:id"
+              element={
+                <ProtectedRoute>
+                  <TaskDetails />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <Profile />
+                </ProtectedRoute>
+              }
+            />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BoardProvider>

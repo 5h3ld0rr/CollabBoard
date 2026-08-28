@@ -7,6 +7,12 @@ export const createBoardSchema = z.object({
   title: z.string().trim().min(3, 'Board title must be at least 3 characters'),
   description: z.string().trim().optional().default(''),
   members: z.array(z.string()).optional().default([]),
+  color: z.string().optional(),
+  icon: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  workspaceId: z.string().optional(),
+  workspaceName: z.string().optional(),
+  isFavorite: z.boolean().optional(),
 });
 
 /**
@@ -16,6 +22,12 @@ export const updateBoardSchema = z.object({
   title: z.string().trim().min(3, 'Board title must be at least 3 characters').optional(),
   description: z.string().trim().optional(),
   members: z.array(z.string()).optional(),
+  color: z.string().optional(),
+  icon: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  workspaceId: z.string().optional(),
+  workspaceName: z.string().optional(),
+  isFavorite: z.boolean().optional(),
 });
 
 /**

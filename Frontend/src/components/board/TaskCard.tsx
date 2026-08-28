@@ -7,7 +7,6 @@ import {
   ExternalLink,
   MessageSquare,
 } from 'lucide-react';
-import { MOCK_COMMENTS } from '../../data/mockData';
 import type { Task, TaskPriority, TaskStatus } from '../../types';
 
 interface TaskCardProps {
@@ -143,20 +142,36 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         {/* Assignee */}
         <div className="flex items-center space-x-1.5">
           {task.assignee ? (
-            <div
-              title={task.assignee.name}
-              className={`w-5 h-5 rounded-full ${task.assignee.color} text-white font-bold text-[9px] flex items-center justify-center ring-1 ring-slate-800`}
-            >
-              {task.assignee.initials}
-            </div>
+            (() => {
+              const name = typeof task.assignee === 'object' && task.assignee !== null ? task.assignee.name : String(task.assignee);
+              const initials = typeof task.assignee === 'object' && task.assignee?.initials ? task.assignee.initials : name.slice(0, 2).toUpperCase();
+              const color = typeof task.assignee === 'object' && task.assignee?.color ? task.assignee.color : 'bg-indigo-600';
+              const firstName = name.split(' ')[0] || name;
+
+              return (
+                <>
+                  <div
+                    title={name}
+                    className={`w-5 h-5 rounded-full ${color} text-white font-bold text-[9px] flex items-center justify-center ring-1 ring-slate-800`}
+                  >
+                    {initials}
+                  </div>
+                  <span className="text-[11px] truncate max-w-24">
+                    {firstName}
+                  </span>
+                </>
+              );
+            })()
           ) : (
-            <div className="w-5 h-5 rounded-full bg-slate-700 text-slate-400 text-[9px] flex items-center justify-center">
-              ?
-            </div>
+            <>
+              <div className="w-5 h-5 rounded-full bg-slate-700 text-slate-400 text-[9px] flex items-center justify-center">
+                ?
+              </div>
+              <span className="text-[11px] truncate max-w-24">
+                Unassigned
+              </span>
+            </>
           )}
-          <span className="text-[11px] truncate max-w-24">
-            {task.assignee ? task.assignee.name.split(' ')[0] : 'Unassigned'}
-          </span>
         </div>
 
         {/* Right side: Due Date & Comments */}
@@ -175,13 +190,13 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
             </span>
           )}
 
-          {Boolean(MOCK_COMMENTS[task.id]?.length) && (
+          {Boolean((task as any).commentCount || (task as any).comments?.length) && (
             <span
-              title={`${MOCK_COMMENTS[task.id].length} comments`}
+              title={`${(task as any).commentCount || (task as any).comments?.length} comments`}
               className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-slate-900/80 text-indigo-300 border border-slate-700/50"
             >
               <MessageSquare className="w-2.5 h-2.5" />
-              <span>{MOCK_COMMENTS[task.id].length}</span>
+              <span>{(task as any).commentCount || (task as any).comments?.length}</span>
             </span>
           )}
         </div>

@@ -20,7 +20,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import type { Board, User } from '../../types';
-import { MOCK_USERS, COLOR_OPTIONS } from '../../data/mockData';
+import { COLOR_OPTIONS } from '../../constants';
 
 interface BoardSettingsModalProps {
   isOpen: boolean;
@@ -146,9 +146,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
   };
 
   // Member Actions
-  const availableTeammates = MOCK_USERS.filter(
-    (u) => !members.some((m) => m.id === u.id || m.email === u.email)
-  );
+  const availableTeammates: User[] = [];
 
   const handleCopyBoardLink = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -160,15 +158,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
     e.preventDefault();
     let userToAdd: User | null = null;
 
-    if (selectedWorkspaceUser) {
-      const found = MOCK_USERS.find((u) => u.id === selectedWorkspaceUser);
-      if (found) {
-        userToAdd = {
-          ...found,
-          boardRole: inviteRole,
-        };
-      }
-    } else if (inviteEmail.trim()) {
+    if (inviteEmail.trim()) {
       const email = inviteEmail.trim();
       const initials = email.slice(0, 2).toUpperCase();
       userToAdd = {

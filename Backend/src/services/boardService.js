@@ -1,5 +1,28 @@
 import { boardRepo } from '../repos/boardRepo.js';
+import { taskRepo } from '../repos/taskRepo.js';
 import { NotFoundError, ForbiddenError } from '../utils/AppError.js';
+
+/**
+ * Enriches a board with dynamic, live computed task statistics
+ */
+export async function enrichBoard(board) {
+  if (!board) return null;
+  const boardTasks = await taskRepo.findByBoardId(board.id);
+  const totalTasks = boardTasks.length;
+  const todoCount = boardTasks.filter((t) => t.status === 'todo').length;
+  const inProgressCount = boardTasks.filter((t) => t.status === 'in-progress' || t.status === 'doing').length;
+  const doneCount = boardTasks.filter((t) => t.status === 'done').length;
+
+  return {
+    ...board,
+    stats: {
+      totalTasks,
+      todoCount,
+      inProgressCount,
+      doneCount,
+    },
+  };
+}
 
 /**
  * Asserts that a board exists and that the requesting user is either the owner or a member.
@@ -20,14 +43,15 @@ export async function assertBoardAccess(boardId, userId) {
     throw new ForbiddenError('You do not have permission to access this board');
   }
 
-  return board;
+  return enrichBoard(board);
 }
 
 /**
- * List all boards accessible to the requesting user
+ * List all boards accessible to the requesting user with live dynamic stats
  */
 export async function listBoards(userId) {
-  return boardRepo.listByUserId(userId);
+  const rawBoards = await boardRepo.listByUserId(userId);
+  return Promise.all(rawBoards.map((b) => enrichBoard(b)));
 }
 
 /**
@@ -40,13 +64,12 @@ export async function getBoard(boardId, userId) {
 /**
  * Create a new board owned by the requesting user
  */
-export async function createBoard({ title, description, members }, userId) {
-  return boardRepo.create({
-    title,
-    description,
+export async function createBoard(boardData, userId) {
+  const created = await boardRepo.create({
+    ...boardData,
     ownerId: userId,
-    members: members || [],
   });
+  return enrichBoard(created);
 }
 
 /**
@@ -54,7 +77,8 @@ export async function createBoard({ title, description, members }, userId) {
  */
 export async function updateBoard(boardId, updates, userId) {
   const board = await assertBoardAccess(boardId, userId);
-  return boardRepo.update(board.id, updates);
+  const updated = await boardRepo.update(board.id, updates);
+  return enrichBoard(updated);
 }
 
 /**
@@ -81,7 +105,8 @@ export async function addBoardMember(boardId, targetUserId, userId) {
   const board = await assertBoardAccess(boardId, userId);
   const currentMembers = board.members || [];
   const updatedMembers = Array.from(new Set([...currentMembers.map(String), String(targetUserId)]));
-  return boardRepo.update(board.id, { members: updatedMembers });
+  const updated = await boardRepo.update(board.id, { members: updatedMembers });
+  return enrichBoard(updated);
 }
 
 /**
@@ -95,5 +120,6 @@ export async function removeBoardMember(boardId, targetUserId, userId) {
   }
   const currentMembers = board.members || [];
   const updatedMembers = currentMembers.filter((m) => String(m) !== String(targetUserId));
-  return boardRepo.update(board.id, { members: updatedMembers });
+  const updated = await boardRepo.update(board.id, { members: updatedMembers });
+  return enrichBoard(updated);
 }

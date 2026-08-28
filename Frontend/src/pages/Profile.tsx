@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   User as UserIcon,
@@ -30,18 +30,18 @@ import {
   BackButton,
 } from "../components/common";
 import { ManageWorkspaceModal } from "../components/workspace";
+import { useAuth, useBoard } from "../context";
 import {
-  MOCK_WORKSPACES,
-  MOCK_TASKS,
-  MOCK_BOARDS,
-  MOCK_CURRENT_USER,
-  MOCK_USER_PROFILE,
-  MOCK_USER_PREFERENCES,
-  MOCK_ACTIVE_SESSIONS,
-  MOCK_SUBSCRIPTION_PLANS,
-  MOCK_BILLING_INFO,
-} from "../data/mockData";
-import type { Task, TaskStatus, Workspace } from "../types";
+  getWorkspaces,
+  updateWorkspace as apiUpdateWorkspace,
+  deleteWorkspace as apiDeleteWorkspace,
+} from "../api";
+import {
+  DEFAULT_USER_PREFERENCES,
+  DEFAULT_ACTIVE_SESSIONS,
+  SUBSCRIPTION_PLANS,
+} from "../constants";
+import type { Task, TaskStatus, Workspace, User } from "../types";
 
 type ProfileTab =
   | "overview"
@@ -53,13 +53,31 @@ type ProfileTab =
 
 export const Profile: React.FC = () => {
   const navigate = useNavigate();
-  const currentUser = MOCK_CURRENT_USER;
+  const { user: authUser } = useAuth();
+  const { state: { boards: contextBoards, tasks: contextTasks } } = useBoard();
+
+  const currentUser: User = authUser || {
+    id: "usr-1",
+    name: "Alex Chen",
+    email: "user1@nsbm.lk",
+    initials: "AC",
+    color: "bg-indigo-600",
+  };
 
   // Active tab state
   const [activeTab, setActiveTab] = useState<ProfileTab>("overview");
 
   // Saved & Form State
-  const [savedProfile, setSavedProfile] = useState(MOCK_USER_PROFILE);
+  const [savedProfile, setSavedProfile] = useState({
+    name: currentUser.name,
+    username: currentUser.email.split("@")[0],
+    email: currentUser.email,
+    role: "Lead Full-Stack Engineer",
+    company: "CollabBoard Labs",
+    location: "San Francisco, CA",
+    bio: "Specializing in real-time collaborative systems, CRDT state sync, and high-performance WebGL & React interfaces.",
+    memberSince: "Member since Oct 2024",
+  });
 
   const [name, setName] = useState(savedProfile.name);
   const [username, setUsername] = useState(savedProfile.username);
@@ -86,15 +104,23 @@ export const Profile: React.FC = () => {
     bio !== savedProfile.bio;
 
   // Preferences state
-  const [preferences, setPreferences] = useState(MOCK_USER_PREFERENCES);
+  const [preferences, setPreferences] = useState(DEFAULT_USER_PREFERENCES);
 
   // Workspaces state
-  const [workspaces, setWorkspaces] = useState<Workspace[]>(MOCK_WORKSPACES);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [managingWorkspace, setManagingWorkspace] = useState<Workspace | null>(
     null,
   );
   const [isManageWorkspaceModalOpen, setIsManageWorkspaceModalOpen] =
     useState(false);
+
+  useEffect(() => {
+    async function load() {
+      const list = await getWorkspaces();
+      setWorkspaces(list);
+    }
+    load();
+  }, []);
 
   // Security state
   const [currentPassword, setCurrentPassword] = useState("");
@@ -108,7 +134,7 @@ export const Profile: React.FC = () => {
   } | null>(null);
 
   // User tasks state
-  const allTasksList: Task[] = Object.values(MOCK_TASKS).flat();
+  const allTasksList: Task[] = contextTasks;
   const [userTasks, setUserTasks] = useState<Task[]>(() =>
     allTasksList.filter(
       (t) =>
@@ -310,7 +336,7 @@ export const Profile: React.FC = () => {
               <div>
                 <p className="text-xs text-slate-400">Workspaces</p>
                 <p className="text-sm sm:text-base font-bold text-white">
-                  {MOCK_WORKSPACES.length}
+                  {workspaces.length}
                 </p>
               </div>
             </div>
@@ -322,7 +348,7 @@ export const Profile: React.FC = () => {
               <div>
                 <p className="text-xs text-slate-400">Active Boards</p>
                 <p className="text-sm sm:text-base font-bold text-white">
-                  {MOCK_BOARDS.length}
+                  {contextBoards.length}
                 </p>
               </div>
             </div>
@@ -593,7 +619,7 @@ export const Profile: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Basic Plan Card */}
               {(() => {
-                const basicPlan = MOCK_SUBSCRIPTION_PLANS[0];
+                const basicPlan = SUBSCRIPTION_PLANS[0];
                 return (
                   <div
                     className={`rounded-3xl p-6 sm:p-8 border flex flex-col justify-between transition-all relative ${
@@ -666,7 +692,7 @@ export const Profile: React.FC = () => {
 
               {/* Pro Plan Card */}
               {(() => {
-                const proPlan = MOCK_SUBSCRIPTION_PLANS[1];
+                const proPlan = SUBSCRIPTION_PLANS[1];
                 return (
                   <div
                     className={`rounded-3xl p-6 sm:p-8 border flex flex-col justify-between transition-all relative overflow-hidden ${
@@ -806,33 +832,17 @@ export const Profile: React.FC = () => {
                 </Button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                 <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/70 space-y-1">
                   <span className="text-slate-400 text-[11px] block">
-                    Payment Card
+                    Payment Method
                   </span>
-                  <div className="flex items-center space-x-2 font-semibold text-white">
-                    <CreditCard className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>{MOCK_BILLING_INFO.paymentCard}</span>
+                  <div className="flex items-center space-x-2 font-medium text-slate-400">
+                    <CreditCard className="w-3.5 h-3.5 text-slate-500" />
+                    <span>No payment method attached</span>
                   </div>
                   <span className="text-[10px] text-slate-500 block">
-                    Expires {MOCK_BILLING_INFO.cardExpiry}
-                  </span>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/70 space-y-1">
-                  <span className="text-slate-400 text-[11px] block">
-                    Next Invoice
-                  </span>
-                  <p className="font-semibold text-white">
-                    {MOCK_BILLING_INFO.nextInvoiceDate}
-                  </p>
-                  <span className="text-[10px] text-emerald-400 block font-mono">
-                    {subscriptionPlan === "pro"
-                      ? billingCycle === "yearly"
-                        ? MOCK_BILLING_INFO.annualRate
-                        : MOCK_BILLING_INFO.monthlyRate
-                      : "$0.00 USD"}
+                    Add a payment method upon plan upgrade
                   </span>
                 </div>
 
@@ -841,7 +851,7 @@ export const Profile: React.FC = () => {
                     Active Workspaces
                   </span>
                   <p className="font-semibold text-white">
-                    {MOCK_WORKSPACES.length} of{" "}
+                    {workspaces.length} of{" "}
                     {subscriptionPlan === "pro" ? "Unlimited" : "3"}
                   </p>
                   <span className="text-[10px] text-indigo-400 block font-mono">
@@ -863,20 +873,20 @@ export const Profile: React.FC = () => {
                 </h2>
                 <p className="text-xs text-slate-400">
                   You are a collaborator or administrator in{" "}
-                  {MOCK_WORKSPACES.length} team spaces
+                  {workspaces.length} team spaces
                 </p>
               </div>
               <Button
                 variant="primary"
                 size="sm"
-                onClick={() => navigate("/boards")}
+                onClick={() => navigate("/dashboard")}
               >
                 Open Dashboard
               </Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {MOCK_WORKSPACES.map((ws) => (
+              {workspaces.map((ws: Workspace) => (
                 <div
                   key={ws.id}
                   className="p-5 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl hover:border-slate-700 transition-all flex flex-col justify-between space-y-4 group"
@@ -1413,7 +1423,7 @@ export const Profile: React.FC = () => {
               </div>
 
               <div className="space-y-3">
-                {MOCK_ACTIVE_SESSIONS.map((session) => (
+                {DEFAULT_ACTIVE_SESSIONS.map((session) => (
                   <div
                     key={session.id}
                     className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/70 flex items-center justify-between text-xs"
@@ -1473,17 +1483,27 @@ export const Profile: React.FC = () => {
           isOpen={isManageWorkspaceModalOpen}
           onClose={() => setIsManageWorkspaceModalOpen(false)}
           workspace={managingWorkspace}
-          onUpdateWorkspace={(updatedWs) => {
-            setWorkspaces((prev) =>
-              prev.map((w) => (w.id === updatedWs.id ? updatedWs : w)),
-            );
-            setManagingWorkspace(updatedWs);
-            showToast(`Workspace "${updatedWs.name}" updated!`);
+          onUpdateWorkspace={async (updatedWs) => {
+            try {
+              const updated = await apiUpdateWorkspace(updatedWs.id, updatedWs);
+              setWorkspaces((prev) =>
+                prev.map((w) => (w.id === updated.id ? updated : w)),
+              );
+              setManagingWorkspace(updated);
+              showToast(`Workspace "${updated.name}" updated!`);
+            } catch {
+              showToast("Failed to update workspace", "info");
+            }
           }}
-          onDeleteWorkspace={(id) => {
-            setWorkspaces((prev) => prev.filter((w) => w.id !== id));
-            setIsManageWorkspaceModalOpen(false);
-            showToast("Workspace deleted", "info");
+          onDeleteWorkspace={async (id) => {
+            try {
+              await apiDeleteWorkspace(id);
+              setWorkspaces((prev) => prev.filter((w) => w.id !== id));
+              setIsManageWorkspaceModalOpen(false);
+              showToast("Workspace deleted", "info");
+            } catch {
+              showToast("Failed to delete workspace", "info");
+            }
           }}
         />
       )}
