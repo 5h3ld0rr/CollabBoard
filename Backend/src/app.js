@@ -3,6 +3,7 @@ import cors from 'cors';
 import { config } from './config.js';
 import { requestId } from './middleware/requestId.js';
 import { requestLogger } from './middleware/requestLogger.js';
+import { securityHeaders } from './middleware/securityHeaders.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import authRoutes from './routes/authRoutes.js';
 import boardRoutes from './routes/boardRoutes.js';
@@ -11,6 +12,7 @@ import taskRoutes from './routes/taskRoutes.js';
 const app = express();
 
 /* Application-Level Middleware */
+app.use(securityHeaders);
 app.use(
   cors({
     origin: config.clientOrigin,
