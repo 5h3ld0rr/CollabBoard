@@ -27,6 +27,13 @@ export const updateTaskSchema = z.object({
 });
 
 /**
+ * Validation schema for Task Status Transitions
+ */
+export const moveTaskStatusSchema = z.object({
+  status: z.enum(['todo', 'doing', 'done']),
+});
+
+/**
  * Validation schema for Task Query parameters (filtering, sorting, pagination)
  */
 export const taskQuerySchema = z.object({

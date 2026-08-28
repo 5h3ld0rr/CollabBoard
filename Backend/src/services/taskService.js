@@ -113,6 +113,19 @@ export async function updateTask(taskId, updates, userId) {
 }
 
 /**
+ * Move task status within its lifecycle (todo -> doing -> done)
+ */
+export async function moveTaskStatus(taskId, newStatus, userId) {
+  const task = await taskRepo.findById(taskId);
+  if (!task) {
+    throw new NotFoundError('Task');
+  }
+
+  await assertBoardAccess(task.boardId, userId);
+  return taskRepo.update(taskId, { status: newStatus });
+}
+
+/**
  * Delete a task ensuring user has access to its parent board
  */
 export async function deleteTask(taskId, userId) {

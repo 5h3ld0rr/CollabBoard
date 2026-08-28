@@ -6,6 +6,7 @@ import { idParamSchema } from '../schemas/commonSchema.js';
 import {
   createTaskSchema,
   updateTaskSchema,
+  moveTaskStatusSchema,
   taskQuerySchema,
 } from '../schemas/taskSchema.js';
 import * as controller from '../controllers/taskController.js';
@@ -18,6 +19,12 @@ router.use(authenticate);
 router.get('/', validate(taskQuerySchema, 'query'), asyncHandler(controller.list));
 router.post('/', validate(createTaskSchema, 'body'), asyncHandler(controller.create));
 router.get('/:id', validate(idParamSchema, 'params'), asyncHandler(controller.getOne));
+router.patch(
+  '/:id/status',
+  validate(idParamSchema, 'params'),
+  validate(moveTaskStatusSchema, 'body'),
+  asyncHandler(controller.moveStatus)
+);
 router.patch(
   '/:id',
   validate(idParamSchema, 'params'),

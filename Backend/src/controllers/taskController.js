@@ -26,6 +26,13 @@ export async function update(req, res) {
   });
 }
 
+export async function moveStatus(req, res) {
+  const task = await taskService.moveTaskStatus(req.params.id, req.body.status, req.user.id);
+  res.status(200).json({
+    data: task,
+  });
+}
+
 export async function remove(req, res) {
   await taskService.deleteTask(req.params.id, req.user.id);
   res.status(204).end();
