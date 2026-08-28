@@ -32,3 +32,17 @@ export async function remove(req, res) {
   await boardService.deleteBoard(req.params.id, req.user.id);
   res.status(204).end();
 }
+
+export async function addMember(req, res) {
+  const board = await boardService.addBoardMember(req.params.id, req.body.userId, req.user.id);
+  res.status(200).json({
+    data: board,
+  });
+}
+
+export async function removeMember(req, res) {
+  const board = await boardService.removeBoardMember(req.params.id, req.params.memberId, req.user.id);
+  res.status(200).json({
+    data: board,
+  });
+}

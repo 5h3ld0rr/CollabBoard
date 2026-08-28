@@ -3,7 +3,7 @@ import { authenticate } from '../middleware/authenticate.js';
 import { validate } from '../middleware/validate.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { idParamSchema } from '../schemas/commonSchema.js';
-import { createBoardSchema, updateBoardSchema } from '../schemas/boardSchema.js';
+import { createBoardSchema, updateBoardSchema, addMemberSchema } from '../schemas/boardSchema.js';
 import { taskQuerySchema } from '../schemas/taskSchema.js';
 import * as controller from '../controllers/boardController.js';
 import * as taskController from '../controllers/taskController.js';
@@ -21,6 +21,16 @@ router.get(
   validate(idParamSchema, 'params'),
   validate(taskQuerySchema, 'query'),
   asyncHandler(taskController.listByBoard)
+);
+router.post(
+  '/:id/members',
+  validate(idParamSchema, 'params'),
+  validate(addMemberSchema, 'body'),
+  asyncHandler(controller.addMember)
+);
+router.delete(
+  '/:id/members/:memberId',
+  asyncHandler(controller.removeMember)
 );
 router.patch(
   '/:id',

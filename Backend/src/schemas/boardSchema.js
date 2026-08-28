@@ -17,3 +17,10 @@ export const updateBoardSchema = z.object({
   description: z.string().trim().optional(),
   members: z.array(z.string()).optional(),
 });
+
+/**
+ * Validation schema for Adding Member to Board
+ */
+export const addMemberSchema = z.object({
+  userId: z.string().trim().min(1, 'userId is required'),
+});

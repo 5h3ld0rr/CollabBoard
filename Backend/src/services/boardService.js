@@ -73,3 +73,27 @@ export async function deleteBoard(boardId, userId) {
   await boardRepo.delete(boardId);
   return true;
 }
+
+/**
+ * Add a collaborator to a board
+ */
+export async function addBoardMember(boardId, targetUserId, userId) {
+  const board = await assertBoardAccess(boardId, userId);
+  const currentMembers = board.members || [];
+  const updatedMembers = Array.from(new Set([...currentMembers.map(String), String(targetUserId)]));
+  return boardRepo.update(board.id, { members: updatedMembers });
+}
+
+/**
+ * Remove a collaborator from a board (restricted to board owner)
+ */
+export async function removeBoardMember(boardId, targetUserId, userId) {
+  const board = await boardRepo.findById(boardId);
+  if (!board) throw new NotFoundError('Board');
+  if (String(board.ownerId) !== String(userId)) {
+    throw new ForbiddenError('Only the board owner can remove members');
+  }
+  const currentMembers = board.members || [];
+  const updatedMembers = currentMembers.filter((m) => String(m) !== String(targetUserId));
+  return boardRepo.update(board.id, { members: updatedMembers });
+}
