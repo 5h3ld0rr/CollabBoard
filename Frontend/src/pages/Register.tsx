@@ -15,9 +15,11 @@ import {
   Sparkles,
 } from "lucide-react";
 import { AmbientBackground, BackButton, Button, Logo } from "../components/common";
+import { useAuth } from "../context";
 
 export const Register: React.FC = () => {
   const navigate = useNavigate();
+  const { register } = useAuth();
 
   const [formData, setFormData] = useState({
     name: "",
@@ -42,7 +44,7 @@ export const Register: React.FC = () => {
   };
 
   // Password strength checks
-  const hasMinLength = formData.password.length >= 8;
+  const hasMinLength = formData.password.length >= 6;
   const hasNumberOrSpecial = /[0-9!@#$%^&*]/.test(formData.password);
   const hasMixedCase =
     /[a-z]/.test(formData.password) && /[A-Z]/.test(formData.password);
@@ -63,7 +65,7 @@ export const Register: React.FC = () => {
       return;
     }
     if (!hasMinLength) {
-      setError("Password must be at least 8 characters long");
+      setError("Password must be at least 6 characters long");
       return;
     }
     if (formData.password !== formData.confirmPassword) {
@@ -77,11 +79,18 @@ export const Register: React.FC = () => {
 
     setIsLoading(true);
 
-    // Simulate registration (M1 static flow)
-    setTimeout(() => {
+    try {
+      await register({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+      });
+      navigate("/dashboard");
+    } catch (err: any) {
+      setError(err.message || "Failed to create account. Please try again.");
+    } finally {
       setIsLoading(false);
-      navigate("/login");
-    }, 800);
+    }
   };
 
   return (
