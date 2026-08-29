@@ -180,6 +180,9 @@ export const Dashboard: React.FC = () => {
         if (sortBy === 'updated') {
           return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
         }
+        if (sortBy === 'updated') {
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        }
         return 0;
       });
   }, [currentWorkspaceBoards, activeTab, searchQuery, sortBy]);
