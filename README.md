@@ -1,146 +1,169 @@
-# CollabBoard 📋⚡
+# 🚀 CollabBoard
 
-> A modern, responsive, collaborative Kanban workspace and task management web application built for agile engineering teams.
-
----
-
-## 📖 Table of Contents
-
-- [What It Is](#-what-it-is)
-- [Key Features](#-key-features)
-- [How to Run It](#-how-to-run-it)
-- [Folder Conventions](#-folder-conventions)
-- [Architecture & State Management](#-architecture--state-management)
-- [Known Limitations](#-known-limitations)
+> A modern, enterprise-grade collaborative Kanban board and sprint planning platform built with **Node.js**, **Express**, **React 19**, **TypeScript**, and **Tailwind CSS v4**.
 
 ---
 
-## 🚀 What It Is
+## 🌟 Key Features
 
-**CollabBoard** is a full-featured collaborative project management and Kanban board application. Designed with modern developer ergonomics and rich dark aesthetics, it enables teams to organize sprints, track work items, discuss tasks, and manage project lifecycles effortlessly.
-
-### Tech Stack
-- **Framework:** [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/)
-- **Bundler & Tooling:** [Vite](https://vitejs.dev/)
-- **Styling:** [Tailwind CSS v4](https://tailwindcss.com/)
-- **Routing:** [React Router v7](https://reactrouter.com/)
-- **Icons:** [Lucide React](https://lucide.dev/)
-- **Linter:** [Oxlint](https://oxc.rs/)
+- 🏢 **Multi-Tenant Workspaces**: Organize projects into team workspaces (e.g., Core Engineering, Product & Design) with dynamic member roles (**Owner**, **Admin**, **Member**).
+- 📋 **Agile Kanban Boards**: Interactive board columns (`To Do`, `In Progress`, `Done`), drag-and-drop workflow simulation, priority badges, tags, and due-date tracking.
+- 📊 **Real-Time Dynamic Metrics**: Automatic workspace statistics including active boards, tasks in flight, completion percentage, and active collaborator sets.
+- 🔐 **Secure JWT Authentication**: Stateless bearer token authentication, bcrypt password hashing, and client-side protected route navigation.
+- 🛡️ **Defensive API Validation**: Robust schema parsing with **Zod** middleware, structured error codes, and strict ownership authorization.
+- 📖 **Interactive Swagger Documentation**: Live API explorer and OpenAPI 3.0 specification available directly at `/api/docs`.
 
 ---
 
-## ✨ Key Features
+## 🏛️ System Architecture
 
-- 📌 **Interactive Kanban Boards:** 3-column structured workflow (`To Do`, `In Progress`, `Completed`) with status progressions and task counts.
-- 🎯 **Task Management:** Create, edit, assign, tag, prioritize (`Low`, `Medium`, `High`, `Urgent`), and set due dates with automatic overdue detection.
-- 💬 **Discussion & Comments System:** Standalone task detail view (`/tasks/:id`) featuring a conversation feed with relative timestamps, edit capabilities, and deletion confirmation dialogs.
-- ⚡ **Global Search & Filter Bar:** Instant title search with keyboard shortcuts (<kbd>Ctrl</kbd> + <kbd>K</kbd> to focus, <kbd>Esc</kbd> to blur), assignee filtering, and status filters.
-- 🌐 **Live Network Indicator:** Real-time Online / Offline network health indicator with automatic reconnect detection.
-- 🏢 **Multi-Workspace & Board Switching:** Seamless workspace switching and board settings configuration modal.
-- 🛡️ **Graceful 404 Recovery:** Custom orbit-themed 404 pages for non-existent routes, bad board IDs, and missing task IDs without application crashes.
+CollabBoard follows a **4-Layer Architecture** to ensure clean separation of concerns and maintainability:
 
----
-
-## 💻 How to Run It
-
-### Prerequisites
-- **Node.js**: v18.0.0 or higher
-- **npm**: v9.0.0 or higher
-
-### Installation & Setup
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/5h3ld0rr/CollabBoard.git
-   cd CollabBoard
-   ```
-
-2. **Navigate into the Frontend directory:**
-   ```bash
-   cd Frontend
-   ```
-
-3. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-
-4. **Start the local development server:**
-   ```bash
-   npm run dev
-   ```
-   Open [http://localhost:5173](http://localhost:5173) (or the port indicated in your terminal) in your browser.
-
-5. **Build for production:**
-   ```bash
-   npm run build
-   ```
-
-6. **Preview production build:**
-   ```bash
-   npm run preview
-   ```
-
----
-
-## 📁 Folder Conventions
-
-```text
-CollabBoard/
-├── Backend/                    # Backend services (Milestone 2 integration)
-├── Frontend/                   # Frontend React + TypeScript application
-│   ├── public/                 # Static assets (favicons, SVG logos)
-│   ├── src/
-│   │   ├── api/                # Named API service modules (never raw fetch in UI)
-│   │   │   ├── boards.ts       # Board queries & mutations
-│   │   │   ├── tasks.ts        # Task & comment queries & mutations
-│   │   │   └── index.ts        # Consolidated API exports
-│   │   ├── components/         # Reusable UI component modules
-│   │   │   ├── auth/           # Login & Registration cards
-│   │   │   ├── board/          # TaskCard, Column, TaskModal, BoardSettingsModal
-│   │   │   ├── common/         # Navbar, AmbientBackground, Logo, NetworkStatus
-│   │   │   └── workspace/      # WorkspaceSwitcher, WorkspaceDropdown
-│   │   ├── context/            # React Contexts & useReducer state machines
-│   │   │   ├── BoardContext.tsx# BoardProvider & boardReducer (Tasks & Boards)
-│   │   │   └── index.ts        # Context exports
-│   │   ├── data/               # Seed data & in-memory stores
-│   │   │   └── mockData.ts     # Initial boards, tasks, comments, and members
-│   │   ├── pages/              # Application Route Views
-│   │   │   ├── Home.tsx        # Landing & feature showcase page
-│   │   │   ├── Dashboard.tsx   # Workspaces, board directory, and overview
-│   │   │   ├── BoardView.tsx   # Kanban canvas (/boards/:id)
-│   │   │   ├── TaskDetails.tsx # Standalone task page (/tasks/:id) with discussions
-│   │   │   ├── Profile.tsx     # User profile, preferences, and session list
-│   │   │   ├── Login.tsx       # Sign-in view
-│   │   │   ├── Register.tsx    # Sign-up view
-│   │   │   └── NotFound.tsx    # 404 catch-all page
-│   │   ├── types/              # Central TypeScript definitions
-│   │   │   └── index.ts        # Interfaces for Board, Task, User, Comment, etc.
-│   │   ├── App.tsx             # Root router with BoardProvider wrapper
-│   │   ├── main.tsx            # DOM entry point
-│   │   └── index.css           # Global Tailwind CSS styles and theme variables
-│   ├── package.json            # Project dependencies and run scripts
-│   ├── tsconfig.json           # TypeScript configuration
-│   └── vite.config.ts          # Vite build and plugin setup
-└── README.md                   # Project documentation
+```
+┌─────────────────────────────────────────────────────────┐
+│                     Client (React 19)                   │
+└────────────────────────────┬────────────────────────────┘
+                             │  HTTP / JSON (Bearer JWT)
+┌────────────────────────────▼────────────────────────────┐
+│ 1. Routes Layer       (URL routing & middleware binding)│
+├─────────────────────────────────────────────────────────┤
+│ 2. Controllers Layer  (HTTP req/res extraction & codes) │
+├─────────────────────────────────────────────────────────┤
+│ 3. Services Layer     (Business logic & authorization)  │
+├─────────────────────────────────────────────────────────┤
+│ 4. Repositories Layer (Data store & entity operations)  │
+└─────────────────────────────────────────────────────────┘
 ```
 
+### Response & Error Standards
+
+- **Single Resource:**
+  ```json
+  {
+    "data": { "id": "ws-1", "name": "Core Engineering" }
+  }
+  ```
+- **Collection Resource:**
+  ```json
+  {
+    "data": [ ... ],
+    "meta": { "page": 1, "limit": 20, "total": 2 }
+  }
+  ```
+- **Error Response:**
+  ```json
+  {
+    "error": {
+      "message": "Validation failed",
+      "code": "VALIDATION_ERROR",
+      "requestId": "req-12345",
+      "details": [
+        { "field": "email", "message": "Invalid email address format" }
+      ]
+    }
+  }
+  ```
+
 ---
 
-## 🧠 Architecture & State Management
+## 📋 CollabBoard REST API Contract
 
-- **Centralized `BoardContext` (`useReducer`)**:
-  All task list and board operations (`ADD_TASK`, `UPDATE_TASK`, `DELETE_TASK`, `MOVE_TASK_STATUS`, `SET_TASKS`, `CLEAR_BOARD_TASKS`, `ADD_BOARD`, `UPDATE_BOARD`, `DELETE_BOARD`) are dispatched through a deterministic `boardReducer`.
-- **Decoupled API Layer (`src/api/`)**:
-  UI components do not call raw HTTP `fetch` directly. All asynchronous operations are handled via named async service functions in `src/api/tasks.ts` and `src/api/boards.ts`.
+All private endpoints require an `Authorization: Bearer <token>` header.
+
+### 1. Authentication
+| Method | Endpoint | Description | Request Body | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **POST** | `/api/auth/register` | Register a new user | `{ name?, email, password }` | `201 Created` |
+| **POST** | `/api/auth/login` | Authenticate user & get token | `{ email, password }` | `200 OK` |
+| **GET** | `/api/auth/me` | Fetch authenticated profile | *None* | `200 OK` |
+
+### 2. Workspaces
+| Method | Endpoint | Description | Request Body | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **GET** | `/api/workspaces` | List accessible workspaces with stats | *None* | `200 OK` |
+| **POST** | `/api/workspaces` | Create a new workspace | `{ name, description?, color? }` | `201 Created` |
+| **GET** | `/api/workspaces/:id` | Get single workspace & member list | *None* | `200 OK` |
+| **PATCH** | `/api/workspaces/:id` | Update workspace name/color/members | `{ name?, description?, color?, admins?, members? }` | `200 OK` |
+| **DELETE**| `/api/workspaces/:id` | Remove workspace *(Owner only)* | *None* | `204 No Content` |
+
+### 3. Boards
+| Method | Endpoint | Description | Request Body | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **GET** | `/api/boards` | List accessible sprint boards | *None* | `200 OK` |
+| **POST** | `/api/boards` | Create a new board in a workspace | `{ title, description?, workspaceId, color?, icon?, tags? }` | `201 Created` |
+| **GET** | `/api/boards/:id` | Get board details & live stats | *None* | `200 OK` |
+| **PATCH** | `/api/boards/:id` | Update board title, tags, or theme | `{ title?, description?, isFavorite?, tags? }` | `200 OK` |
+| **DELETE**| `/api/boards/:id` | Delete a board *(Owner only)* | *None* | `204 No Content` |
+| **POST** | `/api/boards/:id/members` | Add a collaborator to board | `{ userId }` | `200 OK` |
+| **DELETE**| `/api/boards/:id/members/:memberId` | Remove board collaborator | *None* | `200 OK` |
+
+### 4. Tasks
+| Method | Endpoint | Description | Request Body / Query | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **GET** | `/api/boards/:id/tasks` | Get tasks for a board (filterable) | `?status=&assignee=&search=&page=&limit=` | `200 OK` |
+| **GET** | `/api/tasks` | Global tasks list across boards | `?boardId=&status=&assignee=&page=&limit=` | `200 OK` |
+| **POST** | `/api/tasks` | Create a new task | `{ title, boardId, description?, status?, priority?, assignee?, dueDate?, tags? }` | `201 Created` |
+| **GET** | `/api/tasks/:id` | Fetch task details | *None* | `200 OK` |
+| **PATCH** | `/api/tasks/:id` | Update task details or status | `{ title?, description?, status?, priority?, assignee?, dueDate?, tags? }` | `200 OK` |
+| **DELETE**| `/api/tasks/:id` | Delete a task | *None* | `204 No Content` |
+
+### 5. Documentation
+| Method | Endpoint | Description | Status |
+| :--- | :--- | :--- | :--- |
+| **GET** | `/api/docs` | Interactive Swagger UI Explorer | `200 OK` |
+| **GET** | `/api/docs.json` | OpenAPI 3.0 Contract Specification | `200 OK` |
+| **GET** | `/api/health` | Service uptime and health status | `200 OK` |
 
 ---
 
-## ⚠️ Known Limitations
+## 🛠️ Tech Stack
 
-1. **In-Memory Mock Persistence:**
-   - As part of the **Milestone 1 (Static UI & Frontend Architecture)** scope, task and comment mutations persist in memory during the active session. Full page hard-refreshes will re-initialize to the mock seed data until backend database persistence is connected.
-2. **WebSocket Real-time Broadcast:**
-   - Multi-user live cursor broadcasting and cross-tab socket syncing are simulated in this milestone and will be wired to the live WebSocket server in Milestone 2.
-3. **Mock Authentication Session:**
-   - The active user profile is pre-authenticated as `Alex Chen` (`MOCK_CURRENT_USER`) for local testing.
+### Frontend
+- **Framework:** React 19 with Vite & TypeScript
+- **Styling:** Tailwind CSS v4 + Glassmorphism UI
+- **Routing:** React Router v7 with Protected Route guards
+- **Icons:** Lucide React
+
+### Backend
+- **Runtime:** Node.js (ES Modules)
+- **Framework:** Express 4
+- **Validation:** Zod Schema Engine
+- **Auth & Security:** JSON Web Tokens (JWT), Bcrypt.js, CORS, Custom Rate Limiter
+- **API Docs:** Swagger UI Express & YAML OpenAPI spec
+- **Testing:** Node.js Native Test Runner (`node:test`, `node:assert`)
+
+---
+
+## 🚀 Getting Started
+
+### 1. Prerequisites
+- **Node.js** >= v18.0.0
+- **npm** >= v9.0.0
+
+### 2. Backend Setup
+```bash
+# Navigate to the backend directory
+cd Backend
+
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+```
+Backend runs at **`http://localhost:4000`**  
+Interactive API Docs: **`http://localhost:4000/api/docs`**
+
+### 3. Frontend Setup
+```bash
+# Navigate to the frontend directory
+cd Frontend
+
+# Install dependencies
+npm install
+
+# Start Vite dev server
+npm run dev
+```
+Frontend runs at **`http://localhost:5173`**
+

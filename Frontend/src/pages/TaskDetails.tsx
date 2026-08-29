@@ -31,7 +31,7 @@ import {
   updateTask as apiUpdateTask,
   deleteTask as apiDeleteTask,
 } from '../api';
-import { MOCK_USERS, MOCK_CURRENT_USER } from '../data/mockData';
+import { useAuth } from '../context/AuthContext';
 import type { Task, Board, TaskStatus, TaskPriority, User, TaskComment } from '../types';
 
 const PRIORITY_CONFIG: Record<
@@ -99,8 +99,9 @@ export const TaskDetails: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState(true);
   const [task, setTask] = useState<Task | null>(null);
+  const { user: authUser } = useAuth();
   const [board, setBoard] = useState<Board | null>(null);
-  const [boardMembers, setBoardMembers] = useState<User[]>(MOCK_USERS);
+  const [boardMembers, setBoardMembers] = useState<User[]>([]);
   const [comments, setComments] = useState<TaskComment[]>([]);
   const [commentInput, setCommentInput] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
@@ -148,7 +149,7 @@ export const TaskDetails: React.FC = () => {
 
           setBoard(foundBoard);
           if (foundBoard) {
-            setBoardMembers(foundBoard.members || MOCK_USERS);
+            setBoardMembers(foundBoard.members || []);
           }
           setComments(taskComments);
         } else {
@@ -217,7 +218,7 @@ export const TaskDetails: React.FC = () => {
 
     setIsSubmittingComment(true);
     try {
-      const newComment = await addComment(task.id, commentInput.trim(), MOCK_CURRENT_USER);
+      const newComment = await addComment(task.id, commentInput.trim(), authUser || undefined);
       setComments((prev) => [newComment, ...prev]);
       setCommentInput('');
       showToast('Comment posted successfully');
@@ -507,10 +508,10 @@ export const TaskDetails: React.FC = () => {
                   <form onSubmit={handleAddComment} className="space-y-3">
                     <div className="flex items-start space-x-3">
                       <div
-                        className={`w-8 h-8 rounded-xl ${MOCK_CURRENT_USER.color} text-white font-bold text-xs flex items-center justify-center shrink-0 mt-1 shadow`}
-                        title={MOCK_CURRENT_USER.name}
+                        className={`w-8 h-8 rounded-xl ${authUser?.color || 'bg-indigo-600'} text-white font-bold text-xs flex items-center justify-center shrink-0 mt-1 shadow`}
+                        title={authUser?.name || 'User'}
                       >
-                        {MOCK_CURRENT_USER.initials}
+                        {authUser?.initials || (authUser?.name ? authUser.name.slice(0, 2).toUpperCase() : 'U')}
                       </div>
                       <div className="flex-1 space-y-2">
                         <textarea
@@ -553,7 +554,7 @@ export const TaskDetails: React.FC = () => {
                       </div>
                     ) : (
                       comments.map((comment) => {
-                        const isAuthor = comment.author.id === MOCK_CURRENT_USER.id;
+                        const isAuthor = comment.author.id === authUser?.id || comment.author.email === authUser?.email;
                         const isEditingThis = editingCommentId === comment.id;
 
                         return (
@@ -650,17 +651,26 @@ export const TaskDetails: React.FC = () => {
                 <div className="p-5 rounded-3xl bg-slate-900/70 border border-slate-800 space-y-3">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Assignee</h3>
                   {task.assignee ? (
-                    <div className="flex items-center space-x-3 p-3 rounded-2xl bg-slate-950 border border-slate-800">
-                      <div
-                        className={`w-10 h-10 rounded-2xl ${task.assignee.color} text-white font-bold text-sm flex items-center justify-center shadow-md`}
-                      >
-                        {task.assignee.initials}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold text-white truncate">{task.assignee.name}</p>
-                        <p className="text-[10px] text-slate-400 truncate">{task.assignee.email}</p>
-                      </div>
-                    </div>
+                    (() => {
+                      const name = typeof task.assignee === 'object' && task.assignee !== null ? task.assignee.name : String(task.assignee);
+                      const color = typeof task.assignee === 'object' && task.assignee?.color ? task.assignee.color : 'bg-indigo-600';
+                      const initials = typeof task.assignee === 'object' && task.assignee?.initials ? task.assignee.initials : name.slice(0, 2).toUpperCase();
+                      const email = typeof task.assignee === 'object' && task.assignee?.email ? task.assignee.email : '';
+
+                      return (
+                        <div className="flex items-center space-x-3 p-3 rounded-2xl bg-slate-950 border border-slate-800">
+                          <div
+                            className={`w-10 h-10 rounded-2xl ${color} text-white font-bold text-sm flex items-center justify-center shadow-md`}
+                          >
+                            {initials}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-white truncate">{name}</p>
+                            {email && <p className="text-[10px] text-slate-400 truncate">{email}</p>}
+                          </div>
+                        </div>
+                      );
+                    })()
                   ) : (
                     <div className="flex items-center space-x-3 p-3 rounded-2xl bg-slate-950 border border-slate-800">
                       <div className="w-10 h-10 rounded-2xl bg-slate-800 text-slate-400 font-bold text-sm flex items-center justify-center">

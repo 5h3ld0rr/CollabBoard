@@ -9,12 +9,12 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import type { Workspace, User } from '../../types';
-import { MOCK_USERS, COLOR_OPTIONS } from '../../data/mockData';
+import { COLOR_OPTIONS } from '../../constants';
 
 interface ManageWorkspaceModalProps {
   isOpen: boolean;
   onClose: () => void;
-  workspace: Workspace;
+  workspace?: Workspace | null;
   onUpdateWorkspace: (updated: Workspace) => void;
   onDeleteWorkspace?: (id: string) => void;
 }
@@ -27,10 +27,10 @@ export const ManageWorkspaceModal: React.FC<ManageWorkspaceModalProps> = ({
   onDeleteWorkspace,
 }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'members' | 'danger'>('general');
-  const [name, setName] = useState(workspace.name);
-  const [description, setDescription] = useState(workspace.description);
-  const [color, setColor] = useState(workspace.color || COLOR_OPTIONS[0].value);
-  const [members, setMembers] = useState<User[]>(workspace.members || [MOCK_USERS[0]]);
+  const [name, setName] = useState(workspace?.name || '');
+  const [description, setDescription] = useState(workspace?.description || '');
+  const [color, setColor] = useState(workspace?.color || COLOR_OPTIONS[0].value);
+  const [members, setMembers] = useState<User[]>(workspace?.members || []);
   
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'Admin' | 'Member'>('Member');
@@ -38,15 +38,17 @@ export const ManageWorkspaceModal: React.FC<ManageWorkspaceModalProps> = ({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    setName(workspace.name);
-    setDescription(workspace.description);
-    setColor(workspace.color || COLOR_OPTIONS[0].value);
-    setMembers(workspace.members || [MOCK_USERS[0]]);
+    if (workspace) {
+      setName(workspace.name);
+      setDescription(workspace.description);
+      setColor(workspace.color || COLOR_OPTIONS[0].value);
+      setMembers(workspace.members || []);
+    }
     setConfirmDelete(false);
     setSuccessMessage(null);
   }, [workspace, isOpen]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !workspace) return null;
 
   const handleSaveGeneral = (e: React.FormEvent) => {
     e.preventDefault();
@@ -294,52 +296,74 @@ export const ManageWorkspaceModal: React.FC<ManageWorkspaceModalProps> = ({
 
             {/* Member List */}
             <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-              {members.map((member) => (
-                <div
-                  key={member.id}
-                  className="flex items-center justify-between p-3 rounded-xl bg-slate-950/60 border border-slate-800"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div
-                      className={`w-7 h-7 rounded-lg ${
-                        member.color || 'bg-indigo-600'
-                      } text-white font-bold text-[10px] flex items-center justify-center`}
-                    >
-                      {member.initials}
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-white">{member.name}</p>
-                      <p className="text-[10px] text-slate-500">{member.email}</p>
-                    </div>
-                  </div>
+              {members.map((member) => {
+                const isObj = typeof member === 'object' && member !== null;
+                const id = isObj ? member.id : String(member);
+                const name = isObj && member.name ? member.name : `User ${id}`;
+                const email = isObj && member.email ? member.email : `user${id}@nsbm.lk`;
+                const initials = isObj && member.initials ? member.initials : name.slice(0, 2).toUpperCase();
+                const color = isObj && member.color ? member.color : 'bg-indigo-600';
+                const role = isObj && member.role ? member.role : 'Member';
+                const isOwner = role === 'Owner';
 
-                  <div className="flex items-center space-x-2">
-                    <select
-                      value={member.role === 'Admin' ? 'Admin' : 'Member'}
-                      onChange={(e) =>
-                        handleChangeRole(
-                          member.id,
-                          e.target.value as 'Admin' | 'Member'
-                        )
-                      }
-                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 border border-slate-700 text-indigo-300 hover:border-indigo-500 cursor-pointer focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    >
-                      <option value="Member">Member</option>
-                      <option value="Admin">Admin</option>
-                    </select>
-
-                    {members.length > 1 && (
-                      <button
-                        onClick={() => handleRemoveMember(member.id)}
-                        className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
-                        title="Remove member"
+                return (
+                  <div
+                    key={id}
+                    className="flex items-center justify-between p-3 rounded-xl bg-slate-950/60 border border-slate-800"
+                  >
+                    <div className="flex items-center space-x-3 min-w-0">
+                      <div
+                        className={`w-8 h-8 rounded-xl ${color} text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-sm`}
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+                        {initials}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center space-x-1.5">
+                          <p className="text-xs font-semibold text-white truncate">{name}</p>
+                          {isOwner && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                              Owner
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400 truncate">{email}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2 shrink-0">
+                      {isOwner ? (
+                        <span className="px-2.5 py-1 text-[11px] font-semibold text-amber-300 bg-slate-900 border border-slate-700/80 rounded-lg">
+                          Owner
+                        </span>
+                      ) : (
+                        <select
+                          value={role === 'Admin' ? 'Admin' : 'Member'}
+                          onChange={(e) =>
+                            handleChangeRole(
+                              id,
+                              e.target.value as 'Admin' | 'Member'
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 border border-slate-700 text-indigo-300 hover:border-indigo-500 cursor-pointer focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        >
+                          <option value="Member">Member</option>
+                          <option value="Admin">Admin</option>
+                        </select>
+                      )}
+
+                      {!isOwner && members.length > 1 && (
+                        <button
+                          onClick={() => handleRemoveMember(id)}
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
+                          title="Remove member"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

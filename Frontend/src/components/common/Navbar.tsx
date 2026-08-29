@@ -115,21 +115,12 @@ export const Navbar: React.FC<NavbarProps> = ({
     navigate("/login");
   };
 
-  const workspaceObject: Workspace =
+  const workspaceObject: Workspace | null =
     typeof currentWorkspace === "object" && currentWorkspace !== null
       ? currentWorkspace
-      : {
-          id: "ws-1",
-          name:
-            typeof currentWorkspace === "string"
-              ? currentWorkspace
-              : "Core Engineering",
-          description: "Platform infrastructure and real-time engine",
-          boardCount: 4,
-          memberCount: 4,
-          color: "from-indigo-600 to-violet-600",
-          role: "Owner",
-        };
+      : workspaces && workspaces.length > 0
+      ? workspaces[0]
+      : null;
 
   return (
     <header className="sticky top-0 z-40 w-full backdrop-blur-xl bg-slate-950/80 border-b border-slate-800/80 transition-colors">
@@ -143,11 +134,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Logo size="sm" />
           </Link>
 
-          {!shouldHideWorkspace &&
-            (workspaces &&
-            onSelectWorkspace &&
-            onOpenCreateWorkspace &&
-            onOpenManageWorkspace ? (
+          {!shouldHideWorkspace && (
+            workspaces && workspaces.length > 0 && onSelectWorkspace && onOpenCreateWorkspace && onOpenManageWorkspace ? (
               <WorkspaceSwitcher
                 workspaces={workspaces}
                 currentWorkspace={workspaceObject}
@@ -155,12 +143,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onOpenCreateWorkspace={onOpenCreateWorkspace}
                 onOpenManageWorkspace={onOpenManageWorkspace}
               />
-            ) : (
+            ) : workspaceObject ? (
               <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs text-slate-300">
                 <LayoutGrid className="w-3.5 h-3.5 text-indigo-400" />
                 <span className="font-semibold">{workspaceObject.name}</span>
               </div>
-            ))}
+            ) : null
+          )}
         </div>
 
         {/* Middle: Search Bar */}

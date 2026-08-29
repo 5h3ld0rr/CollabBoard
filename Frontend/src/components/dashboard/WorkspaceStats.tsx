@@ -4,19 +4,46 @@ import type { Board } from '../../types';
 
 interface WorkspaceStatsProps {
   boards: Board[];
+  workspaceCount?: number;
+  workspaceName?: string;
 }
 
-export const WorkspaceStats: React.FC<WorkspaceStatsProps> = ({ boards }) => {
+export const WorkspaceStats: React.FC<WorkspaceStatsProps> = ({
+  boards,
+  workspaceCount,
+  workspaceName,
+}) => {
   const totalBoards = boards.length;
-  const totalTasks = boards.reduce((acc, b) => acc + b.stats.totalTasks, 0);
-  const inProgressTasks = boards.reduce((acc, b) => acc + b.stats.inProgressCount, 0);
-  const completedTasks = boards.reduce((acc, b) => acc + b.stats.doneCount, 0);
+  const totalTasks = boards.reduce((acc, b) => acc + (b.stats?.totalTasks || 0), 0);
+  const inProgressTasks = boards.reduce((acc, b) => acc + (b.stats?.inProgressCount || 0), 0);
+  const completedTasks = boards.reduce((acc, b) => acc + (b.stats?.doneCount || 0), 0);
+
+  // Compute unique collaborators dynamically across all accessible boards
+  const collaboratorIds = new Set<string>();
+  boards.forEach((b) => {
+    if (Array.isArray(b.members)) {
+      b.members.forEach((m) => {
+        if (typeof m === 'string') {
+          collaboratorIds.add(m);
+        } else if (m && typeof m === 'object' && 'id' in m) {
+          collaboratorIds.add(String((m as { id: string }).id));
+        }
+      });
+    }
+  });
+  const totalCollaborators = Math.max(collaboratorIds.size, 1);
+
+  const activeBoardsSubtext = workspaceName
+    ? `in ${workspaceName}`
+    : workspaceCount !== undefined
+    ? `across ${workspaceCount} workspace${workspaceCount === 1 ? '' : 's'}`
+    : 'in active workspace';
 
   const stats = [
     {
       label: 'Active Boards',
       value: totalBoards,
-      subtext: 'across 3 workspaces',
+      subtext: activeBoardsSubtext,
       icon: <Kanban className="w-5 h-5 text-indigo-400" />,
       bg: 'bg-indigo-500/10 border-indigo-500/20',
     },
@@ -36,7 +63,7 @@ export const WorkspaceStats: React.FC<WorkspaceStatsProps> = ({ boards }) => {
     },
     {
       label: 'Collaborators',
-      value: 4,
+      value: totalCollaborators,
       subtext: 'Real-time presence active',
       icon: <Users className="w-5 h-5 text-sky-400" />,
       bg: 'bg-sky-500/10 border-sky-500/20',

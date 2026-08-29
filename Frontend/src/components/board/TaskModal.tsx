@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Sparkles, Check, Trash2, Loader2 } from 'lucide-react';
 import type { Task, TaskPriority, TaskStatus, User } from '../../types';
-import { MOCK_USERS } from '../../data/mockData';
 
 interface TaskModalProps {
   isOpen: boolean;
@@ -20,7 +19,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   initialTask,
   defaultStatus = 'todo',
   boardId,
-  availableAssignees = MOCK_USERS,
+  availableAssignees = [],
   onSaveTask,
   onDeleteTask,
 }) => {
@@ -87,7 +86,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     }
 
     const assignedUser: User | undefined = assigneeId
-      ? availableAssignees.find((u) => u.id === assigneeId) || MOCK_USERS.find((u) => u.id === assigneeId)
+      ? availableAssignees.find((u: User) => u.id === assigneeId)
       : undefined;
     const parsedTags = tagInput
       .split(',')

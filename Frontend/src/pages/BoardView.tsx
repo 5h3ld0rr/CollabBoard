@@ -247,7 +247,7 @@ export const BoardView: React.FC = () => {
   // Collect all unique tags for filtering
   const allTags = useMemo(() => {
     const tagSet = new Set<string>();
-    tasks.forEach((t) => t.tags.forEach((tag) => tagSet.add(tag)));
+    tasks.forEach((t) => (t.tags || []).forEach((tag) => tagSet.add(tag)));
     return Array.from(tagSet);
   }, [tasks]);
 
@@ -259,36 +259,38 @@ export const BoardView: React.FC = () => {
       // 1. Free-text search on title
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchTitle = task.title.toLowerCase().includes(q);
+        const matchTitle = (task.title || "").toLowerCase().includes(q);
         if (!matchTitle) return false;
       }
 
       // 2. Filter by Assignee
       if (selectedAssignee !== "all") {
+        const assigneeId = typeof task.assignee === "object" && task.assignee !== null ? task.assignee.id : String(task.assignee || "");
         if (selectedAssignee === "unassigned") {
           if (task.assignee) return false;
         } else {
-          if (!task.assignee || task.assignee.id !== selectedAssignee)
+          if (!assigneeId || assigneeId !== selectedAssignee)
             return false;
         }
       }
 
       // 3. Filter by Status
-      if (selectedStatus !== "all" && task.status !== selectedStatus) {
+      const normalizedStatus = task.status === ("doing" as any) ? "in-progress" : task.status;
+      if (selectedStatus !== "all" && normalizedStatus !== selectedStatus) {
         return false;
       }
 
       // 4. Filter by Overdue
       if (isOverdueFilter) {
         const isTaskOverdue =
-          task.status !== "done" &&
+          normalizedStatus !== "done" &&
           Boolean(task.dueDate) &&
           new Date(task.dueDate!).getTime() < today;
         if (!isTaskOverdue) return false;
       }
 
       // 5. Filter by Tag
-      if (selectedTag !== "all" && !task.tags.includes(selectedTag)) {
+      if (selectedTag !== "all" && !(task.tags || []).includes(selectedTag)) {
         return false;
       }
 
@@ -352,14 +354,16 @@ export const BoardView: React.FC = () => {
     handleMoveStatus(taskId, targetStatus);
   };
 
-  const handleSaveTask = (savedTask: Task) => {
+  const handleSaveTask = async (savedTask: Task) => {
     const exists = tasks.some((t) => t.id === savedTask.id);
     if (exists) {
-      updateTask(savedTask);
+      await updateTask(savedTask);
       showToast("Task updated successfully");
     } else {
-      addTask(savedTask);
-      showToast("New task added to board");
+      if (boardData) {
+        await addTask(boardData.id, savedTask);
+        showToast("New task added to board");
+      }
     }
   };
 

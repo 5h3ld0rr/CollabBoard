@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Plus,
   Filter,
@@ -16,14 +16,25 @@ import { WorkspaceStats } from '../components/dashboard/WorkspaceStats';
 import { BoardCard } from '../components/dashboard/BoardCard';
 import { CreateBoardModal } from '../components/dashboard/CreateBoardModal';
 import { CreateWorkspaceModal, ManageWorkspaceModal } from '../components/workspace';
-import { MOCK_BOARDS, MOCK_WORKSPACES } from '../data/mockData';
+import { useBoard } from '../context';
+import {
+  getWorkspaces,
+  createWorkspace as apiCreateWorkspace,
+  updateWorkspace as apiUpdateWorkspace,
+  deleteWorkspace as apiDeleteWorkspace,
+} from '../api';
 import type { Board, Workspace } from '../types';
 
 export const Dashboard: React.FC = () => {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>(MOCK_WORKSPACES);
-  const [currentWorkspace, setCurrentWorkspace] = useState<Workspace>(MOCK_WORKSPACES[0]);
-  const [managingWorkspace, setManagingWorkspace] = useState<Workspace>(MOCK_WORKSPACES[0]);
-  const [boards, setBoards] = useState<Board[]>(MOCK_BOARDS);
+  const {
+    state: { boards },
+    addBoard,
+    toggleFavoriteBoard,
+  } = useBoard();
+
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null);
+  const [managingWorkspace, setManagingWorkspace] = useState<Workspace | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'starred'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'updated' | 'tasks' | 'title'>('updated');
@@ -41,6 +52,19 @@ export const Dashboard: React.FC = () => {
     }, 3000);
   };
 
+  // Load workspaces from live API
+  useEffect(() => {
+    async function load() {
+      const list = await getWorkspaces();
+      setWorkspaces(list);
+      if (list.length > 0) {
+        setCurrentWorkspace(list[0]);
+        setManagingWorkspace(list[0]);
+      }
+    }
+    load();
+  }, []);
+
   // Workspace actions
   const handleSelectWorkspace = (ws: Workspace) => {
     setCurrentWorkspace(ws);
@@ -48,69 +72,86 @@ export const Dashboard: React.FC = () => {
     showToast(`Switched to "${ws.name}"`);
   };
 
-  const handleCreateWorkspace = (newWs: Workspace) => {
-    setWorkspaces((prev) => [...prev, newWs]);
-    setCurrentWorkspace(newWs);
-    showToast(`Created workspace "${newWs.name}"!`);
-  };
-
-  const handleUpdateWorkspace = (updatedWs: Workspace) => {
-    setWorkspaces((prev) => prev.map((w) => (w.id === updatedWs.id ? updatedWs : w)));
-    if (currentWorkspace.id === updatedWs.id) {
-      setCurrentWorkspace(updatedWs);
+  const handleCreateWorkspace = async (newWsData: Partial<Workspace> & { name: string }) => {
+    try {
+      const created = await apiCreateWorkspace(newWsData);
+      setWorkspaces((prev) => [...prev, created]);
+      setCurrentWorkspace(created);
+      showToast(`Created workspace "${created.name}"!`);
+    } catch {
+      showToast('Failed to create workspace');
     }
-    // Also update board workspace names if renamed
-    setBoards((prev) =>
-      prev.map((b) =>
-        b.workspaceId === updatedWs.id ? { ...b, workspaceName: updatedWs.name } : b
-      )
-    );
-    showToast(`Updated workspace "${updatedWs.name}"`);
   };
 
-  const handleDeleteWorkspace = (workspaceId: string) => {
+  const handleUpdateWorkspace = async (updatedWs: Workspace) => {
+    try {
+      const updated = await apiUpdateWorkspace(updatedWs.id, updatedWs);
+      setWorkspaces((prev) => prev.map((w) => (w.id === updated.id ? updated : w)));
+      if (currentWorkspace?.id === updated.id) {
+        setCurrentWorkspace(updated);
+      }
+      showToast(`Updated workspace "${updated.name}"`);
+    } catch {
+      showToast('Failed to update workspace');
+    }
+  };
+
+  const handleDeleteWorkspace = async (workspaceId: string) => {
     if (workspaces.length <= 1) {
       showToast("Cannot delete the only workspace");
       return;
     }
-    const target = workspaces.find((w) => w.id === workspaceId);
-    const remaining = workspaces.filter((w) => w.id !== workspaceId);
-    setWorkspaces(remaining);
-    setCurrentWorkspace(remaining[0]);
-    setActiveTab('all');
-    if (target) {
-      showToast(`Deleted workspace "${target.name}"`);
+    try {
+      await apiDeleteWorkspace(workspaceId);
+      const remaining = workspaces.filter((w) => w.id !== workspaceId);
+      setWorkspaces(remaining);
+      if (currentWorkspace?.id === workspaceId && remaining.length > 0) {
+        setCurrentWorkspace(remaining[0]);
+      }
+      setActiveTab('all');
+      showToast('Workspace deleted');
+    } catch {
+      showToast('Failed to delete workspace');
     }
   };
 
   // Board actions
   const handleToggleFavorite = (boardId: string) => {
-    setBoards((prev) =>
-      prev.map((b) => {
-        if (b.id === boardId) {
-          const nextFav = !b.isFavorite;
-          showToast(nextFav ? `Starred "${b.title}"` : `Removed "${b.title}" from favorites`);
-          return { ...b, isFavorite: nextFav };
-        }
-        return b;
-      })
-    );
+    toggleFavoriteBoard(boardId);
+    showToast('Toggled board favorite status');
   };
 
-  const handleCreateBoard = (newBoard: Board) => {
-    setBoards((prev) => [newBoard, ...prev]);
-    // update workspace boardCount
-    setWorkspaces((prev) =>
-      prev.map((w) =>
-        w.id === newBoard.workspaceId ? { ...w, boardCount: w.boardCount + 1 } : w
-      )
-    );
-    showToast(`Created board "${newBoard.title}"!`);
+  const handleCreateBoard = async (newBoard: Board) => {
+    try {
+      await addBoard(newBoard);
+      // update workspace boardCount
+      setWorkspaces((prev) =>
+        prev.map((w) =>
+          w.id === newBoard.workspaceId ? { ...w, boardCount: w.boardCount + 1 } : w
+        )
+      );
+      showToast(`Created board "${newBoard.title}"!`);
+    } catch {
+      showToast('Failed to create board');
+    }
   };
+
+  // Boards belonging to the currently active workspace
+  const currentWorkspaceBoards = useMemo(() => {
+    if (!currentWorkspace) return boards;
+    return boards.filter((board) => {
+      const matchesId = board.workspaceId && String(board.workspaceId) === String(currentWorkspace.id);
+      const matchesName = board.workspaceName && board.workspaceName.toLowerCase() === currentWorkspace.name.toLowerCase();
+      if (board.workspaceId || board.workspaceName) {
+        return matchesId || matchesName;
+      }
+      return true;
+    });
+  }, [boards, currentWorkspace]);
 
   // Filter and Sort Logic
   const filteredBoards = useMemo(() => {
-    return boards
+    return currentWorkspaceBoards
       .filter((board) => {
         // Tab filter
         if (activeTab === 'starred' && !board.isFavorite) {
@@ -120,10 +161,10 @@ export const Dashboard: React.FC = () => {
         // Search query filter
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase();
-          const matchTitle = board.title.toLowerCase().includes(q);
-          const matchDesc = board.description.toLowerCase().includes(q);
-          const matchWorkspace = board.workspaceName.toLowerCase().includes(q);
-          const matchTags = board.tags.some((t) => t.toLowerCase().includes(q));
+          const matchTitle = (board.title || '').toLowerCase().includes(q);
+          const matchDesc = (board.description || '').toLowerCase().includes(q);
+          const matchWorkspace = (board.workspaceName || '').toLowerCase().includes(q);
+          const matchTags = (board.tags || []).some((t) => t.toLowerCase().includes(q));
           if (!matchTitle && !matchDesc && !matchWorkspace && !matchTags) return false;
         }
 
@@ -131,17 +172,20 @@ export const Dashboard: React.FC = () => {
       })
       .sort((a, b) => {
         if (sortBy === 'title') {
-          return a.title.localeCompare(b.title);
+          return (a.title || '').localeCompare(b.title || '');
         }
         if (sortBy === 'tasks') {
-          return b.stats.totalTasks - a.stats.totalTasks;
+          return (b.stats?.totalTasks || 0) - (a.stats?.totalTasks || 0);
+        }
+        if (sortBy === 'updated') {
+          return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
         }
         if (sortBy === 'updated') {
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         }
         return 0;
       });
-  }, [boards, activeTab, searchQuery, sortBy]);
+  }, [currentWorkspaceBoards, activeTab, searchQuery, sortBy]);
 
   return (
     <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
@@ -150,7 +194,7 @@ export const Dashboard: React.FC = () => {
       {/* Top Navbar with Workspace Switcher */}
       <Navbar
         workspaces={workspaces}
-        currentWorkspace={currentWorkspace}
+        currentWorkspace={currentWorkspace || undefined}
         onSelectWorkspace={handleSelectWorkspace}
         onOpenCreateWorkspace={() => setIsCreateWorkspaceModalOpen(true)}
         onOpenManageWorkspace={(ws) => {
@@ -175,51 +219,62 @@ export const Dashboard: React.FC = () => {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
-        
         {/* Header Title Section */}
         <div className="mb-8">
           <div>
             <div className="flex items-center space-x-2 text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-1">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>{currentWorkspace.name} Workspace</span>
+              <span>
+                {currentWorkspace
+                  ? `${currentWorkspace.name} Workspace`
+                  : "Workspace"}
+              </span>
             </div>
             <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
               Engineering Sprint Boards
             </h1>
             <p className="text-sm text-slate-400 mt-1 max-w-2xl">
-              {currentWorkspace.description}
+              {currentWorkspace?.description ||
+                "Team workspaces, sprint roadmaps, and collaborative project boards"}
             </p>
           </div>
         </div>
 
         {/* Workspace Stat Metrics */}
-        <WorkspaceStats boards={boards} />
+        <WorkspaceStats
+          boards={currentWorkspaceBoards}
+          workspaceCount={workspaces.length}
+          workspaceName={currentWorkspace?.name}
+        />
 
         {/* Filter Tabs & Search / Sort Controls */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800/80 mb-8">
           {/* Tabs */}
           <div className="flex items-center space-x-1.5 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
             <button
-              onClick={() => setActiveTab('all')}
+              onClick={() => setActiveTab("all")}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-                activeTab === 'all'
-                  ? 'bg-indigo-600 text-white shadow-md'
-                  : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800'
+                activeTab === "all"
+                  ? "bg-indigo-600 text-white shadow-md"
+                  : "bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800"
               }`}
             >
-              All Boards ({boards.length})
+              All Boards ({currentWorkspaceBoards.length})
             </button>
 
             <button
-              onClick={() => setActiveTab('starred')}
+              onClick={() => setActiveTab("starred")}
               className={`inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-                activeTab === 'starred'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-md'
-                  : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800'
+                activeTab === "starred"
+                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-md"
+                  : "bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800"
               }`}
             >
               <Star className="w-3.5 h-3.5 fill-amber-400/80 text-amber-400" />
-              <span>Starred ({boards.filter((b) => b.isFavorite).length})</span>
+              <span>
+                Starred (
+                {currentWorkspaceBoards.filter((b) => b.isFavorite).length})
+              </span>
             </button>
           </div>
 
@@ -240,7 +295,9 @@ export const Dashboard: React.FC = () => {
               <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as 'updated' | 'tasks' | 'title')}
+                onChange={(e) =>
+                  setSortBy(e.target.value as "updated" | "tasks" | "title")
+                }
                 className="px-3 py-1.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-300 focus:outline-none focus:border-slate-700 transition"
               >
                 <option value="updated">Recently Updated</option>
@@ -252,31 +309,37 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* Board Cards Grid */}
-        {filteredBoards.length === 0 ? (
+        {currentWorkspaceBoards.length > 0 &&filteredBoards.length === 0 ? (
+          /* Search / Filter Empty State */
           <div className="rounded-3xl border border-slate-800/80 bg-slate-900/30 p-12 text-center max-w-md mx-auto my-12 space-y-4">
             <div className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center mx-auto text-slate-400">
               <Filter className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-bold text-white">No boards found</h3>
+            <h3 className="text-base font-bold text-white">
+              No boards match your search
+            </h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              No boards match your current search query or active filter. Try resetting the filter or create a new board.
+              No boards match your current search query or active filter. Try
+              resetting your search or create a new board.
             </p>
-            <button
-              onClick={() => {
-                setSearchQuery('');
-                setActiveTab('all');
-              }}
-              className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white text-xs font-semibold transition"
-            >
-              Reset Filters
-            </button>
+            <div className="flex items-center justify-center space-x-3 pt-2">
+              <button
+                onClick={() => {
+                  setSearchQuery("");
+                  setActiveTab("all");
+                }}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition cursor-pointer"
+              >
+                Reset Filters
+              </button>
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Action Card: Create New Board */}
             <button
               onClick={() => setIsCreateBoardModalOpen(true)}
-              className="group rounded-2xl border-2 border-dashed border-slate-800 hover:border-indigo-500/60 bg-slate-900/20 hover:bg-slate-900/50 p-6 flex flex-col items-center justify-center text-center space-y-3 min-h-65 transition-all duration-200"
+              className="group rounded-2xl border-2 border-dashed border-slate-800 hover:border-indigo-500/60 bg-slate-900/20 hover:bg-slate-900/50 p-6 flex flex-col items-center justify-center text-center space-y-3 min-h-65 transition-all duration-200 cursor-pointer"
             >
               <div className="w-12 h-12 rounded-2xl bg-indigo-600/10 group-hover:bg-indigo-600/20 border border-indigo-500/20 group-hover:border-indigo-500/40 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
                 <Plus className="w-6 h-6" />
@@ -309,9 +372,12 @@ export const Dashboard: React.FC = () => {
               <Activity className="w-4 h-4 animate-pulse" />
             </div>
             <div>
-              <h4 className="text-xs font-bold text-white">Live Multiplayer Sync</h4>
+              <h4 className="text-xs font-bold text-white">
+                Live Multiplayer Sync
+              </h4>
               <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
-                Connected to WebSocket engine. Real-time board broadcasts and cursor presence enabled.
+                Connected to WebSocket engine. Real-time board broadcasts and
+                cursor presence enabled.
               </p>
             </div>
           </div>
@@ -321,9 +387,12 @@ export const Dashboard: React.FC = () => {
               <Layers className="w-4 h-4" />
             </div>
             <div>
-              <h4 className="text-xs font-bold text-white">IndexedDB Local Cache</h4>
+              <h4 className="text-xs font-bold text-white">
+                IndexedDB Local Cache
+              </h4>
               <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
-                All boards synced locally. Offline mutations queue automatically on network loss.
+                All boards synced locally. Offline mutations queue automatically
+                on network loss.
               </p>
             </div>
           </div>
@@ -340,7 +409,6 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
         </div>
-
       </main>
 
       {/* Create Board Modal */}
@@ -348,6 +416,7 @@ export const Dashboard: React.FC = () => {
         isOpen={isCreateBoardModalOpen}
         onClose={() => setIsCreateBoardModalOpen(false)}
         workspaces={workspaces}
+        currentWorkspaceId={currentWorkspace?.id}
         onCreateBoard={handleCreateBoard}
       />
 

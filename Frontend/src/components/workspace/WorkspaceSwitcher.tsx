@@ -10,15 +10,15 @@ import {
 import type { Workspace } from '../../types';
 
 interface WorkspaceSwitcherProps {
-  workspaces: Workspace[];
-  currentWorkspace: Workspace;
-  onSelectWorkspace: (workspace: Workspace) => void;
-  onOpenCreateWorkspace: () => void;
-  onOpenManageWorkspace: (workspace?: Workspace) => void;
+  workspaces?: Workspace[];
+  currentWorkspace?: Workspace | null;
+  onSelectWorkspace?: (workspace: Workspace) => void;
+  onOpenCreateWorkspace?: () => void;
+  onOpenManageWorkspace?: (workspace?: Workspace) => void;
 }
 
 export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
-  workspaces,
+  workspaces = [],
   currentWorkspace,
   onSelectWorkspace,
   onOpenCreateWorkspace,
@@ -38,6 +38,10 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const workspaceName = currentWorkspace?.name || (workspaces[0]?.name ?? 'Workspaces');
+  const workspaceColor = currentWorkspace?.color || (workspaces[0]?.color ?? 'from-indigo-600 to-violet-600');
+  const workspaceRole = currentWorkspace?.role;
+
   return (
     <div className="relative" ref={dropdownRef}>
       {/* Switcher Pill Button */}
@@ -46,18 +50,16 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
         className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-slate-700 text-xs text-slate-200 transition shadow-sm active:scale-98 cursor-pointer"
       >
         <div
-          className={`w-3.5 h-3.5 rounded bg-linear-to-br ${
-            currentWorkspace.color || 'from-indigo-600 to-violet-600'
-          } flex items-center justify-center`}
+          className={`w-3.5 h-3.5 rounded bg-linear-to-br ${workspaceColor} flex items-center justify-center`}
         >
           <LayoutGrid className="w-2.5 h-2.5 text-white" />
         </div>
         <span className="font-semibold truncate max-w-30 sm:max-w-40">
-          {currentWorkspace.name}
+          {workspaceName}
         </span>
-        {currentWorkspace.role && (
+        {workspaceRole && (
           <span className="hidden lg:inline px-1.5 py-0.2 rounded text-[9px] font-mono uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-            {currentWorkspace.role}
+            {workspaceRole}
           </span>
         )}
         <ChevronDown
@@ -77,12 +79,12 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
           {/* Workspace List */}
           <div className="space-y-1 my-1">
             {workspaces.map((ws) => {
-              const isSelected = ws.id === currentWorkspace.id;
+              const isSelected = currentWorkspace ? ws.id === currentWorkspace.id : ws.id === workspaces[0]?.id;
               return (
                 <div
                   key={ws.id}
                   onClick={() => {
-                    onSelectWorkspace(ws);
+                    onSelectWorkspace?.(ws);
                     setIsOpen(false);
                   }}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs transition cursor-pointer group/item ${
@@ -107,11 +109,11 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
                         )}
                       </div>
                       <div className="flex items-center space-x-2 text-[10px] text-slate-400 font-normal">
-                        <span>{ws.boardCount} boards</span>
+                        <span>{ws.boardCount || 0} boards</span>
                         <span>•</span>
                         <span className="flex items-center space-x-0.5">
                           <Users className="w-2.5 h-2.5" />
-                          <span>{ws.memberCount} members</span>
+                          <span>{ws.memberCount || 1} members</span>
                         </span>
                       </div>
                     </div>
@@ -123,7 +125,7 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       setIsOpen(false);
-                      onOpenManageWorkspace(ws);
+                      onOpenManageWorkspace?.(ws);
                     }}
                     title={`Workspace settings for ${ws.name}`}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/60 transition shrink-0 opacity-70 group-hover/item:opacity-100 cursor-pointer"
@@ -140,7 +142,7 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
             <button
               onClick={() => {
                 setIsOpen(false);
-                onOpenCreateWorkspace();
+                onOpenCreateWorkspace?.();
               }}
               className="w-full flex items-center space-x-2 px-3 py-2 rounded-xl text-xs text-indigo-400 hover:bg-indigo-600/10 hover:text-indigo-300 transition text-left font-medium cursor-pointer"
             >

@@ -11,7 +11,6 @@ import {
   Edit3,
 } from 'lucide-react';
 import type { Board, User } from '../../types';
-import { MOCK_USERS } from '../../data/mockData';
 
 interface BoardMembersModalProps {
   isOpen: boolean;
@@ -60,9 +59,7 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
   if (!isOpen) return null;
 
   // Find workspace teammates who are not yet added to this board
-  const availableTeammates = MOCK_USERS.filter(
-    (u) => !members.some((m) => m.id === u.id || m.email === u.email)
-  );
+  const availableTeammates: User[] = [];
 
   const handleCopyBoardLink = () => {
     const boardUrl = window.location.href;
@@ -76,15 +73,7 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
 
     let userToAdd: User | null = null;
 
-    if (selectedWorkspaceUser) {
-      const found = MOCK_USERS.find((u) => u.id === selectedWorkspaceUser);
-      if (found) {
-        userToAdd = {
-          ...found,
-          boardRole: inviteRole,
-        };
-      }
-    } else if (inviteEmail.trim()) {
+    if (inviteEmail.trim()) {
       const email = inviteEmail.trim();
       const initials = email.slice(0, 2).toUpperCase();
       userToAdd = {

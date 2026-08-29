@@ -18,9 +18,11 @@ import {
   Button,
   Logo,
 } from "../components/common";
+import { useAuth } from "../context";
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const [formData, setFormData] = useState({
     email: "",
@@ -57,11 +59,17 @@ export const Login: React.FC = () => {
 
     setIsLoading(true);
 
-    // Simulate authentication flow (M1 static flow)
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      await login({
+        email: formData.email,
+        password: formData.password,
+      });
       navigate("/dashboard");
-    }, 800);
+    } catch (err: any) {
+      setError(err.message || "Failed to log in. Please check your credentials.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
