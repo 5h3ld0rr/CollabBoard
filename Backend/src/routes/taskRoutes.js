@@ -10,6 +10,8 @@ import {
   taskQuerySchema,
 } from '../schemas/taskSchema.js';
 import * as controller from '../controllers/taskController.js';
+import * as commentController from '../controllers/commentController.js';
+import { createCommentSchema } from '../schemas/commentSchema.js';
 
 const router = Router();
 
@@ -32,5 +34,15 @@ router.patch(
   asyncHandler(controller.update)
 );
 router.delete('/:id', validate(idParamSchema, 'params'), asyncHandler(controller.remove));
+
+/* Nested Task Comments Routes */
+router.get('/:id/comments', validate(idParamSchema, 'params'), asyncHandler(commentController.list));
+router.post(
+  '/:id/comments',
+  validate(idParamSchema, 'params'),
+  validate(createCommentSchema, 'body'),
+  asyncHandler(commentController.create)
+);
+router.delete('/:id/comments/:commentId', asyncHandler(commentController.remove));
 
 export default router;

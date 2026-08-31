@@ -14,15 +14,13 @@ export interface TaskResponse {
   data: Task;
 }
 
-const DEFAULT_COMMENT_AUTHOR: User = {
-  id: 'usr-current',
-  name: 'Team Member',
-  email: 'member@collabboard.io',
-  initials: 'TM',
-  color: 'bg-indigo-600',
-};
+export interface CommentListResponse {
+  data: TaskComment[];
+}
 
-const commentsStorage: Record<string, TaskComment[]> = {};
+export interface CommentResponse {
+  data: TaskComment;
+}
 
 /**
  * Fetch all tasks, optionally filtered by board ID and query parameters
@@ -114,38 +112,42 @@ export async function deleteTask(taskId: string): Promise<boolean> {
 }
 
 /**
- * Fetch comments for a task
+ * Fetch comments for a task from backend API
  */
 export async function getTaskComments(taskId: string): Promise<TaskComment[]> {
-  return commentsStorage[taskId] || [];
+  try {
+    const res = await request<CommentListResponse>(`/api/tasks/${taskId}/comments`);
+    return res.data || [];
+  } catch {
+    return [];
+  }
 }
 
 /**
- * Add comment to task
+ * Add comment to task via backend API
  */
 export async function addComment(
   taskId: string,
   content: string,
-  author: User = DEFAULT_COMMENT_AUTHOR
+  _author?: User
 ): Promise<TaskComment> {
-  const newComment: TaskComment = {
-    id: `comm-${Date.now()}`,
-    taskId,
-    author,
-    content: content.trim(),
-    createdAt: new Date().toISOString(),
-  };
-  const list = commentsStorage[taskId] || [];
-  commentsStorage[taskId] = [newComment, ...list];
-  return newComment;
+  const res = await request<CommentResponse>(`/api/tasks/${taskId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ content: content.trim() }),
+  });
+  return res.data;
 }
 
 /**
- * Delete a comment from task
+ * Delete a comment from task via backend API
  */
 export async function deleteComment(taskId: string, commentId: string): Promise<boolean> {
-  const list = commentsStorage[taskId] || [];
-  const filtered = list.filter((c) => c.id !== commentId);
-  commentsStorage[taskId] = filtered;
-  return filtered.length < list.length;
+  try {
+    await request(`/api/tasks/${taskId}/comments/${commentId}`, {
+      method: 'DELETE',
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Plus,
   Filter,
@@ -26,8 +27,12 @@ import {
 import type { Board, Workspace } from '../types';
 
 export const Dashboard: React.FC = () => {
+  const { workspaceId } = useParams<{ workspaceId: string }>();
+  const navigate = useNavigate();
+
   const {
     state: { boards },
+    loadBoards,
     addBoard,
     toggleFavoriteBoard,
   } = useBoard();
@@ -52,23 +57,38 @@ export const Dashboard: React.FC = () => {
     }, 3000);
   };
 
-  // Load workspaces from live API
+  // Load workspaces and boards from live API
   useEffect(() => {
     async function load() {
+      loadBoards();
       const list = await getWorkspaces();
       setWorkspaces(list);
       if (list.length > 0) {
-        setCurrentWorkspace(list[0]);
-        setManagingWorkspace(list[0]);
+        const targetId = workspaceId || 'ws-1';
+        const found = list.find((w) => w.id === targetId) || list[0];
+        setCurrentWorkspace(found);
+        setManagingWorkspace(found);
       }
     }
     load();
-  }, []);
+  }, [workspaceId]);
+
+  // Sync workspace with URL when workspaceId route param changes
+  useEffect(() => {
+    if (workspaceId && workspaces.length > 0) {
+      const found = workspaces.find((w) => w.id === workspaceId);
+      if (found) {
+        setCurrentWorkspace(found);
+        setManagingWorkspace(found);
+      }
+    }
+  }, [workspaceId, workspaces]);
 
   // Workspace actions
   const handleSelectWorkspace = (ws: Workspace) => {
     setCurrentWorkspace(ws);
     setManagingWorkspace(ws);
+    navigate(`/workspaces/${ws.id}`);
     showToast(`Switched to "${ws.name}"`);
   };
 
@@ -77,6 +97,7 @@ export const Dashboard: React.FC = () => {
       const created = await apiCreateWorkspace(newWsData);
       setWorkspaces((prev) => [...prev, created]);
       setCurrentWorkspace(created);
+      navigate(`/workspaces/${created.id}`);
       showToast(`Created workspace "${created.name}"!`);
     } catch {
       showToast('Failed to create workspace');
@@ -96,17 +117,18 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const handleDeleteWorkspace = async (workspaceId: string) => {
+  const handleDeleteWorkspace = async (deletedWorkspaceId: string) => {
     if (workspaces.length <= 1) {
       showToast("Cannot delete the only workspace");
       return;
     }
     try {
-      await apiDeleteWorkspace(workspaceId);
-      const remaining = workspaces.filter((w) => w.id !== workspaceId);
+      await apiDeleteWorkspace(deletedWorkspaceId);
+      const remaining = workspaces.filter((w) => w.id !== deletedWorkspaceId);
       setWorkspaces(remaining);
-      if (currentWorkspace?.id === workspaceId && remaining.length > 0) {
+      if (remaining.length > 0) {
         setCurrentWorkspace(remaining[0]);
+        navigate(`/workspaces/${remaining[0].id}`);
       }
       setActiveTab('all');
       showToast('Workspace deleted');
