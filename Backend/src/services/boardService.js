@@ -1,9 +1,10 @@
 import { boardRepo } from '../repos/boardRepo.js';
 import { taskRepo } from '../repos/taskRepo.js';
+import { userRepo } from '../repos/userRepo.js';
 import { NotFoundError, ForbiddenError } from '../utils/AppError.js';
 
 /**
- * Enriches a board with dynamic, live computed task statistics
+ * Enriches a board with dynamic, live computed task statistics and populated member profiles
  */
 export async function enrichBoard(board) {
   if (!board) return null;
@@ -13,8 +14,52 @@ export async function enrichBoard(board) {
   const inProgressCount = boardTasks.filter((t) => t.status === 'in-progress' || t.status === 'doing').length;
   const doneCount = boardTasks.filter((t) => t.status === 'done').length;
 
+  const rawMembers = Array.isArray(board.members) ? board.members : [];
+  const populatedMembers = await Promise.all(
+    rawMembers.map(async (m, idx) => {
+      if (m && typeof m === 'object' && 'name' in m) {
+        return m;
+      }
+      const memberId = String(m);
+      const user = await userRepo.findById(memberId);
+      const isOwner = String(board.ownerId) === memberId;
+      const boardRole = isOwner ? 'Admin' : (idx === 0 ? 'Admin' : 'Editor');
+
+      if (user) {
+        const initials = (user.name || 'User')
+          .split(' ')
+          .map((n) => n[0])
+          .join('')
+          .toUpperCase()
+          .slice(0, 2);
+        const color = memberId === '1' ? 'bg-indigo-600' : memberId === '2' ? 'bg-emerald-600' : 'bg-fuchsia-600';
+
+        return {
+          id: String(user.id),
+          name: user.name,
+          email: user.email,
+          initials,
+          color,
+          boardRole,
+          role: boardRole,
+        };
+      }
+
+      return {
+        id: memberId,
+        name: `User ${memberId}`,
+        email: `user${memberId}@nsbm.lk`,
+        initials: `U${memberId}`,
+        color: 'bg-indigo-600',
+        boardRole,
+        role: boardRole,
+      };
+    })
+  );
+
   return {
     ...board,
+    members: populatedMembers,
     stats: {
       totalTasks,
       todoCount,

@@ -38,7 +38,13 @@ async function enrichWorkspace(workspace, userId) {
           .join('')
           .toUpperCase()
           .slice(0, 2);
-        const color = memberId === '1' ? 'bg-indigo-600' : 'bg-emerald-600';
+        const memberColors = {
+          '1': 'bg-indigo-600',
+          '2': 'bg-emerald-600',
+          '3': 'bg-fuchsia-600',
+          '4': 'bg-amber-600',
+        };
+        const color = memberColors[memberId] || 'bg-indigo-600';
 
         return {
           id: String(user.id),

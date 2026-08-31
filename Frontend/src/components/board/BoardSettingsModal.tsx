@@ -59,6 +59,37 @@ const ROLE_BADGES = {
   },
 };
 
+const normalizeMember = (m: any, idx: number): User => {
+  if (typeof m === 'object' && m !== null && m.name) {
+    return {
+      ...m,
+      boardRole: m.boardRole || (idx === 0 ? 'Admin' : 'Editor'),
+    };
+  }
+  const id = typeof m === 'object' && m !== null ? m.id : String(m);
+  const name =
+    id === '1' ? 'Alex Chen' :
+    id === '2' ? 'Clara Tanaka' :
+    id === '3' ? 'Elena Rostova' :
+    id === '4' ? 'Marcus Vance' : `User ${id}`;
+  const email =
+    id === '1' ? 'user1@nsbm.lk' :
+    id === '2' ? 'user2@nsbm.lk' :
+    id === '3' ? 'user3@nsbm.lk' :
+    id === '4' ? 'user4@nsbm.lk' : `user${id}@nsbm.lk`;
+  const initials = name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+  const color = id === '1' ? 'bg-indigo-600' : id === '2' ? 'bg-emerald-600' : 'bg-fuchsia-600';
+
+  return {
+    id: String(id),
+    name,
+    email,
+    initials,
+    color,
+    boardRole: idx === 0 ? 'Admin' : 'Editor',
+  };
+};
+
 export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
   isOpen,
   onClose,
@@ -79,10 +110,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
 
   // Members Tab States
   const [members, setMembers] = useState<User[]>(() => {
-    return (board.members || []).map((m, idx) => ({
-      ...m,
-      boardRole: m.boardRole || (idx === 0 ? 'Admin' : 'Editor'),
-    }));
+    return (board.members || []).map(normalizeMember);
   });
   const [inviteEmail, setInviteEmail] = useState('');
   const [selectedWorkspaceUser, setSelectedWorkspaceUser] = useState<string>('');
@@ -104,12 +132,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
       setColor(board.color || COLOR_OPTIONS[0].value);
       setIcon(board.icon || 'Kanban');
       setTagsInput(board.tags.join(', '));
-      setMembers(
-        (board.members || []).map((m, idx) => ({
-          ...m,
-          boardRole: m.boardRole || (idx === 0 ? 'Admin' : 'Editor'),
-        }))
-      );
+      setMembers((board.members || []).map(normalizeMember));
       setConfirmDelete(false);
       setConfirmClear(false);
       setSuccessMessage(null);
