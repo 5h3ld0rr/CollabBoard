@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 const users = [
   {
     id: '1',
-    name: 'User 1',
+    name: 'Alex Chen',
     email: 'user1@nsbm.lk',
     // bcrypt hash of 'password123'
     passwordHash: '$2a$10$NgdZ3I5PimDrUHErY68OO.VqgM9sSq413Z4aUIFyD8AXBR1fV0HDO',
@@ -12,8 +12,24 @@ const users = [
   },
   {
     id: '2',
-    name: 'User 2',
+    name: 'Clara Tanaka',
     email: 'user2@nsbm.lk',
+    // bcrypt hash of 'password123'
+    passwordHash: '$2a$10$NgdZ3I5PimDrUHErY68OO.VqgM9sSq413Z4aUIFyD8AXBR1fV0HDO',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: '3',
+    name: 'Elena Rostova',
+    email: 'user3@nsbm.lk',
+    // bcrypt hash of 'password123'
+    passwordHash: '$2a$10$NgdZ3I5PimDrUHErY68OO.VqgM9sSq413Z4aUIFyD8AXBR1fV0HDO',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: '4',
+    name: 'Marcus Vance',
+    email: 'user4@nsbm.lk',
     // bcrypt hash of 'password123'
     passwordHash: '$2a$10$NgdZ3I5PimDrUHErY68OO.VqgM9sSq413Z4aUIFyD8AXBR1fV0HDO',
     createdAt: new Date().toISOString(),

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import { useAuth } from './AuthContext';
 import * as tasksApi from '../api/tasks';
 import * as boardsApi from '../api/boards';
 import type { Board, Task, TaskStatus, User } from '../types';
@@ -252,12 +253,15 @@ const BoardContext = createContext<BoardContextValue | undefined>(undefined);
 
 export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(boardReducer, initialState);
+  const { token, user } = useAuth();
 
   const loadBoards = async () => {
     dispatch({ type: 'SET_LOADING', payload: true });
     try {
       const boards = await boardsApi.getBoards();
       dispatch({ type: 'SET_BOARDS', payload: boards });
+    } catch (err) {
+      console.warn('Failed to load boards:', err);
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
@@ -373,13 +377,14 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     dispatch({ type: 'UPDATE_BOARD', payload: updatedBoard });
   };
 
-  // Initial load of boards when authenticated
+  // Reactively re-load boards when authenticated or when auth state updates
   useEffect(() => {
-    const token = localStorage.getItem('token');
     if (token) {
       loadBoards();
+    } else {
+      dispatch({ type: 'SET_BOARDS', payload: [] });
     }
-  }, []);
+  }, [token, user]);
 
   return (
     <BoardContext.Provider
