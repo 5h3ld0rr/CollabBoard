@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import express from 'express';
 import cors from 'cors';
 import { config } from './config.js';
@@ -28,8 +29,15 @@ app.use(requestLogger);
 
 /* Health Check Endpoint (Public) */
 app.get('/api/health', (req, res) => {
+  const readyStates = ['disconnected', 'connected', 'connecting', 'disconnecting'];
+  const dbStatus = readyStates[mongoose.connection.readyState] ?? 'unknown';
+
   res.json({
     status: 'ok',
+    database: {
+      status: dbStatus,
+      connected: mongoose.connection.readyState === 1,
+    },
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
   });
