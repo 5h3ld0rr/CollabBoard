@@ -66,6 +66,20 @@ CollabBoard follows a **4-Layer Architecture** to ensure clean separation of con
 
 ---
 
+## 🗄️ Database & Data Model Decisions (Session 3)
+
+### Embed vs. Reference Justification Table
+
+| Entity / Relationship | Storage Pattern | Justification (Based on Read/Write & Growth Patterns) |
+| :--- | :--- | :--- |
+| **Columns inside Board** | **Embed** | Bounded array (typically 3–7 columns per board), always read together to render the Kanban view, has no meaning without the parent board, and updated atomically in a single write. |
+| **Members inside Board** | **Embed** | Bounded list (`[{ userId, role }]`), loaded with the board document for instant permission checks and collaborator badges. |
+| **Tasks** | **Reference (Separate Collection)** | Unbounded growth (can grow to thousands per board), queried independently (e.g., global "My Tasks", assignee filters, overdue checks), updated frequently (drag-and-drop, status changes). Embedding would cause massive document rewrites and edit collisions. |
+| **Users** | **Reference (Separate Collection)** | Queried independently during authentication, shared across multiple boards and workspaces. Referencing prevents stale duplicate profile data. |
+| **Comments / Activity** | **Reference (Separate Collection)** | Unbounded append-only log, read lazily when opening task details. Embedding would bloat task documents. |
+
+---
+
 ## 📋 CollabBoard REST API Contract
 
 All private endpoints require an `Authorization: Bearer <token>` header.
