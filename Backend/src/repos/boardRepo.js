@@ -1,76 +1,59 @@
-import { randomUUID } from 'node:crypto';
+import mongoose from 'mongoose';
+import { Board } from '../models/Board.js';
 
-// In-memory boards collection with seeded test data
-const boards = [
-  {
-    id: 'b1',
-    title: 'Sprint Planning (Core Platform)',
-    description: 'Sprint planning and roadmap for Project Alpha',
-    workspaceId: 'ws-1',
-    workspaceName: 'Core Engineering',
-    color: 'from-indigo-600 to-violet-600',
-    icon: 'Kanban',
-    isFavorite: true,
-    tags: ['Core', 'Sprint-12'],
-    stats: { totalTasks: 4, todoCount: 2, inProgressCount: 1, doneCount: 1 },
-    ownerId: '1',
-    members: ['1', '2'],
-    createdAt: new Date().toISOString(),
-    updatedAt: 'Just now',
-  },
-  {
-    id: 'b2',
-    title: 'Marketing Campaign (Shared)',
-    description: 'Q3 Marketing launch tasks and user acquisition',
-    workspaceId: 'ws-1',
-    workspaceName: 'Core Engineering',
-    color: 'from-emerald-600 to-teal-600',
-    icon: 'Layers',
-    isFavorite: false,
-    tags: ['Marketing', 'Launch'],
-    stats: { totalTasks: 3, todoCount: 1, inProgressCount: 1, doneCount: 1 },
-    ownerId: '1',
-    members: ['1', '2'],
-    createdAt: new Date().toISOString(),
-    updatedAt: 'Just now',
-  },
-  {
-    id: 'b3',
-    title: 'Design System & UI Library',
-    description: 'Component architecture, tokens, and UX guidelines',
-    workspaceId: 'ws-2',
-    workspaceName: 'Product & Design',
-    color: 'from-fuchsia-600 to-pink-600',
-    icon: 'Layers',
-    isFavorite: true,
-    tags: ['Design', 'UI/UX'],
-    ownerId: '1',
-    members: ['1'],
-    createdAt: new Date().toISOString(),
-    updatedAt: 'Just now',
-  },
-];
+function formatBoard(doc) {
+  if (!doc) return null;
+  const obj = typeof doc.toObject === 'function' ? doc.toObject({ virtuals: true }) : { ...doc };
+  return {
+    ...obj,
+    id: String(obj.id || obj._id),
+    workspaceId: String(obj.workspaceId),
+    ownerId: String(obj.ownerId),
+    members: Array.isArray(obj.members) ? obj.members.map(String) : [],
+    stats: obj.stats || { totalTasks: 0, todoCount: 0, inProgressCount: 0, doneCount: 0 },
+  };
+}
 
 export const boardRepo = {
   async listByUserId(userId) {
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return [];
+    }
     const uid = String(userId);
-    return boards.filter(
-      (b) => String(b.ownerId) === uid || (Array.isArray(b.members) && b.members.map(String).includes(uid))
-    );
+    const docs = await Board.find({
+      $or: [{ ownerId: uid }, { members: uid }],
+    });
+    return docs.map(formatBoard);
+  },
+
+  async findAll(query = {}) {
+    const docs = await Board.find(query);
+    return docs.map(formatBoard);
   },
 
   async findById(boardId) {
-    return boards.find((b) => String(b.id) === String(boardId)) ?? null;
+    if (!boardId || !mongoose.Types.ObjectId.isValid(boardId)) {
+      return null;
+    }
+    const doc = await Board.findById(boardId);
+    return formatBoard(doc);
   },
 
   async countByWorkspaceId(workspaceId, userId) {
-    const uid = userId ? String(userId) : null;
-    return boards.filter((b) => {
-      const matchWs = String(b.workspaceId) === String(workspaceId);
-      if (!matchWs) return false;
-      if (!uid) return true;
-      return String(b.ownerId) === uid || (Array.isArray(b.members) && b.members.map(String).includes(uid));
-    }).length;
+    if (!workspaceId || !mongoose.Types.ObjectId.isValid(workspaceId)) {
+      return 0;
+    }
+    const wsId = String(workspaceId);
+    const query = { workspaceId: wsId };
+
+    if (userId) {
+      if (!mongoose.Types.ObjectId.isValid(userId)) return 0;
+      const uid = String(userId);
+      query.$or = [{ ownerId: uid }, { members: uid }];
+    }
+
+    const count = await Board.countDocuments(query);
+    return count;
   },
 
   async create({
@@ -84,48 +67,48 @@ export const boardRepo = {
     workspaceId = 'ws-1',
     workspaceName = 'Engineering',
   }) {
-    const uniqueMembers = Array.from(new Set([String(ownerId), ...members.map(String)]));
-    const newBoard = {
-      id: randomUUID(),
+    const uid = String(ownerId);
+    const uniqueMembers = Array.from(new Set([uid, ...members.map(String)]));
+
+    const doc = await Board.create({
       title: title.trim(),
       description: description.trim(),
-      ownerId: String(ownerId),
+      ownerId: uid,
       members: uniqueMembers,
       color,
       icon,
       tags: Array.isArray(tags) ? tags : ['General'],
-      workspaceId,
+      workspaceId: String(workspaceId),
       workspaceName,
       isFavorite: false,
       stats: { totalTasks: 0, todoCount: 0, inProgressCount: 0, doneCount: 0 },
-      createdAt: new Date().toISOString(),
-      updatedAt: 'Just now',
-    };
-    boards.push(newBoard);
-    return newBoard;
+    });
+
+    return formatBoard(doc);
   },
 
   async update(boardId, updates) {
-    const index = boards.findIndex((b) => String(b.id) === String(boardId));
-    if (index === -1) return null;
+    if (!boardId || !mongoose.Types.ObjectId.isValid(boardId)) {
+      return null;
+    }
 
-    const existing = boards[index];
-    const updated = {
-      ...existing,
-      ...updates,
-      ...(updates.members
-        ? { members: Array.from(new Set([String(existing.ownerId), ...updates.members.map(String)])) }
-        : {}),
-      updatedAt: 'Just now',
-    };
-    boards[index] = updated;
-    return updated;
+    const existing = await this.findById(boardId);
+    if (!existing) return null;
+
+    const payload = { ...updates };
+    if (updates.members) {
+      payload.members = Array.from(new Set([String(existing.ownerId), ...updates.members.map(String)]));
+    }
+
+    const doc = await Board.findByIdAndUpdate(boardId, payload, { new: true });
+    return formatBoard(doc);
   },
 
   async delete(boardId) {
-    const index = boards.findIndex((b) => String(b.id) === String(boardId));
-    if (index === -1) return false;
-    boards.splice(index, 1);
-    return true;
+    if (!boardId || !mongoose.Types.ObjectId.isValid(boardId)) {
+      return false;
+    }
+    const result = await Board.findByIdAndDelete(boardId);
+    return Boolean(result);
   },
 };

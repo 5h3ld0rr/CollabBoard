@@ -1,75 +1,54 @@
-import { randomUUID } from 'node:crypto';
-
-// In-memory users store with seeded default users
-const users = [
-  {
-    id: '1',
-    name: 'Alex Chen',
-    email: 'user1@nsbm.lk',
-    // bcrypt hash of 'password123'
-    passwordHash: '$2a$10$NgdZ3I5PimDrUHErY68OO.VqgM9sSq413Z4aUIFyD8AXBR1fV0HDO',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: '2',
-    name: 'Clara Tanaka',
-    email: 'user2@nsbm.lk',
-    // bcrypt hash of 'password123'
-    passwordHash: '$2a$10$NgdZ3I5PimDrUHErY68OO.VqgM9sSq413Z4aUIFyD8AXBR1fV0HDO',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: '3',
-    name: 'Elena Rostova',
-    email: 'user3@nsbm.lk',
-    // bcrypt hash of 'password123'
-    passwordHash: '$2a$10$NgdZ3I5PimDrUHErY68OO.VqgM9sSq413Z4aUIFyD8AXBR1fV0HDO',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: '4',
-    name: 'Marcus Vance',
-    email: 'user4@nsbm.lk',
-    // bcrypt hash of 'password123'
-    passwordHash: '$2a$10$NgdZ3I5PimDrUHErY68OO.VqgM9sSq413Z4aUIFyD8AXBR1fV0HDO',
-    createdAt: new Date().toISOString(),
-  },
-];
+import mongoose from 'mongoose';
+import { User } from '../models/User.js';
 
 /**
  * Strips sensitive fields like passwordHash before returning user object
- * @param {object} user - Raw user entity
+ * @param {object} user - Raw user entity or Mongoose document
  * @returns {object|null} Sanitized user profile
  */
 export function publicUser(user) {
   if (!user) return null;
-  const { passwordHash, ...safeUser } = user;
-  return safeUser;
+  const userObj = typeof user.toObject === 'function' ? user.toObject({ virtuals: true }) : { ...user };
+  const id = String(userObj.id || userObj._id || '');
+  const { passwordHash, _id, __v, ...safeUser } = userObj;
+  return {
+    id,
+    ...safeUser,
+  };
 }
 
 export const userRepo = {
   async findByEmail(email) {
+    if (!email) return null;
     const normalized = email.toLowerCase().trim();
-    return users.find((u) => u.email.toLowerCase() === normalized) ?? null;
+    const doc = await User.findOne({ email: normalized });
+    if (!doc) return null;
+    const obj = doc.toObject({ virtuals: true });
+    return { ...obj, id: String(obj.id || obj._id) };
   },
 
   async findById(id) {
-    return users.find((u) => String(u.id) === String(id)) ?? null;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return null;
+    }
+    const doc = await User.findById(id);
+    if (!doc) return null;
+    const obj = doc.toObject({ virtuals: true });
+    return { ...obj, id: String(obj.id || obj._id) };
   },
 
   async create({ email, passwordHash, name = 'User' }) {
-    const newUser = {
-      id: randomUUID(),
+    const doc = await User.create({
       name: name.trim(),
       email: email.toLowerCase().trim(),
       passwordHash,
-      createdAt: new Date().toISOString(),
-    };
-    users.push(newUser);
-    return newUser;
+    });
+    const obj = doc.toObject({ virtuals: true });
+    return { ...obj, id: String(obj.id || obj._id) };
   },
 
   async list() {
-    return users.map(publicUser);
+    const docs = await User.find();
+    return docs.map(publicUser);
   },
 };

@@ -1,48 +1,29 @@
-import { randomUUID } from 'node:crypto';
+import mongoose from 'mongoose';
+import { Workspace } from '../models/Workspace.js';
 
-// In-memory workspaces collection with initial seeded data
-const workspaces = [
-  {
-    id: 'ws-1',
-    name: 'Core Engineering',
-    description: 'Platform infrastructure, real-time sync engine, and API services',
-    color: 'from-indigo-600 to-violet-600',
-    ownerId: '1',
-    admins: ['1', '2'],
-    members: ['1', '2', '3', '4'],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'ws-2',
-    name: 'Product & Design',
-    description: 'UX research, design systems, and user interaction flows',
-    color: 'from-fuchsia-600 to-pink-600',
-    ownerId: '1',
-    admins: ['1'],
-    members: ['1', '2'],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'ws-3',
-    name: 'Marketing & Growth',
-    description: 'Product launches, marketing campaigns, and user acquisition',
-    color: 'from-amber-600 to-orange-600',
-    ownerId: '2',
-    admins: ['2'],
-    members: ['1', '2', '3'],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
+function formatWorkspace(doc) {
+  if (!doc) return null;
+  const obj = typeof doc.toObject === 'function' ? doc.toObject({ virtuals: true }) : { ...doc };
+  return {
+    ...obj,
+    id: String(obj.id || obj._id),
+    ownerId: String(obj.ownerId),
+    admins: Array.isArray(obj.admins) ? obj.admins.map(String) : [],
+    members: Array.isArray(obj.members) ? obj.members.map(String) : [],
+  };
+}
 
 export const workspaceRepo = {
   async listByUserId(userId) {
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return [];
+    }
     const uid = String(userId);
-    const userWorkspaces = workspaces.filter(
-      (w) => String(w.ownerId) === uid || (Array.isArray(w.members) && w.members.map(String).includes(uid))
-    );
+    const docs = await Workspace.find({
+      $or: [{ ownerId: uid }, { members: uid }],
+    });
+
+    const userWorkspaces = docs.map(formatWorkspace);
 
     // If user has no workspaces, provision a default workspace automatically from backend
     if (userWorkspaces.length === 0) {
@@ -60,8 +41,17 @@ export const workspaceRepo = {
     return userWorkspaces;
   },
 
+  async findAll(query = {}) {
+    const docs = await Workspace.find(query);
+    return docs.map(formatWorkspace);
+  },
+
   async findById(workspaceId) {
-    return workspaces.find((w) => String(w.id) === String(workspaceId)) ?? null;
+    if (!workspaceId || !mongoose.Types.ObjectId.isValid(workspaceId)) {
+      return null;
+    }
+    const doc = await Workspace.findById(workspaceId);
+    return formatWorkspace(doc);
   },
 
   async create({
@@ -72,47 +62,47 @@ export const workspaceRepo = {
     admins = [],
     members = [],
   }) {
-    const uniqueMembers = Array.from(new Set([String(ownerId), ...members.map(String)]));
-    const uniqueAdmins = Array.from(new Set([String(ownerId), ...admins.map(String)]));
-    const newWorkspace = {
-      id: randomUUID(),
+    const uid = String(ownerId);
+    const uniqueMembers = Array.from(new Set([uid, ...members.map(String)]));
+    const uniqueAdmins = Array.from(new Set([uid, ...admins.map(String)]));
+
+    const doc = await Workspace.create({
       name: name.trim(),
       description: description.trim(),
       color,
-      ownerId: String(ownerId),
+      ownerId: uid,
       admins: uniqueAdmins,
       members: uniqueMembers,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    workspaces.push(newWorkspace);
-    return newWorkspace;
+    });
+
+    return formatWorkspace(doc);
   },
 
   async update(workspaceId, updates) {
-    const index = workspaces.findIndex((w) => String(w.id) === String(workspaceId));
-    if (index === -1) return null;
+    if (!workspaceId || !mongoose.Types.ObjectId.isValid(workspaceId)) {
+      return null;
+    }
 
-    const existing = workspaces[index];
-    const updated = {
-      ...existing,
-      ...updates,
-      ...(updates.admins
-        ? { admins: Array.from(new Set([String(existing.ownerId), ...updates.admins.map(String)])) }
-        : {}),
-      ...(updates.members
-        ? { members: Array.from(new Set([String(existing.ownerId), ...updates.members.map(String)])) }
-        : {}),
-      updatedAt: new Date().toISOString(),
-    };
-    workspaces[index] = updated;
-    return updated;
+    const existing = await this.findById(workspaceId);
+    if (!existing) return null;
+
+    const payload = { ...updates };
+    if (updates.admins) {
+      payload.admins = Array.from(new Set([String(existing.ownerId), ...updates.admins.map(String)]));
+    }
+    if (updates.members) {
+      payload.members = Array.from(new Set([String(existing.ownerId), ...updates.members.map(String)]));
+    }
+
+    const doc = await Workspace.findByIdAndUpdate(workspaceId, payload, { new: true });
+    return formatWorkspace(doc);
   },
 
   async delete(workspaceId) {
-    const index = workspaces.findIndex((w) => String(w.id) === String(workspaceId));
-    if (index === -1) return false;
-    workspaces.splice(index, 1);
-    return true;
+    if (!workspaceId || !mongoose.Types.ObjectId.isValid(workspaceId)) {
+      return false;
+    }
+    const result = await Workspace.findByIdAndDelete(workspaceId);
+    return Boolean(result);
   },
 };
