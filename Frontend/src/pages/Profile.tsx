@@ -51,9 +51,20 @@ type ProfileTab =
   | "preferences"
   | "security";
 
+interface UserProfileDetails {
+  name: string;
+  username: string;
+  email: string;
+  role: string;
+  company: string;
+  location: string;
+  bio: string;
+  memberSince: string;
+}
+
 export const Profile: React.FC = () => {
   const navigate = useNavigate();
-  const { user: authUser } = useAuth();
+  const { user: authUser, updateUser } = useAuth();
   const { state: { boards: contextBoards, tasks: contextTasks } } = useBoard();
 
   const currentUser: User = authUser || {
@@ -68,15 +79,30 @@ export const Profile: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ProfileTab>("overview");
 
   // Saved & Form State
-  const [savedProfile, setSavedProfile] = useState({
-    name: currentUser.name,
-    username: currentUser.email.split("@")[0],
-    email: currentUser.email,
-    role: "Lead Full-Stack Engineer",
-    company: "CollabBoard Labs",
-    location: "San Francisco, CA",
-    bio: "Specializing in real-time collaborative systems, CRDT state sync, and high-performance WebGL & React interfaces.",
-    memberSince: "Member since Oct 2024",
+  const [savedProfile, setSavedProfile] = useState<UserProfileDetails>(() => {
+    const stored = localStorage.getItem("user_profile_details");
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        return {
+          ...parsed,
+          name: authUser?.name || parsed.name || currentUser.name,
+          email: authUser?.email || parsed.email || currentUser.email,
+        };
+      } catch {
+        // fallback
+      }
+    }
+    return {
+      name: currentUser.name,
+      username: currentUser.email ? currentUser.email.split("@")[0] : "alex.chen",
+      email: currentUser.email,
+      role: "Lead Full-Stack Engineer",
+      company: "CollabBoard Labs",
+      location: "San Francisco, CA",
+      bio: "Specializing in real-time collaborative systems, CRDT state sync, and high-performance WebGL & React interfaces.",
+      memberSince: "Member since Oct 2024",
+    };
   });
 
   const [name, setName] = useState(savedProfile.name);
@@ -92,6 +118,20 @@ export const Profile: React.FC = () => {
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">(
     "monthly",
   );
+
+  // Keep fields synced if authUser loads later and no custom profile was set
+  useEffect(() => {
+    if (authUser && !localStorage.getItem("user_profile_details")) {
+      setName(authUser.name);
+      setEmail(authUser.email);
+      setSavedProfile((prev) => ({
+        ...prev,
+        name: authUser.name,
+        email: authUser.email,
+        username: authUser.email ? authUser.email.split("@")[0] : prev.username,
+      }));
+    }
+  }, [authUser]);
 
   // Check if any personal info field has unsaved changes
   const isProfileDirty =
@@ -155,7 +195,7 @@ export const Profile: React.FC = () => {
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
-    setSavedProfile({
+    const updated = {
       name,
       username,
       email,
@@ -164,7 +204,16 @@ export const Profile: React.FC = () => {
       location,
       bio,
       memberSince: savedProfile.memberSince,
+    };
+    setSavedProfile(updated);
+    localStorage.setItem("user_profile_details", JSON.stringify(updated));
+
+    // Update global AuthContext user
+    updateUser({
+      name,
+      email,
     });
+
     showToast("Profile details updated successfully!");
   };
 

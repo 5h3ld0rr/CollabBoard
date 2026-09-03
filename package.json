@@ -1,0 +1,10 @@
+{
+  "name": "collabboard-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix Backend run dev",
+    "dev:backend": "npm --prefix Backend run dev",
+    "dev:frontend": "npm --prefix Frontend run dev"
+  }
+}

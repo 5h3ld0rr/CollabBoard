@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Logo } from "./Logo";
 import { WorkspaceSwitcher } from "../workspace/WorkspaceSwitcher";
+import { useAuth } from "../../context";
 import type { Workspace } from "../../types";
 
 interface NavbarProps {
@@ -41,11 +42,26 @@ export const Navbar: React.FC<NavbarProps> = ({
   hideLiveSync = false,
 }) => {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotificationToast, setShowNotificationToast] = useState(false);
   const [isOnline, setIsOnline] = useState<boolean>(
     typeof navigator !== "undefined" ? navigator.onLine : true,
   );
+
+  const displayName = user?.name || "Alex Chen";
+  const displayEmail = user?.email || "alex.chen@collabboard.io";
+  const displayInitials =
+    user?.initials ||
+    (displayName
+      ? displayName
+          .split(" ")
+          .filter(Boolean)
+          .map((part) => part[0]?.toUpperCase())
+          .slice(0, 2)
+          .join("")
+      : "AC") ||
+    "AC";
 
   const notificationsRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -112,6 +128,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const shouldHideLiveSync = hideLiveSync || isProfileVariant;
 
   const handleSignOut = () => {
+    logout();
     navigate("/login");
   };
 
@@ -243,19 +260,22 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="relative" ref={profileRef}>
             <button
               onClick={() => setShowProfileMenu((prev) => !prev)}
+              aria-label="User profile menu"
               className="flex items-center space-x-2 p-1 rounded-xl hover:bg-slate-900 border border-transparent hover:border-slate-800 transition cursor-pointer"
             >
               <div className="w-8 h-8 rounded-lg bg-linear-to-br from-indigo-600 to-violet-600 text-white font-bold text-xs flex items-center justify-center shadow-inner">
-                AC
+                {displayInitials}
               </div>
             </button>
 
             {showProfileMenu && (
               <div className="absolute right-0 mt-2 w-52 rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black/90 backdrop-blur-xl p-1.5 z-50 ring-1 ring-white/10 animate-in fade-in zoom-in-95 duration-100">
                 <div className="px-3 py-2 border-b border-slate-800 mb-1">
-                  <p className="text-xs font-semibold text-white">Alex Chen</p>
+                  <p className="text-xs font-semibold text-white truncate">
+                    {displayName}
+                  </p>
                   <p className="text-[11px] text-slate-400 truncate">
-                    alex.chen@collabboard.io
+                    {displayEmail}
                   </p>
                 </div>
                 <div className="space-y-0.5 text-xs">
