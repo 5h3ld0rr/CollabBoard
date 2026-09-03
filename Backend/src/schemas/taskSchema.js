@@ -19,11 +19,12 @@ export const createTaskSchema = z.object({
 export const updateTaskSchema = z.object({
   title: z.string().trim().min(3, 'Title must be at least 3 characters').optional(),
   description: z.string().trim().optional(),
-  status: z.enum(['todo', 'doing', 'done']).optional(),
-  priority: z.enum(['low', 'normal', 'high']).optional(),
+  status: z.enum(['todo', 'doing', 'in-progress', 'done']).optional(),
+  priority: z.enum(['low', 'normal', 'medium', 'high', 'urgent']).optional(),
   assignee: z.string().trim().optional(),
   boardId: z.string().trim().optional(),
   dueDate: z.string().optional(),
+  version: z.coerce.number().int().nonnegative().optional(),
 });
 
 /**

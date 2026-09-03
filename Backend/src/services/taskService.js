@@ -1,7 +1,7 @@
 import { taskRepo } from '../repos/taskRepo.js';
 import { boardRepo } from '../repos/boardRepo.js';
 import { assertBoardAccess } from './boardService.js';
-import { NotFoundError, ForbiddenError } from '../utils/AppError.js';
+import { NotFoundError, ForbiddenError, ConflictError } from '../utils/AppError.js';
 
 /**
  * Lists tasks with filtering, sorting, pagination, and board ownership authorization
@@ -95,7 +95,8 @@ export async function createTask(taskData, userId) {
 }
 
 /**
- * Update an existing task ensuring user has access to current (and new) board
+ * Update an existing task ensuring user has access to current (and new) board.
+ * Enforces Optimistic Concurrency Control (OCC) using the version field.
  */
 export async function updateTask(taskId, updates, userId) {
   const task = await taskRepo.findById(taskId);
@@ -109,11 +110,26 @@ export async function updateTask(taskId, updates, userId) {
     await assertBoardAccess(updates.boardId, userId);
   }
 
-  return taskRepo.update(taskId, updates);
+  // If client provided a version in updates, check for version mismatch
+  if (updates.version !== undefined && updates.version !== null) {
+    if (Number(updates.version) !== Number(task.version)) {
+      throw new ConflictError('Task version mismatch. The task was modified by another user.');
+    }
+  }
+
+  const expectedVersion =
+    updates.version !== undefined && updates.version !== null ? Number(updates.version) : task.version;
+
+  const updated = await taskRepo.update(taskId, updates, expectedVersion);
+  if (!updated) {
+    throw new ConflictError('Task version mismatch. The task was modified by another user.');
+  }
+
+  return updated;
 }
 
 /**
- * Move task status within its lifecycle (todo -> doing -> done)
+ * Move task status within its lifecycle (todo -> doing -> done) with OCC verification
  */
 export async function moveTaskStatus(taskId, newStatus, userId) {
   const task = await taskRepo.findById(taskId);
@@ -122,7 +138,11 @@ export async function moveTaskStatus(taskId, newStatus, userId) {
   }
 
   await assertBoardAccess(task.boardId, userId);
-  return taskRepo.update(taskId, { status: newStatus });
+  const updated = await taskRepo.update(taskId, { status: newStatus }, task.version);
+  if (!updated) {
+    throw new ConflictError('Task version mismatch. The task was modified by another user.');
+  }
+  return updated;
 }
 
 /**

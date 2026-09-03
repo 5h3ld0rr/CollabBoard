@@ -27,6 +27,17 @@ app.use(express.json({ limit: '100kb' }));
 app.use(requestId);
 app.use(requestLogger);
 
+/* Root Endpoint (Public) */
+app.get('/', (req, res) => {
+  res.json({
+    name: 'CollabBoard REST API',
+    version: '1.0.0',
+    status: 'running',
+    docs: '/api/docs',
+    health: '/api/health',
+  });
+});
+
 /* Health Check Endpoint (Public) */
 app.get('/api/health', (req, res) => {
   const readyStates = ['disconnected', 'connected', 'connecting', 'disconnecting'];
