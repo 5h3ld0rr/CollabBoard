@@ -1,192 +1,136 @@
-import { randomUUID } from 'node:crypto';
+import mongoose from 'mongoose';
+import { Task } from '../models/Task.js';
 
-const seededUsers = {
-  '1': {
-    id: '1',
-    name: 'User 1',
-    email: 'user1@nsbm.lk',
-    initials: 'U1',
-    color: 'bg-indigo-600',
-  },
-  '2': {
-    id: '2',
-    name: 'User 2',
-    email: 'user2@nsbm.lk',
-    initials: 'U2',
-    color: 'bg-emerald-600',
-  },
-};
-
-// In-memory tasks collection with seeded tasks matching schema
-const tasks = [
-  {
-    id: 't1',
-    title: 'Design Dashboard Wireframes',
-    description: 'Create Figma mocks for the main board layout',
-    status: 'done',
-    priority: 'high',
-    assignee: seededUsers['1'],
-    boardId: 'b1',
-    tags: ['Design', 'UI/UX'],
-    order: 0,
-    version: 1,
-    dueDate: '2026-09-01T00:00:00.000Z',
-    createdAt: '2026-08-20T10:00:00.000Z',
-    updatedAt: '2026-08-20T10:00:00.000Z',
-  },
-  {
-    id: 't2',
-    title: 'Develop REST API Pipeline',
-    description: 'Setup Express server, error handling, and auth middleware',
-    status: 'in-progress',
-    priority: 'high',
-    assignee: seededUsers['2'],
-    boardId: 'b1',
-    tags: ['Backend', 'API'],
-    order: 1,
-    version: 1,
-    dueDate: '2026-09-05T00:00:00.000Z',
-    createdAt: '2026-08-21T11:00:00.000Z',
-    updatedAt: '2026-08-21T11:00:00.000Z',
-  },
-  {
-    id: 't3',
-    title: 'Write API Contract Documentation',
-    description: 'Document REST contract endpoints in README and export Postman tests',
-    status: 'todo',
-    priority: 'medium',
-    assignee: seededUsers['1'],
-    boardId: 'b1',
-    tags: ['Docs', 'Postman'],
-    order: 2,
-    version: 1,
-    dueDate: '2026-09-10T00:00:00.000Z',
-    createdAt: '2026-08-22T14:30:00.000Z',
-    updatedAt: '2026-08-22T14:30:00.000Z',
-  },
-  {
-    id: 't4',
-    title: 'Marketing Campaign Launch Plan',
-    description: 'Prepare campaign materials and landing page assets',
-    status: 'in-progress',
-    priority: 'high',
-    assignee: seededUsers['2'],
-    boardId: 'b2',
-    tags: ['Marketing', 'Launch'],
-    order: 0,
-    version: 1,
-    dueDate: '2026-09-15T00:00:00.000Z',
-    createdAt: '2026-08-23T09:00:00.000Z',
-    updatedAt: '2026-08-23T09:00:00.000Z',
-  },
-  {
-    id: 't5',
-    title: 'Design System & Component Tokens',
-    description: 'Establish Figma tokens and WCAG AA accessibility color contrast guidelines',
-    status: 'in-progress',
-    priority: 'high',
-    assignee: seededUsers['1'],
-    boardId: 'b3',
-    tags: ['Design', 'Tokens'],
-    order: 0,
-    version: 1,
-    dueDate: '2026-09-20T00:00:00.000Z',
-    createdAt: '2026-08-24T10:00:00.000Z',
-    updatedAt: '2026-08-24T10:00:00.000Z',
-  },
-  {
-    id: 't6',
-    title: 'Mobile Micro-interactions',
-    description: 'Prototype fluid gestures and haptic feedback specs for mobile dashboard',
-    status: 'todo',
-    priority: 'medium',
-    assignee: seededUsers['1'],
-    boardId: 'b3',
-    tags: ['UX', 'Mobile'],
-    order: 1,
-    version: 1,
-    dueDate: '2026-09-25T00:00:00.000Z',
-    createdAt: '2026-08-25T11:00:00.000Z',
-    updatedAt: '2026-08-25T11:00:00.000Z',
-  },
-];
-
-function normalizeAssignee(assignee) {
-  if (!assignee) return null;
-  if (typeof assignee === 'object' && assignee !== null) return assignee;
-  if (typeof assignee === 'string' && seededUsers[assignee]) return seededUsers[assignee];
-  if (typeof assignee === 'string') {
-    return {
-      id: `usr-${Date.now()}`,
-      name: assignee,
-      email: `${assignee.toLowerCase().replace(/\s+/g, '')}@collabboard.io`,
-      initials: assignee.slice(0, 2).toUpperCase(),
-      color: 'bg-indigo-600',
-    };
-  }
-  return null;
+/**
+ * Serializes and formats a Mongoose Task document or raw object.
+ * @param {object} doc - Mongoose document or task object
+ * @returns {object|null} Formatted task object
+ */
+export function formatTask(doc) {
+  if (!doc) return null;
+  const obj = typeof doc.toObject === 'function' ? doc.toObject({ virtuals: true }) : { ...doc };
+  const id = String(obj.id || obj._id || '');
+  return {
+    ...obj,
+    id,
+    boardId: String(obj.boardId || ''),
+    version: typeof obj.version === 'number' ? obj.version : 0,
+    status: obj.status ?? 'todo',
+    priority: obj.priority ?? 'normal',
+    assignee: obj.assignee ?? '',
+    tags: Array.isArray(obj.tags) ? obj.tags : [],
+    position: typeof obj.position === 'number' ? obj.position : (typeof obj.order === 'number' ? obj.order : 0),
+  };
 }
 
 export const taskRepo = {
-  async findAll() {
-    return [...tasks];
+  /**
+   * Find all tasks matching optional query criteria
+   */
+  async findAll(query = {}) {
+    const docs = await Task.find(query);
+    return docs.map(formatTask);
   },
 
+  /**
+   * Find a single task by its MongoDB ObjectId
+   */
   async findById(taskId) {
-    return tasks.find((t) => String(t.id) === String(taskId)) ?? null;
+    if (!taskId || !mongoose.Types.ObjectId.isValid(taskId)) {
+      return null;
+    }
+    const doc = await Task.findById(taskId);
+    return formatTask(doc);
   },
 
+  /**
+   * Find all tasks belonging to a specific board
+   */
   async findByBoardId(boardId) {
-    return tasks.filter((t) => String(t.boardId) === String(boardId));
+    if (!boardId) return [];
+    const docs = await Task.find({ boardId: String(boardId) });
+    return docs.map(formatTask);
   },
 
+  /**
+   * Create a new task document in MongoDB
+   */
   async create(taskData) {
     const rawStatus = taskData.status ?? 'todo';
-    const status = rawStatus === 'doing' ? 'in-progress' : rawStatus;
-    const newTask = {
-      id: randomUUID(),
-      title: taskData.title.trim(),
+    const status = rawStatus === 'in-progress' ? 'doing' : rawStatus;
+
+    const doc = await Task.create({
+      title: taskData.title?.trim(),
       description: taskData.description?.trim() ?? '',
-      status,
-      priority: taskData.priority ?? 'medium',
-      assignee: normalizeAssignee(taskData.assignee),
       boardId: String(taskData.boardId),
-      tags: Array.isArray(taskData.tags) ? taskData.tags : [],
-      order: typeof taskData.order === 'number' ? taskData.order : 0,
-      version: 1,
-      dueDate: taskData.dueDate ?? null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    tasks.push(newTask);
-    return newTask;
-  },
-
-  async update(taskId, updates) {
-    const index = tasks.findIndex((t) => String(t.id) === String(taskId));
-    if (index === -1) return null;
-
-    const existing = tasks[index];
-    const rawStatus = updates.status ?? existing.status;
-    const status = rawStatus === 'doing' ? 'in-progress' : rawStatus;
-
-    const updated = {
-      ...existing,
-      ...updates,
+      columnId: taskData.columnId ?? null,
       status,
-      assignee: updates.assignee !== undefined ? normalizeAssignee(updates.assignee) : existing.assignee,
-      tags: updates.tags !== undefined ? (Array.isArray(updates.tags) ? updates.tags : []) : (existing.tags || []),
-      version: (existing.version || 1) + 1,
-      updatedAt: new Date().toISOString(),
-    };
-    tasks[index] = updated;
-    return updated;
+      priority: taskData.priority ?? 'normal',
+      assignee:
+        typeof taskData.assignee === 'object' && taskData.assignee !== null
+          ? taskData.assignee.name || taskData.assignee.id || ''
+          : taskData.assignee ?? '',
+      dueDate: taskData.dueDate ? new Date(taskData.dueDate) : null,
+      position:
+        typeof taskData.position === 'number'
+          ? taskData.position
+          : typeof taskData.order === 'number'
+          ? taskData.order
+          : 0,
+      done: taskData.done ?? (status === 'done'),
+      version: 0,
+    });
+
+    return formatTask(doc);
   },
 
+  /**
+   * Update task atomically with Optimistic Concurrency Control (OCC).
+   * If expectedVersion is specified, update matches version and increments it.
+   */
+  async update(taskId, updates, expectedVersion) {
+    if (!taskId || !mongoose.Types.ObjectId.isValid(taskId)) {
+      return null;
+    }
+
+    const query = { _id: taskId };
+    if (expectedVersion !== undefined && expectedVersion !== null) {
+      query.version = Number(expectedVersion);
+    }
+
+    const { id, _id, version, ...payload } = updates;
+    if (payload.status) {
+      const rawStatus = payload.status;
+      payload.status = rawStatus === 'in-progress' ? 'doing' : rawStatus;
+    }
+    if (payload.assignee && typeof payload.assignee === 'object') {
+      payload.assignee = payload.assignee.name || payload.assignee.id || '';
+    }
+    if (payload.dueDate) {
+      payload.dueDate = new Date(payload.dueDate);
+    }
+
+    const doc = await Task.findOneAndUpdate(
+      query,
+      {
+        $set: payload,
+        $inc: { version: 1 },
+      },
+      { new: true }
+    );
+
+    return formatTask(doc);
+  },
+
+  /**
+   * Delete task by its MongoDB ObjectId
+   */
   async delete(taskId) {
-    const index = tasks.findIndex((t) => String(t.id) === String(taskId));
-    if (index === -1) return false;
-    tasks.splice(index, 1);
-    return true;
+    if (!taskId || !mongoose.Types.ObjectId.isValid(taskId)) {
+      return false;
+    }
+    const result = await Task.findByIdAndDelete(taskId);
+    return Boolean(result);
   },
 };
+
