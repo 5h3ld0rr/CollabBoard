@@ -10,6 +10,7 @@ interface AuthContextType {
   login: (credentials: authApi.LoginInput) => Promise<void>;
   register: (data: authApi.RegisterInput) => Promise<void>;
   logout: () => void;
+  updateUser: (updatedData: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -90,6 +91,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setToken(null);
   };
 
+  const updateUser = (updatedData: Partial<User>) => {
+    setUser((prev) => {
+      const base: User = prev || {
+        id: 'usr-1',
+        name: 'Alex Chen',
+        email: 'alex.chen@collabboard.io',
+        initials: 'AC',
+        color: 'from-indigo-600 to-violet-600',
+      };
+
+      const newName = updatedData.name !== undefined ? updatedData.name : base.name;
+      const computedInitials =
+        updatedData.initials ||
+        (newName
+          ? newName
+              .split(' ')
+              .filter(Boolean)
+              .map((part) => part[0]?.toUpperCase())
+              .slice(0, 2)
+              .join('')
+          : base.initials) ||
+        'AC';
+
+      const nextUser: User = {
+        ...base,
+        ...updatedData,
+        name: newName,
+        initials: computedInitials,
+      };
+
+      localStorage.setItem('user', JSON.stringify(nextUser));
+      return nextUser;
+    });
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -100,6 +136,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         login,
         register,
         logout,
+        updateUser,
       }}
     >
       {children}
