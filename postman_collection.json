@@ -176,6 +176,23 @@
               "path": ["api", "boards", "b1", "tasks"]
             }
           }
+        },
+        {
+          "name": "GET /api/boards/:id/analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/boards/b1/analytics",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "boards", "b1", "analytics"]
+            }
+          }
         }
       ]
     },

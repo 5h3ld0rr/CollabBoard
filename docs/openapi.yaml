@@ -174,6 +174,131 @@ paths:
         '204':
           description: Board deleted
 
+  /api/boards/{id}/analytics:
+    get:
+      summary: Get board analytics (aggregation pipeline)
+      description: >
+        Returns aggregated task statistics for a board computed in a **single
+        MongoDB round-trip** using a `$facet` aggregation pipeline.
+        No application-level looping is performed.
+
+        **Answers two real analytical questions:**
+
+        1. *"How many tasks per assignee are overdue on this board?"*
+           — returned in `overduePerAssignee`, each entry includes the
+           `overdueCount`, the affected `taskIds`, and a joined `assignee`
+           object populated from the `users` collection via `$lookup`.
+
+        2. *"What is the distribution of tasks by status and priority?"*
+           — returned in `byStatus` and `byPriority` arrays.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Board ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Aggregated analytics data (single DB round-trip)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      boardId:
+                        type: string
+                        example: b1
+                      generatedAt:
+                        type: string
+                        format: date-time
+                        description: ISO timestamp of when the aggregation ran
+                      totalTasks:
+                        type: integer
+                        example: 12
+                        description: Total number of tasks on the board
+                      totalOverdue:
+                        type: integer
+                        example: 3
+                        description: Number of non-done tasks past their due date
+                      overduePerAssignee:
+                        type: array
+                        description: >
+                          One entry per assignee who has at least one overdue task,
+                          sorted by overdueCount descending.
+                        items:
+                          type: object
+                          properties:
+                            _id:
+                              type: string
+                              description: Assignee user ID
+                              example: "2"
+                            overdueCount:
+                              type: integer
+                              example: 2
+                            taskIds:
+                              type: array
+                              items:
+                                type: string
+                              example: [t2, t7]
+                            assignee:
+                              type: object
+                              description: >
+                                Joined user document (populated via $lookup from
+                                the users collection). Null when the assignee id
+                                does not match any user.
+                              properties:
+                                _id:
+                                  type: string
+                                name:
+                                  type: string
+                                  example: Clara Tanaka
+                                email:
+                                  type: string
+                                  format: email
+                                  example: user2@nsbm.lk
+                      byStatus:
+                        type: array
+                        description: Task counts grouped by status, sorted by count descending
+                        items:
+                          type: object
+                          properties:
+                            _id:
+                              type: string
+                              enum: [todo, doing, in-progress, done]
+                            count:
+                              type: integer
+                        example:
+                          - { _id: todo, count: 5 }
+                          - { _id: doing, count: 4 }
+                          - { _id: done, count: 3 }
+                      byPriority:
+                        type: array
+                        description: Task counts grouped by priority, sorted by count descending
+                        items:
+                          type: object
+                          properties:
+                            _id:
+                              type: string
+                              enum: [low, normal, medium, high, urgent]
+                            count:
+                              type: integer
+                        example:
+                          - { _id: high, count: 6 }
+                          - { _id: normal, count: 4 }
+                          - { _id: low, count: 2 }
+        '401':
+          description: Missing or invalid authentication token
+        '403':
+          description: Forbidden — user is not a member or owner of this board
+        '404':
+          description: Board not found
+
   /api/boards/{id}/tasks:
     get:
       summary: List tasks on a board
