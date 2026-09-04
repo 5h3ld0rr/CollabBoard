@@ -17,6 +17,11 @@ router.get('/', asyncHandler(controller.list));
 router.post('/', validate(createBoardSchema, 'body'), asyncHandler(controller.create));
 router.get('/:id', validate(idParamSchema, 'params'), asyncHandler(controller.getOne));
 router.get(
+  '/:id/analytics',
+  validate(idParamSchema, 'params'),
+  asyncHandler(controller.getAnalytics)
+);
+router.get(
   '/:id/tasks',
   validate(idParamSchema, 'params'),
   validate(taskQuerySchema, 'query'),
