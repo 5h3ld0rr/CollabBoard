@@ -8,9 +8,9 @@ export interface ApiErrorDetail {
 export class ApiError extends Error {
   code: string;
   status: number;
-  details?: ApiErrorDetail[];
+  details?: any;
 
-  constructor(message: string, status: number, code = 'API_ERROR', details?: ApiErrorDetail[]) {
+  constructor(message: string, status: number, code = 'API_ERROR', details?: any) {
     super(message);
     this.name = 'ApiError';
     this.status = status;

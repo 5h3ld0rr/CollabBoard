@@ -113,7 +113,10 @@ export async function updateTask(taskId, updates, userId) {
   // If client provided a version in updates, check for version mismatch
   if (updates.version !== undefined && updates.version !== null) {
     if (Number(updates.version) !== Number(task.version)) {
-      throw new ConflictError('Task version mismatch. The task was modified by another user.');
+      throw new ConflictError('Task was modified by someone else', {
+        current: task,
+        yourVersion: Number(updates.version),
+      });
     }
   }
 
@@ -122,7 +125,12 @@ export async function updateTask(taskId, updates, userId) {
 
   const updated = await taskRepo.update(taskId, updates, expectedVersion);
   if (!updated) {
-    throw new ConflictError('Task version mismatch. The task was modified by another user.');
+    const current = await taskRepo.findById(taskId);
+    if (!current) throw new NotFoundError('Task');
+    throw new ConflictError('Task was modified by someone else', {
+      current,
+      yourVersion: expectedVersion,
+    });
   }
 
   return updated;
@@ -140,7 +148,12 @@ export async function moveTaskStatus(taskId, newStatus, userId) {
   await assertBoardAccess(task.boardId, userId);
   const updated = await taskRepo.update(taskId, { status: newStatus }, task.version);
   if (!updated) {
-    throw new ConflictError('Task version mismatch. The task was modified by another user.');
+    const current = await taskRepo.findById(taskId);
+    if (!current) throw new NotFoundError('Task');
+    throw new ConflictError('Task was modified by someone else', {
+      current,
+      yourVersion: task.version,
+    });
   }
   return updated;
 }
