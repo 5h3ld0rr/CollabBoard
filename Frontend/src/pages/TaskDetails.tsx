@@ -20,8 +20,8 @@ import {
   Loader2,
   User as UserIcon,
 } from 'lucide-react';
-import { Navbar, AmbientBackground } from '../components/common';
-import { TaskModal } from '../components/board';
+import { Navbar, AmbientBackground, OfflineIndicator } from '../components/common';
+import { TaskModal, ConflictModal } from '../components/board';
 import {
   getTaskById,
   getBoardById,
@@ -31,6 +31,12 @@ import {
   updateTask as apiUpdateTask,
   deleteTask as apiDeleteTask,
 } from '../api';
+import {
+  getCachedTask,
+  getCachedBoard,
+  updateCachedTask,
+  saveBoardToCache,
+} from '../db';
 import { useAuth } from '../context/AuthContext';
 import type { Task, Board, TaskStatus, TaskPriority, User, TaskComment } from '../types';
 
@@ -117,6 +123,11 @@ export const TaskDetails: React.FC = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // 409 OCC Conflict Resolution State
+  const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
+  const [conflictLocalTask, setConflictLocalTask] = useState<Task | null>(null);
+  const [conflictServerTask, setConflictServerTask] = useState<Task | null>(null);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
@@ -124,10 +135,9 @@ export const TaskDetails: React.FC = () => {
     }, 3000);
   };
 
-  // Find task across all mock boards via API
+  // Find task across all mock boards via API and IndexedDB cache
   useEffect(() => {
     let isMounted = true;
-    setIsLoading(true);
 
     async function loadData() {
       if (!id) {
@@ -135,12 +145,29 @@ export const TaskDetails: React.FC = () => {
         return;
       }
 
+      // 1. Instant Cache Hydration from IndexedDB (0ms delay)
+      const cachedTask = await getCachedTask(id);
+      if (cachedTask && isMounted) {
+        setTask(cachedTask);
+        const cachedBoard = await getCachedBoard(cachedTask.boardId);
+        if (cachedBoard && isMounted) {
+          setBoard(cachedBoard);
+          setBoardMembers(cachedBoard.members || []);
+        }
+        setIsLoading(false);
+      } else {
+        setIsLoading(true);
+      }
+
+      // 2. Background Revalidation from API
       try {
         const foundTask = await getTaskById(id);
         if (!isMounted) return;
 
         if (foundTask) {
           setTask(foundTask);
+          await updateCachedTask(foundTask);
+
           const [foundBoard, taskComments] = await Promise.all([
             getBoardById(foundTask.boardId),
             getTaskComments(foundTask.id),
@@ -150,13 +177,16 @@ export const TaskDetails: React.FC = () => {
           setBoard(foundBoard);
           if (foundBoard) {
             setBoardMembers(foundBoard.members || []);
+            await saveBoardToCache(foundBoard);
           }
           setComments(taskComments);
-        } else {
+        } else if (!cachedTask) {
           setTask(null);
           setBoard(null);
           setComments([]);
         }
+      } catch (err) {
+        console.warn('[TaskDetails] Network fetch failed, retaining cached data:', err);
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -181,11 +211,19 @@ export const TaskDetails: React.FC = () => {
   const handleStatusChange = async (newStatus: TaskStatus) => {
     if (!task) return;
     try {
-      const updated = await apiUpdateTask(task.id, { status: newStatus });
+      const updated = await apiUpdateTask(task.id, { status: newStatus, version: task.version });
       setTask(updated);
+      await updateCachedTask(updated);
       showToast(`Status updated to ${newStatus === 'in-progress' ? 'In Progress' : newStatus === 'done' ? 'Completed' : 'To Do'}`);
-    } catch {
-      setTask((prev) => (prev ? { ...prev, status: newStatus, updatedAt: new Date().toISOString() } : null));
+    } catch (err: any) {
+      if (err?.status === 409 || err?.code === 'CONFLICT') {
+        const serverDoc = err.details?.current || (await getTaskById(task.id)) || task;
+        setConflictLocalTask({ ...task, status: newStatus });
+        setConflictServerTask(serverDoc);
+        setIsConflictModalOpen(true);
+      } else {
+        showToast(err?.message || 'Failed to update status');
+      }
     }
   };
 
@@ -193,11 +231,47 @@ export const TaskDetails: React.FC = () => {
     try {
       const updated = await apiUpdateTask(savedTask.id, savedTask);
       setTask(updated);
-    } catch {
-      setTask(savedTask);
+      await updateCachedTask(updated);
+      setIsEditModalOpen(false);
+      showToast('Task updated successfully');
+    } catch (err: any) {
+      if (err?.status === 409 || err?.code === 'CONFLICT') {
+        // Handle 409 OCC Conflict State
+        let serverDoc = err.details?.current;
+        if (!serverDoc) {
+          serverDoc = await getTaskById(savedTask.id);
+        }
+        if (serverDoc) {
+          setConflictLocalTask(savedTask);
+          setConflictServerTask(serverDoc);
+          setIsConflictModalOpen(true);
+        } else {
+          showToast('Conflict detected. Please retry.');
+        }
+      } else {
+        showToast(err?.message || 'Failed to update task');
+      }
     }
-    setIsEditModalOpen(false);
-    showToast('Task updated successfully');
+  };
+
+  const handleConflictOverwrite = async (resolvedTask: Task) => {
+    const updated = await apiUpdateTask(resolvedTask.id, resolvedTask);
+    setTask(updated);
+    await updateCachedTask(updated);
+    showToast('Changes saved (force overwrite applied)');
+  };
+
+  const handleConflictDiscard = (serverTask: Task) => {
+    setTask(serverTask);
+    updateCachedTask(serverTask);
+    showToast("Reverted to server's latest version");
+  };
+
+  const handleConflictMerge = async (mergedTask: Task) => {
+    const updated = await apiUpdateTask(mergedTask.id, mergedTask);
+    setTask(updated);
+    await updateCachedTask(updated);
+    showToast('Merged version saved successfully');
   };
 
   const handleDeleteTask = async () => {
@@ -361,6 +435,7 @@ export const TaskDetails: React.FC = () => {
 
               {/* Action Buttons */}
               <div className="flex items-center space-x-2.5">
+                <OfflineIndicator />
                 <button
                   onClick={handleCopyLink}
                   className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 text-xs font-medium transition cursor-pointer"
@@ -830,6 +905,18 @@ export const TaskDetails: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+      {/* 409 Conflict Resolution Modal */}
+      {isConflictModalOpen && conflictLocalTask && conflictServerTask && (
+        <ConflictModal
+          isOpen={isConflictModalOpen}
+          onClose={() => setIsConflictModalOpen(false)}
+          localTask={conflictLocalTask}
+          serverTask={conflictServerTask}
+          onOverwrite={handleConflictOverwrite}
+          onDiscard={handleConflictDiscard}
+          onMerge={handleConflictMerge}
+        />
       )}
     </div>
   );

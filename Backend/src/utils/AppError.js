@@ -27,8 +27,8 @@ export class ValidationError extends AppError {
 }
 
 export class ConflictError extends AppError {
-  constructor(message = 'Conflict: Resource has been modified by another user') {
-    super(message, 409, 'CONFLICT');
+  constructor(message = 'Conflict: Resource has been modified by another user', details) {
+    super(message, 409, 'CONFLICT', details);
   }
 }
 
