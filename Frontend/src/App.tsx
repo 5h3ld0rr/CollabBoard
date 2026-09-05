@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
 import Register from './pages/Register';
 import Login from './pages/Login';
@@ -8,6 +8,7 @@ import Profile from './pages/Profile';
 import TaskDetails from './pages/TaskDetails';
 import NotFound from './pages/NotFound';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
+import { WorkspaceRedirect } from './components/workspace';
 import { BoardProvider, AuthProvider } from './context';
 
 function App() {
@@ -21,11 +22,19 @@ function App() {
             <Route path="/register" element={<Register />} />
             <Route
               path="/dashboard"
-              element={<Navigate to="/workspaces/ws-1" replace />}
+              element={
+                <ProtectedRoute>
+                  <WorkspaceRedirect />
+                </ProtectedRoute>
+              }
             />
             <Route
               path="/workspaces"
-              element={<Navigate to="/workspaces/ws-1" replace />}
+              element={
+                <ProtectedRoute>
+                  <WorkspaceRedirect />
+                </ProtectedRoute>
+              }
             />
             <Route
               path="/workspaces/:workspaceId"
