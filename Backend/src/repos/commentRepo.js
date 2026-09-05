@@ -1,81 +1,53 @@
-import { randomUUID } from 'node:crypto';
+import mongoose from 'mongoose';
+import { Comment } from '../models/Comment.js';
 
-// In-memory comments collection with seeded discussions
-const comments = [
-  {
-    id: 'comm-101-1',
-    taskId: 'task-101',
-    authorId: '2',
-    authorName: 'Clara Tanaka',
-    authorEmail: 'user2@nsbm.lk',
-    content: 'Make sure we cap the reconnection backoff interval at 30 seconds to prevent hanging sockets.',
-    createdAt: '2026-08-14T19:30:00.000Z',
-  },
-  {
-    id: 'comm-101-2',
-    taskId: 'task-101',
-    authorId: '1',
-    authorName: 'Alex Chen',
-    authorEmail: 'user1@nsbm.lk',
-    content: 'Good call Clara. I added jitter and clamped the maximum backoff to 30s with auto reconnect on focus.',
-    createdAt: '2026-08-14T20:15:00.000Z',
-  },
-  {
-    id: 'comm-103-1',
-    taskId: 'task-103',
-    authorId: '3',
-    authorName: 'Elena Rostova',
-    authorEmail: 'user3@nsbm.lk',
-    content: 'Are we broadcasting cursor positions through raw WebSockets or using WebRTC data channels for lower latency?',
-    createdAt: '2026-08-15T21:20:00.000Z',
-  },
-  {
-    id: 'comm-103-2',
-    taskId: 'task-103',
-    authorId: '2',
-    authorName: 'Clara Tanaka',
-    authorEmail: 'user2@nsbm.lk',
-    content: 'Using WebSocket binary packets throttled at 60Hz. It stays well under 15ms latency across our staging nodes.',
-    createdAt: '2026-08-15T22:05:00.000Z',
-  },
-  {
-    id: 'comm-104-1',
-    taskId: 'task-104',
-    authorId: '1',
-    authorName: 'Alex Chen',
-    authorEmail: 'user1@nsbm.lk',
-    content: 'Conflict resolution should give priority to the most recent server timestamp if optimistic lock fails.',
-    createdAt: '2026-08-15T22:45:00.000Z',
-  },
-];
+function formatComment(doc) {
+  if (!doc) return null;
+  const obj = typeof doc.toObject === 'function' ? doc.toObject({ virtuals: true }) : { ...doc };
+  return {
+    ...obj,
+    id: String(obj.id || obj._id),
+    taskId: String(obj.taskId),
+    authorId: String(obj.authorId),
+    content: obj.content,
+    createdAt: obj.createdAt,
+    updatedAt: obj.updatedAt,
+  };
+}
 
 export const commentRepo = {
   async listByTaskId(taskId) {
-    return comments.filter((c) => String(c.taskId) === String(taskId));
+    if (!taskId) return [];
+    const docs = await Comment.find({ taskId: String(taskId) }).sort({ createdAt: 1 });
+    return docs.map(formatComment);
   },
 
   async findById(commentId) {
-    return comments.find((c) => String(c.id) === String(commentId)) ?? null;
+    if (!commentId) return null;
+    let doc = null;
+    if (mongoose.Types.ObjectId.isValid(commentId)) {
+      doc = await Comment.findById(commentId);
+    }
+    if (!doc) {
+      doc = await Comment.findOne({ _id: String(commentId) });
+    }
+    return formatComment(doc);
   },
 
-  async create({ taskId, authorId, authorName, authorEmail, content }) {
-    const newComment = {
-      id: randomUUID(),
+  async create({ taskId, authorId, content }) {
+    const doc = await Comment.create({
       taskId: String(taskId),
       authorId: String(authorId),
-      authorName: authorName.trim(),
-      authorEmail: authorEmail.toLowerCase().trim(),
       content: content.trim(),
-      createdAt: new Date().toISOString(),
-    };
-    comments.push(newComment);
-    return newComment;
+    });
+    return formatComment(doc);
   },
 
   async delete(commentId) {
-    const index = comments.findIndex((c) => String(c.id) === String(commentId));
-    if (index === -1) return false;
-    comments.splice(index, 1);
-    return true;
+    if (!commentId) return false;
+    const result = mongoose.Types.ObjectId.isValid(commentId)
+      ? await Comment.findByIdAndDelete(commentId)
+      : await Comment.findOneAndDelete({ _id: String(commentId) });
+    return Boolean(result);
   },
 };

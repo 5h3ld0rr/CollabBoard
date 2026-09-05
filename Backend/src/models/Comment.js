@@ -13,10 +13,7 @@ const commentSchema = new mongoose.Schema(
     authorId: {
       type: String,
       required: true,
-    },
-    authorName: {
-      type: String,
-      default: 'Collaborator',
+      index: true,
     },
     content: {
       type: String,

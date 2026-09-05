@@ -1,6 +1,7 @@
 import { boardRepo } from '../repos/boardRepo.js';
 import { taskRepo } from '../repos/taskRepo.js';
 import { userRepo } from '../repos/userRepo.js';
+import { workspaceRepo } from '../repos/workspaceRepo.js';
 import { NotFoundError, ForbiddenError } from '../utils/AppError.js';
 
 /**
@@ -13,6 +14,14 @@ export async function enrichBoard(board) {
   const todoCount = boardTasks.filter((t) => t.status === 'todo').length;
   const inProgressCount = boardTasks.filter((t) => t.status === 'in-progress' || t.status === 'doing').length;
   const doneCount = boardTasks.filter((t) => t.status === 'done').length;
+
+  let workspaceName = '';
+  if (board.workspaceId) {
+    const ws = await workspaceRepo.findById(board.workspaceId);
+    if (ws) {
+      workspaceName = ws.name;
+    }
+  }
 
   const rawMembers = Array.isArray(board.members) ? board.members : [];
   const populatedMembers = await Promise.all(
@@ -59,6 +68,7 @@ export async function enrichBoard(board) {
 
   return {
     ...board,
+    workspaceName,
     members: populatedMembers,
     stats: {
       totalTasks,
@@ -110,8 +120,15 @@ export async function getBoard(boardId, userId) {
  * Create a new board owned by the requesting user
  */
 export async function createBoard(boardData, userId) {
+  let targetWorkspaceId = boardData.workspaceId;
+  if (!targetWorkspaceId) {
+    const userWorkspaces = await workspaceRepo.listByUserId(userId);
+    targetWorkspaceId = userWorkspaces[0]?.id || null;
+  }
+
   const created = await boardRepo.create({
     ...boardData,
+    workspaceId: targetWorkspaceId,
     ownerId: userId,
   });
   return enrichBoard(created);
