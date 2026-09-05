@@ -16,9 +16,7 @@ function formatBoard(doc) {
 
 export const boardRepo = {
   async listByUserId(userId) {
-    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
-      return [];
-    }
+    if (!userId) return [];
     const uid = String(userId);
     const docs = await Board.find({
       $or: [{ ownerId: uid }, { members: uid }],
@@ -32,10 +30,14 @@ export const boardRepo = {
   },
 
   async findById(boardId) {
-    if (!boardId || !mongoose.Types.ObjectId.isValid(boardId)) {
-      return null;
+    if (!boardId) return null;
+    let doc = null;
+    if (mongoose.Types.ObjectId.isValid(boardId)) {
+      doc = await Board.findById(boardId);
     }
-    const doc = await Board.findById(boardId);
+    if (!doc) {
+      doc = await Board.collection.findOne({ _id: String(boardId) });
+    }
     return formatBoard(doc);
   },
 
@@ -88,9 +90,7 @@ export const boardRepo = {
   },
 
   async update(boardId, updates) {
-    if (!boardId || !mongoose.Types.ObjectId.isValid(boardId)) {
-      return null;
-    }
+    if (!boardId) return null;
 
     const existing = await this.findById(boardId);
     if (!existing) return null;
@@ -105,10 +105,10 @@ export const boardRepo = {
   },
 
   async delete(boardId) {
-    if (!boardId || !mongoose.Types.ObjectId.isValid(boardId)) {
-      return false;
-    }
-    const result = await Board.findByIdAndDelete(boardId);
+    if (!boardId) return false;
+    const result = mongoose.Types.ObjectId.isValid(boardId)
+      ? await Board.findByIdAndDelete(boardId)
+      : await Board.findOneAndDelete({ _id: String(boardId) });
     return Boolean(result);
   },
 };

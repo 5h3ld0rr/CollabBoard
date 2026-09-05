@@ -21,20 +21,22 @@ export const userRepo = {
   async findByEmail(email) {
     if (!email) return null;
     const normalized = email.toLowerCase().trim();
-    const doc = await User.findOne({ email: normalized });
-    if (!doc) return null;
-    const obj = doc.toObject({ virtuals: true });
-    return { ...obj, id: String(obj.id || obj._id) };
+    // Use lean() to get raw BSON object — the toJSON transform deletes _id,
+    // which breaks id extraction for non-ObjectId seed _ids like '1', '2'.
+    const obj = await User.findOne({ email: normalized }).lean();
+    if (!obj) return null;
+    return { ...obj, id: String(obj._id), passwordHash: obj.passwordHash };
   },
 
   async findById(id) {
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-      return null;
+    if (!id) return null;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      const obj = await User.findById(id).lean();
+      if (obj) return { ...obj, id: String(obj._id) };
     }
-    const doc = await User.findById(id);
-    if (!doc) return null;
-    const obj = doc.toObject({ virtuals: true });
-    return { ...obj, id: String(obj.id || obj._id) };
+    const raw = await User.collection.findOne({ _id: String(id) });
+    if (!raw) return null;
+    return { ...raw, id: String(raw._id) };
   },
 
   async create({ email, passwordHash, name = 'User' }) {
