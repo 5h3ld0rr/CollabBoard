@@ -171,3 +171,48 @@ export async function deleteTask(taskId, userId) {
   await taskRepo.delete(taskId);
   return true;
 }
+
+/**
+ * Returns board analytics computed in a single MongoDB aggregation round-trip.
+ *
+ * Answers:
+ *  1. "How many tasks per assignee are overdue on this board?" (overduePerAssignee)
+ *  2. Task distribution by status and priority (summary metrics)
+ *
+ * Authorization: Only board members/owners may fetch analytics.
+ *
+ * @param {string} boardId - The board to analyse
+ * @param {string} userId  - The requesting user (for access control)
+ * @returns {Promise<object>} Aggregated analytics data
+ */
+export async function getBoardAnalytics(boardId, userId) {
+  // Reuse existing access guard — throws 403/404 if unauthorized
+  await assertBoardAccess(boardId, userId);
+  return taskRepo.getBoardAnalytics(boardId);
+}
+
+/**
+ * Returns overdue tasks grouped by assignee for a specific board.
+ * Answers: "How many tasks per assignee are overdue on this board?"
+ *
+ * @param {string} boardId - The board ID
+ * @param {string} userId  - The requesting user
+ * @returns {Promise<Array<object>>}
+ */
+export async function getOverdueTasksPerAssignee(boardId, userId) {
+  await assertBoardAccess(boardId, userId);
+  return taskRepo.getOverdueTasksPerAssignee(boardId);
+}
+
+/**
+ * Returns summary metrics (counts by status and priority) for a specific board.
+ *
+ * @param {string} boardId - The board ID
+ * @param {string} userId  - The requesting user
+ * @returns {Promise<object>}
+ */
+export async function getBoardSummaryMetrics(boardId, userId) {
+  await assertBoardAccess(boardId, userId);
+  return taskRepo.getBoardSummaryMetrics(boardId);
+}
+
