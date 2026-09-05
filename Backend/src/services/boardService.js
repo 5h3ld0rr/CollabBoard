@@ -120,8 +120,15 @@ export async function getBoard(boardId, userId) {
  * Create a new board owned by the requesting user
  */
 export async function createBoard(boardData, userId) {
+  let targetWorkspaceId = boardData.workspaceId;
+  if (!targetWorkspaceId) {
+    const userWorkspaces = await workspaceRepo.listByUserId(userId);
+    targetWorkspaceId = userWorkspaces[0]?.id || null;
+  }
+
   const created = await boardRepo.create({
     ...boardData,
+    workspaceId: targetWorkspaceId,
     ownerId: userId,
   });
   return enrichBoard(created);

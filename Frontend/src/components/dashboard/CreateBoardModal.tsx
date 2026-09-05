@@ -35,7 +35,7 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
 }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [workspaceId, setWorkspaceId] = useState(currentWorkspaceId || workspaces[0]?.id || 'ws-1');
+  const [workspaceId, setWorkspaceId] = useState(currentWorkspaceId || workspaces[0]?.id || '');
   const [selectedColor, setSelectedColor] = useState(COLOR_OPTIONS[0].value);
   const [selectedIcon, setSelectedIcon] = useState(ICON_OPTIONS[0].name);
   const [tagInput, setTagInput] = useState('Frontend, Core');
@@ -43,7 +43,7 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      setWorkspaceId(currentWorkspaceId || workspaces[0]?.id || 'ws-1');
+      setWorkspaceId(currentWorkspaceId || workspaces[0]?.id || '');
       setTitle('');
       setDescription('');
       setError(null);

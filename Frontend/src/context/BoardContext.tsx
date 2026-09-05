@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import * as tasksApi from '../api/tasks';
 import * as boardsApi from '../api/boards';
@@ -253,9 +253,9 @@ const BoardContext = createContext<BoardContextValue | undefined>(undefined);
 
 export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(boardReducer, initialState);
-  const { token, user } = useAuth();
+  const { token } = useAuth();
 
-  const loadBoards = async () => {
+  const loadBoards = useCallback(async () => {
     dispatch({ type: 'SET_LOADING', payload: true });
     try {
       const boards = await boardsApi.getBoards();
@@ -265,9 +265,9 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
-  };
+  }, []);
 
-  const loadBoard = async (boardId: string) => {
+  const loadBoard = useCallback(async (boardId: string) => {
     dispatch({ type: 'SET_LOADING', payload: true });
     try {
       const [board, boardTasks] = await Promise.all([
@@ -294,97 +294,93 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
-  };
+  }, []);
 
-  const setTasks = (tasks: Task[]) => {
+  const setTasks = useCallback((tasks: Task[]) => {
     dispatch({ type: 'SET_TASKS', payload: tasks });
-  };
+  }, []);
 
-  const addTask = async (boardId: string, taskInput: Partial<Task> & { title: string }) => {
+  const addTask = useCallback(async (boardId: string, taskInput: Partial<Task> & { title: string }) => {
     const created = await tasksApi.createTask(boardId, taskInput);
     dispatch({ type: 'ADD_TASK', payload: created });
     return created;
-  };
+  }, []);
 
-  const updateTask = async (task: Task) => {
+  const updateTask = useCallback(async (task: Task) => {
     const updated = await tasksApi.updateTask(task.id, task);
     dispatch({ type: 'UPDATE_TASK', payload: updated });
     return updated;
-  };
+  }, []);
 
-  const deleteTask = async (taskId: string) => {
+  const deleteTask = useCallback(async (taskId: string) => {
     await tasksApi.deleteTask(taskId);
     dispatch({ type: 'DELETE_TASK', payload: { taskId } });
-  };
+  }, []);
 
-  const moveTaskStatus = async (taskId: string, newStatus: TaskStatus) => {
-    // Optimistic UI update
+  const moveTaskStatus = useCallback(async (taskId: string, newStatus: TaskStatus) => {
     dispatch({ type: 'MOVE_TASK_STATUS', payload: { taskId, newStatus } });
     try {
       await tasksApi.moveTaskStatus(taskId, newStatus);
     } catch (err) {
-      // Refresh board on failure
       if (state.activeBoard) {
         loadBoard(state.activeBoard.id);
       }
       throw err;
     }
-  };
+  }, [state.activeBoard, loadBoard]);
 
-  const clearBoardTasks = async (boardId: string) => {
+  const clearBoardTasks = useCallback(async (boardId: string) => {
     dispatch({ type: 'CLEAR_BOARD_TASKS', payload: { boardId } });
-  };
+  }, []);
 
-  const addBoard = async (boardInput: Partial<Board> & { title: string }) => {
+  const addBoard = useCallback(async (boardInput: Partial<Board> & { title: string }) => {
     const created = await boardsApi.createBoard(boardInput);
     dispatch({ type: 'ADD_BOARD', payload: created });
     return created;
-  };
+  }, []);
 
-  const updateBoard = async (board: Board) => {
+  const updateBoard = useCallback(async (board: Board) => {
     const updated = await boardsApi.updateBoard(board.id, board);
     dispatch({ type: 'UPDATE_BOARD', payload: updated });
     return updated;
-  };
+  }, []);
 
-  const deleteBoard = async (boardId: string) => {
+  const deleteBoard = useCallback(async (boardId: string) => {
     await boardsApi.deleteBoard(boardId);
     dispatch({ type: 'DELETE_BOARD', payload: { boardId } });
-  };
+  }, []);
 
-  const toggleFavoriteBoard = async (boardId: string) => {
+  const toggleFavoriteBoard = useCallback(async (boardId: string) => {
     const targetBoard = state.boards.find((b) => b.id === boardId);
     const nextFavorite = targetBoard ? !targetBoard.isFavorite : true;
 
-    // Optimistic UI update
     dispatch({ type: 'TOGGLE_FAVORITE_BOARD', payload: { boardId } });
 
     try {
       await boardsApi.updateBoard(boardId, { isFavorite: nextFavorite });
     } catch {
-      // Rollback on failure
       dispatch({ type: 'TOGGLE_FAVORITE_BOARD', payload: { boardId } });
     }
-  };
+  }, [state.boards]);
 
-  const addBoardMember = async (boardId: string, email: string) => {
+  const addBoardMember = useCallback(async (boardId: string, email: string) => {
     const updatedBoard = await boardsApi.addBoardMember(boardId, email);
     dispatch({ type: 'UPDATE_BOARD', payload: updatedBoard });
-  };
+  }, []);
 
-  const removeBoardMember = async (boardId: string, memberId: string) => {
+  const removeBoardMember = useCallback(async (boardId: string, memberId: string) => {
     const updatedBoard = await boardsApi.removeBoardMember(boardId, memberId);
     dispatch({ type: 'UPDATE_BOARD', payload: updatedBoard });
-  };
+  }, []);
 
-  // Reactively re-load boards when authenticated or when auth state updates
+  // Reactively load boards when token changes
   useEffect(() => {
     if (token) {
       loadBoards();
     } else {
       dispatch({ type: 'SET_BOARDS', payload: [] });
     }
-  }, [token, user]);
+  }, [token, loadBoards]);
 
   return (
     <BoardContext.Provider
