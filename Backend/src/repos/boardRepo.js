@@ -66,8 +66,7 @@ export const boardRepo = {
     color = 'from-indigo-600 to-violet-600',
     icon = 'Kanban',
     tags = ['General'],
-    workspaceId = 'ws-1',
-    workspaceName = 'Engineering',
+    workspaceId = null,
   }) {
     const uid = String(ownerId);
     const uniqueMembers = Array.from(new Set([uid, ...members.map(String)]));
@@ -81,7 +80,6 @@ export const boardRepo = {
       icon,
       tags: Array.isArray(tags) ? tags : ['General'],
       workspaceId: String(workspaceId),
-      workspaceName,
       isFavorite: false,
       stats: { totalTasks: 0, todoCount: 0, inProgressCount: 0, doneCount: 0 },
     });

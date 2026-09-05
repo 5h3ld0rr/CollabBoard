@@ -16,7 +16,7 @@ import { Navbar, AmbientBackground } from '../components/common';
 import { WorkspaceStats } from '../components/dashboard/WorkspaceStats';
 import { BoardCard } from '../components/dashboard/BoardCard';
 import { CreateBoardModal } from '../components/dashboard/CreateBoardModal';
-import { CreateWorkspaceModal, ManageWorkspaceModal } from '../components/workspace';
+import { CreateWorkspaceModal, ManageWorkspaceModal, WorkspaceSkeleton } from '../components/workspace';
 import { useBoard } from '../context';
 import {
   getWorkspaces,
@@ -38,7 +38,7 @@ export const Dashboard: React.FC = () => {
   } = useBoard();
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null);
+  const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(true);
   const [managingWorkspace, setManagingWorkspace] = useState<Workspace | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'starred'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -57,37 +57,53 @@ export const Dashboard: React.FC = () => {
     }, 3000);
   };
 
-  // Load workspaces and boards from live API
+  // Derive active workspace directly from state without delayed useEffect redirects
+  const currentWorkspace = useMemo(() => {
+    if (workspaces.length === 0) return null;
+    if (workspaceId) {
+      const match = workspaces.find((w) => w.id === workspaceId);
+      if (match) return match;
+      return null;
+    }
+    return workspaces[0];
+  }, [workspaces, workspaceId]);
+
+  // Load workspaces and boards from live API once on mount
   useEffect(() => {
+    let isMounted = true;
     async function load() {
       loadBoards();
-      const list = await getWorkspaces();
-      setWorkspaces(list);
-      if (list.length > 0) {
-        const targetId = workspaceId || 'ws-1';
-        const found = list.find((w) => w.id === targetId) || list[0];
-        setCurrentWorkspace(found);
-        setManagingWorkspace(found);
+      try {
+        const list = await getWorkspaces();
+        if (isMounted) {
+          setWorkspaces(list);
+        }
+      } catch (err) {
+        console.warn('Failed to load workspaces:', err);
+      } finally {
+        if (isMounted) {
+          setIsLoadingWorkspaces(false);
+        }
       }
     }
     load();
-  }, [workspaceId]);
+    return () => {
+      isMounted = false;
+    };
+  }, [loadBoards]);
 
-  // Sync workspace with URL when workspaceId route param changes
+  // If workspaceId in the URL is invalid/not found, navigate to the correct primary workspace
   useEffect(() => {
-    if (workspaceId && workspaces.length > 0) {
-      const found = workspaces.find((w) => w.id === workspaceId);
-      if (found) {
-        setCurrentWorkspace(found);
-        setManagingWorkspace(found);
+    if (workspaces.length > 0 && workspaceId) {
+      const isValid = workspaces.some((w) => w.id === workspaceId);
+      if (!isValid && workspaces[0]?.id) {
+        navigate(`/workspaces/${workspaces[0].id}`, { replace: true });
       }
     }
-  }, [workspaceId, workspaces]);
+  }, [workspaces, workspaceId, navigate]);
 
   // Workspace actions
   const handleSelectWorkspace = (ws: Workspace) => {
-    setCurrentWorkspace(ws);
-    setManagingWorkspace(ws);
     navigate(`/workspaces/${ws.id}`);
     showToast(`Switched to "${ws.name}"`);
   };
@@ -96,7 +112,6 @@ export const Dashboard: React.FC = () => {
     try {
       const created = await apiCreateWorkspace(newWsData);
       setWorkspaces((prev) => [...prev, created]);
-      setCurrentWorkspace(created);
       navigate(`/workspaces/${created.id}`);
       showToast(`Created workspace "${created.name}"!`);
     } catch {
@@ -108,9 +123,6 @@ export const Dashboard: React.FC = () => {
     try {
       const updated = await apiUpdateWorkspace(updatedWs.id, updatedWs);
       setWorkspaces((prev) => prev.map((w) => (w.id === updated.id ? updated : w)));
-      if (currentWorkspace?.id === updated.id) {
-        setCurrentWorkspace(updated);
-      }
       showToast(`Updated workspace "${updated.name}"`);
     } catch {
       showToast('Failed to update workspace');
@@ -127,7 +139,6 @@ export const Dashboard: React.FC = () => {
       const remaining = workspaces.filter((w) => w.id !== deletedWorkspaceId);
       setWorkspaces(remaining);
       if (remaining.length > 0) {
-        setCurrentWorkspace(remaining[0]);
         navigate(`/workspaces/${remaining[0].id}`);
       }
       setActiveTab('all');
@@ -202,12 +213,14 @@ export const Dashboard: React.FC = () => {
         if (sortBy === 'updated') {
           return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
         }
-        if (sortBy === 'updated') {
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        }
         return 0;
       });
   }, [currentWorkspaceBoards, activeTab, searchQuery, sortBy]);
+
+  // Display skeleton loader while initial data loads or while redirecting from an invalid workspace ID
+  if (isLoadingWorkspaces || (workspaces.length > 0 && !currentWorkspace)) {
+    return <WorkspaceSkeleton />;
+  }
 
   return (
     <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
