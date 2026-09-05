@@ -3,3 +3,4 @@ export * from './Column';
 export * from './TaskModal';
 export * from './BoardMembersModal';
 export * from './BoardSettingsModal';
+export * from './ConflictModal';
