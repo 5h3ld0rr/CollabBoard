@@ -42,10 +42,6 @@ const boardSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
-    workspaceName: {
-      type: String,
-      default: '',
-    },
     color: {
       type: String,
       default: 'from-indigo-600 to-violet-600',
