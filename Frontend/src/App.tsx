@@ -7,7 +7,7 @@ import BoardView from './pages/BoardView';
 import Profile from './pages/Profile';
 import TaskDetails from './pages/TaskDetails';
 import NotFound from './pages/NotFound';
-import { ProtectedRoute, PublicRoute } from './components/common';
+import { ProtectedRoute, PublicRoute, OfflineIndicator } from './components/common';
 import { WorkspaceRedirect } from './components/workspace';
 import { BoardProvider, AuthProvider } from './context';
 
@@ -25,6 +25,7 @@ function AuthLayout() {
 function App() {
   return (
     <Router>
+      <OfflineIndicator />
       <Routes>
         {/* Public routes — no auth context, no auth/me request */}
         <Route path="/" element={<Home />} />

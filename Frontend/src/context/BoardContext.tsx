@@ -13,7 +13,9 @@ import {
   deleteCachedTask,
   deleteCachedBoard,
   clearCachedBoardTasks,
+  enqueueMutation,
 } from '../db';
+import { flushSyncQueue } from '../sync';
 import type { Board, Task, TaskStatus, User } from '../types';
 import { hasBoardsChanged, hasBoardChanged, hasTasksChanged } from '../utils';
 
@@ -54,7 +56,7 @@ export type BoardAction =
    useReducer Implementation for Task & Board Management
    ========================================================================== */
 
-export const boardReducer = (state: BoardState, action: BoardAction): BoardState => {
+const boardReducer = (state: BoardState, action: BoardAction): BoardState => {
   switch (action.type) {
     case 'SET_LOADING':
       return {
@@ -296,6 +298,13 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       dispatch({ type: 'SET_LOADING', payload: true });
     }
 
+    // Do NOT fire HTTP requests over network while offline
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      dispatch({ type: 'SET_LOADING', payload: false });
+      dispatch({ type: 'SET_SYNCING', payload: false });
+      return;
+    }
+
     // 2. Background Revalidation from API
     try {
       const serverBoards = await boardsApi.getBoards();
@@ -328,6 +337,13 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       });
     } else {
       dispatch({ type: 'SET_LOADING', payload: true });
+    }
+
+    // Do NOT fire HTTP requests over network while offline
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      dispatch({ type: 'SET_LOADING', payload: false });
+      dispatch({ type: 'SET_SYNCING', payload: false });
+      return;
     }
 
     // 2. Background Revalidation from API
@@ -370,6 +386,32 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const addTask = useCallback(async (boardId: string, taskInput: Partial<Task> & { title: string }) => {
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    if (isOffline) {
+      const localTask: Task = {
+        id: `temp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        boardId,
+        title: taskInput.title,
+        description: taskInput.description || '',
+        status: taskInput.status || 'todo',
+        priority: taskInput.priority || 'medium',
+        tags: taskInput.tags || [],
+        order: taskInput.order ?? 0,
+        dueDate: taskInput.dueDate,
+        version: 1,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      dispatch({ type: 'ADD_TASK', payload: localTask });
+      await updateCachedTask(localTask);
+      await enqueueMutation({
+        type: 'CREATE_TASK',
+        entityId: localTask.id,
+        payload: { ...taskInput, boardId },
+      });
+      return localTask;
+    }
+
     const created = await tasksApi.createTask(boardId, taskInput);
     dispatch({ type: 'ADD_TASK', payload: created });
     await updateCachedTask(created);
@@ -377,16 +419,74 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const updateTask = useCallback(async (task: Task) => {
-    const updated = await tasksApi.updateTask(task.id, task);
-    dispatch({ type: 'UPDATE_TASK', payload: updated });
-    await updateCachedTask(updated);
-    return updated;
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    if (isOffline) {
+      const updatedLocalTask: Task = {
+        ...task,
+        updatedAt: new Date().toISOString(),
+      };
+      dispatch({ type: 'UPDATE_TASK', payload: updatedLocalTask });
+      await updateCachedTask(updatedLocalTask);
+      await enqueueMutation({
+        type: 'UPDATE_TASK',
+        entityId: task.id,
+        payload: updatedLocalTask,
+      });
+      return updatedLocalTask;
+    }
+
+    try {
+      const updated = await tasksApi.updateTask(task.id, task);
+      dispatch({ type: 'UPDATE_TASK', payload: updated });
+      await updateCachedTask(updated);
+      return updated;
+    } catch (err: any) {
+      // If network suddenly dropped mid-request
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        const fallbackTask: Task = {
+          ...task,
+          updatedAt: new Date().toISOString(),
+        };
+        dispatch({ type: 'UPDATE_TASK', payload: fallbackTask });
+        await updateCachedTask(fallbackTask);
+        await enqueueMutation({
+          type: 'UPDATE_TASK',
+          entityId: task.id,
+          payload: fallbackTask,
+        });
+        return fallbackTask;
+      }
+      throw err;
+    }
   }, []);
 
   const deleteTask = useCallback(async (taskId: string) => {
-    await tasksApi.deleteTask(taskId);
     dispatch({ type: 'DELETE_TASK', payload: { taskId } });
     await deleteCachedTask(taskId);
+
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    if (isOffline) {
+      await enqueueMutation({
+        type: 'DELETE_TASK',
+        entityId: taskId,
+        payload: {},
+      });
+      return;
+    }
+
+    try {
+      await tasksApi.deleteTask(taskId);
+    } catch (err: any) {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        await enqueueMutation({
+          type: 'DELETE_TASK',
+          entityId: taskId,
+          payload: {},
+        });
+        return;
+      }
+      throw err;
+    }
   }, []);
 
   const moveTaskStatus = useCallback(async (taskId: string, newStatus: TaskStatus) => {
@@ -400,11 +500,29 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       });
     }
 
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    if (isOffline) {
+      await enqueueMutation({
+        type: 'MOVE_TASK_STATUS',
+        entityId: taskId,
+        payload: { status: newStatus },
+      });
+      return;
+    }
+
     try {
       const updated = await tasksApi.moveTaskStatus(taskId, newStatus);
       dispatch({ type: 'UPDATE_TASK', payload: updated });
       await updateCachedTask(updated);
-    } catch (err) {
+    } catch (err: any) {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        await enqueueMutation({
+          type: 'MOVE_TASK_STATUS',
+          entityId: taskId,
+          payload: { status: newStatus },
+        });
+        return;
+      }
       if (state.activeBoard) {
         await loadBoard(state.activeBoard.id);
       }
@@ -418,6 +536,38 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const addBoard = useCallback(async (boardInput: Partial<Board> & { title: string }) => {
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    if (isOffline) {
+      const localBoard: Board = {
+        id: `temp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        title: boardInput.title,
+        description: boardInput.description || '',
+        workspaceId: boardInput.workspaceId || '',
+        workspaceName: boardInput.workspaceName || '',
+        color: boardInput.color || '#6366f1',
+        icon: boardInput.icon || 'Layout',
+        isFavorite: boardInput.isFavorite || false,
+        members: boardInput.members || [],
+        tags: boardInput.tags || [],
+        stats: {
+          totalTasks: 0,
+          todoCount: 0,
+          inProgressCount: 0,
+          doneCount: 0,
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      dispatch({ type: 'ADD_BOARD', payload: localBoard });
+      await saveBoardToCache(localBoard);
+      await enqueueMutation({
+        type: 'CREATE_BOARD',
+        entityId: localBoard.id,
+        payload: boardInput,
+      });
+      return localBoard;
+    }
+
     const created = await boardsApi.createBoard(boardInput);
     dispatch({ type: 'ADD_BOARD', payload: created });
     await saveBoardToCache(created);
@@ -425,6 +575,18 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const updateBoard = useCallback(async (board: Board) => {
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    if (isOffline) {
+      dispatch({ type: 'UPDATE_BOARD', payload: board });
+      await saveBoardToCache(board);
+      await enqueueMutation({
+        type: 'UPDATE_BOARD',
+        entityId: board.id,
+        payload: board,
+      });
+      return board;
+    }
+
     const updated = await boardsApi.updateBoard(board.id, board);
     dispatch({ type: 'UPDATE_BOARD', payload: updated });
     await saveBoardToCache(updated);
@@ -432,9 +594,20 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const deleteBoard = useCallback(async (boardId: string) => {
-    await boardsApi.deleteBoard(boardId);
     dispatch({ type: 'DELETE_BOARD', payload: { boardId } });
     await deleteCachedBoard(boardId);
+
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    if (isOffline) {
+      await enqueueMutation({
+        type: 'DELETE_BOARD',
+        entityId: boardId,
+        payload: {},
+      });
+      return;
+    }
+
+    await boardsApi.deleteBoard(boardId);
   }, []);
 
   const toggleFavoriteBoard = useCallback(async (boardId: string) => {
@@ -442,6 +615,19 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const nextFavorite = targetBoard ? !targetBoard.isFavorite : true;
 
     dispatch({ type: 'TOGGLE_FAVORITE_BOARD', payload: { boardId } });
+
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    if (isOffline) {
+      if (targetBoard) {
+        await saveBoardToCache({ ...targetBoard, isFavorite: nextFavorite });
+      }
+      await enqueueMutation({
+        type: 'UPDATE_BOARD',
+        entityId: boardId,
+        payload: { isFavorite: nextFavorite },
+      });
+      return;
+    }
 
     try {
       const updated = await boardsApi.updateBoard(boardId, { isFavorite: nextFavorite });
@@ -473,6 +659,35 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       dispatch({ type: 'SET_BOARDS', payload: [] });
     }
   }, [token, loadBoards]);
+
+  // Auto-sync active board and boards list when connection is restored
+  useEffect(() => {
+    const handleOnline = async () => {
+      dispatch({ type: 'SET_OFFLINE', payload: false });
+      try {
+        const { processed } = await flushSyncQueue();
+        if (processed > 0) {
+          console.log(`[BoardContext] Flushed ${processed} offline mutations`);
+        }
+      } catch (err) {
+        console.warn('[BoardContext] flushSyncQueue failed on reconnect:', err);
+      }
+      loadBoards(true);
+      if (state.activeBoard) {
+        loadBoard(state.activeBoard.id, true);
+      }
+    };
+    const handleOffline = () => {
+      dispatch({ type: 'SET_OFFLINE', payload: true });
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [loadBoards, loadBoard, state.activeBoard]);
 
   return (
     <BoardContext.Provider
@@ -512,5 +727,3 @@ export const useBoard = (): BoardContextValue => {
   }
   return context;
 };
-
-export default BoardContext;

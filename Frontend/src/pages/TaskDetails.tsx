@@ -20,7 +20,7 @@ import {
   Loader2,
   User as UserIcon,
 } from 'lucide-react';
-import { Navbar, AmbientBackground, OfflineIndicator } from '../components/common';
+import { Navbar, AmbientBackground } from '../components/common';
 import { TaskModal, ConflictModal } from '../components/board';
 import {
   getTaskById,
@@ -35,8 +35,11 @@ import {
   getCachedTask,
   getCachedBoard,
   updateCachedTask,
+  deleteCachedTask,
   saveBoardToCache,
+  enqueueMutation,
 } from '../db';
+import { flushSyncQueue } from '../sync';
 import { useAuth } from '../context/AuthContext';
 import type { Task, Board, TaskStatus, TaskPriority, User, TaskComment } from '../types';
 import { formatRelativeTime, getInitials, hasTaskChanged, hasBoardChanged } from '../utils';
@@ -148,7 +151,12 @@ export const TaskDetails: React.FC = () => {
         setIsLoading(true);
       }
 
-      // 2. Background Revalidation from API
+      // 2. Background Revalidation from API (Skip if offline)
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        if (isMounted) setIsLoading(false);
+        return;
+      }
+
       try {
         const foundTask = await getTaskById(id);
         if (!isMounted) return;
@@ -194,6 +202,36 @@ export const TaskDetails: React.FC = () => {
     };
   }, [id]);
 
+  // Auto-sync active task and flush queue when connection is restored
+  useEffect(() => {
+    const handleOnline = async () => {
+      try {
+        const { processed } = await flushSyncQueue();
+        if (processed > 0) {
+          console.log(`[TaskDetails] Flushed ${processed} offline mutations`);
+        }
+      } catch (err) {
+        console.warn('[TaskDetails] Flush sync queue failed on reconnect:', err);
+      }
+      if (id) {
+        try {
+          const found = await getTaskById(id);
+          if (found) {
+            setTask(found);
+            await updateCachedTask(found);
+          }
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [id]);
+
   const priorityInfo = task ? PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium : PRIORITY_CONFIG.medium;
 
   const isDone = task?.status === 'done';
@@ -205,6 +243,24 @@ export const TaskDetails: React.FC = () => {
 
   const handleStatusChange = async (newStatus: TaskStatus) => {
     if (!task) return;
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    if (isOffline) {
+      const updated: Task = {
+        ...task,
+        status: newStatus,
+        updatedAt: new Date().toISOString(),
+      };
+      setTask(updated);
+      await updateCachedTask(updated);
+      await enqueueMutation({
+        type: 'MOVE_TASK_STATUS',
+        entityId: task.id,
+        payload: { status: newStatus },
+      });
+      showToast(`Status updated to ${newStatus === 'in-progress' ? 'In Progress' : newStatus === 'done' ? 'Completed' : 'To Do'} (saved locally, will sync when online)`);
+      return;
+    }
+
     try {
       const updated = await apiUpdateTask(task.id, { status: newStatus, version: task.version });
       setTask(updated);
@@ -223,6 +279,24 @@ export const TaskDetails: React.FC = () => {
   };
 
   const handleSaveTask = async (savedTask: Task) => {
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    if (isOffline) {
+      const updated: Task = {
+        ...savedTask,
+        updatedAt: new Date().toISOString(),
+      };
+      setTask(updated);
+      await updateCachedTask(updated);
+      await enqueueMutation({
+        type: 'UPDATE_TASK',
+        entityId: savedTask.id,
+        payload: updated,
+      });
+      setIsEditModalOpen(false);
+      showToast('Task updated locally (will sync when online)');
+      return;
+    }
+
     try {
       const updated = await apiUpdateTask(savedTask.id, savedTask);
       setTask(updated);
@@ -271,8 +345,20 @@ export const TaskDetails: React.FC = () => {
 
   const handleDeleteTask = async () => {
     if (!task) return;
-    await apiDeleteTask(task.id);
-    showToast('Task deleted successfully');
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    await deleteCachedTask(task.id);
+
+    if (isOffline) {
+      await enqueueMutation({
+        type: 'DELETE_TASK',
+        entityId: task.id,
+        payload: {},
+      });
+    } else {
+      await apiDeleteTask(task.id);
+    }
+
+    showToast(isOffline ? 'Task deleted locally (will sync when online)' : 'Task deleted successfully');
     setIsDeleteModalOpen(false);
     if (board) {
       navigate(`/boards/${board.id}`);
@@ -284,6 +370,11 @@ export const TaskDetails: React.FC = () => {
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!commentInput.trim() || !task) return;
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      showToast('Cannot post comments while offline');
+      return;
+    }
 
     setIsSubmittingComment(true);
     try {
@@ -430,7 +521,6 @@ export const TaskDetails: React.FC = () => {
 
               {/* Action Buttons */}
               <div className="flex items-center space-x-2.5">
-                <OfflineIndicator />
                 <button
                   onClick={handleCopyLink}
                   className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 text-xs font-medium transition cursor-pointer"

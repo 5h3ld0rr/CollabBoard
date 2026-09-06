@@ -22,7 +22,7 @@ import {
   Trash2,
   FileQuestion,
 } from "lucide-react";
-import { Navbar, AmbientBackground, OfflineIndicator } from "../components/common";
+import { Navbar, AmbientBackground } from "../components/common";
 import { Column, TaskModal, BoardSettingsModal, ConflictModal } from "../components/board";
 import { useBoard } from "../context";
 import * as tasksApi from "../api/tasks";
@@ -346,15 +346,17 @@ export const BoardView: React.FC = () => {
 
   const handleConfirmDeleteTask = () => {
     if (!taskToDelete) return;
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
     deleteTask(taskToDelete.id);
-    showToast(`Task "${taskToDelete.title}" deleted`);
+    showToast(`Task "${taskToDelete.title}" deleted${isOffline ? ' locally (will sync when online)' : ''}`);
     setTaskToDelete(null);
   };
 
   const handleMoveStatus = async (taskId: string, newStatus: TaskStatus) => {
     try {
       await moveTaskStatus(taskId, newStatus);
-      showToast(`Task moved to ${newStatus.replace("-", " ")}`);
+      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+      showToast(`Task moved to ${newStatus.replace("-", " ")}${isOffline ? ' (saved locally, will sync when online)' : ''}`);
     } catch (err: any) {
       if (err?.status === 409 || err?.code === 'CONFLICT') {
         showToast("⚠️ Task modified by someone else — reloaded latest board state");
@@ -369,11 +371,12 @@ export const BoardView: React.FC = () => {
   };
 
   const handleSaveTask = async (savedTask: Task) => {
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
     const exists = tasks.some((t) => t.id === savedTask.id);
     if (exists) {
       try {
         await updateTask(savedTask);
-        showToast("Task updated successfully");
+        showToast(isOffline ? "Task updated locally (will sync when online)" : "Task updated successfully");
       } catch (err: any) {
         if (err?.status === 409 || err?.code === 'CONFLICT') {
           // Handle 409 OCC Conflict State
@@ -396,7 +399,7 @@ export const BoardView: React.FC = () => {
     } else {
       if (boardData) {
         await addTask(boardData.id, savedTask);
-        showToast("New task added to board");
+        showToast(isOffline ? "New task added locally (will sync when online)" : "New task added to board");
       }
     }
   };
@@ -560,9 +563,6 @@ export const BoardView: React.FC = () => {
 
               {/* Right Action Tools */}
               <div className="flex items-center space-x-3">
-                {/* Offline / IDB Indicator */}
-                <OfflineIndicator onSync={() => boardId && loadBoard(boardId, true)} />
-
                 {/* Board Settings Action Button */}
                 <button
                   onClick={() => setIsSettingsModalOpen(true)}

@@ -5,17 +5,36 @@ import type { Board, Task, User } from '../types';
 // Database instances — lazy-initialized to avoid opening IndexedDB prematurely
 // ---------------------------------------------------------------------------
 
+export type MutationType =
+  | 'UPDATE_TASK'
+  | 'CREATE_TASK'
+  | 'DELETE_TASK'
+  | 'MOVE_TASK_STATUS'
+  | 'CREATE_BOARD'
+  | 'UPDATE_BOARD'
+  | 'DELETE_BOARD';
+
+export interface QueuedMutation {
+  id: string;
+  type: MutationType;
+  entityId: string;
+  payload: any;
+  createdAt: number;
+}
+
 let _boardsDB:  PouchDB.Database<Board> | null = null;
 let _tasksDB:   PouchDB.Database<Task> | null = null;
 let _metaDB:    PouchDB.Database<{ key: string; timestamp: number }> | null = null;
 let _userDB:    PouchDB.Database<User & { id: string }> | null = null;
 let _profileDB: PouchDB.Database<{ id: string; details: any }> | null = null;
+let _queueDB:   PouchDB.Database<QueuedMutation> | null = null;
 
 function getBoardsDB()  { return _boardsDB  ??= new PouchDB<Board>('collabboard_boards'); }
 function getTasksDB()   { return _tasksDB   ??= new PouchDB<Task>('collabboard_tasks'); }
 function getMetaDB()    { return _metaDB    ??= new PouchDB<{ key: string; timestamp: number }>('collabboard_meta'); }
 function getUserDB()    { return _userDB    ??= new PouchDB<User & { id: string }>('collabboard_user'); }
 function getProfileDB() { return _profileDB ??= new PouchDB<{ id: string; details: any }>('collabboard_profile'); }
+function getQueueDB()   { return _queueDB   ??= new PouchDB<QueuedMutation>('collabboard_mutation_queue'); }
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -229,6 +248,66 @@ export async function getLastSyncTime(key: string): Promise<number | null> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Offline Mutation Outbox Queue Operations
+// ---------------------------------------------------------------------------
+
+export async function enqueueMutation(
+  item: Omit<QueuedMutation, 'id' | 'createdAt'>
+): Promise<QueuedMutation> {
+  const mutation: QueuedMutation = {
+    id: `mut_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    type: item.type,
+    entityId: item.entityId,
+    payload: item.payload,
+    createdAt: Date.now(),
+  };
+  try {
+    await upsert(getQueueDB() as unknown as PouchDB.Database<QueuedMutation & object>, mutation);
+  } catch (err) {
+    console.warn('[PouchDB] Failed to enqueue mutation:', err);
+  }
+  return mutation;
+}
+
+export async function getQueuedMutations(): Promise<QueuedMutation[]> {
+  try {
+    const result = await getQueueDB().allDocs({ include_docs: true });
+    const all = result.rows
+      .filter((row) => row.doc)
+      .map((row) => fromDoc(row.doc!));
+    return all.sort((a, b) => a.createdAt - b.createdAt);
+  } catch (err) {
+    console.warn('[PouchDB] Failed to get queued mutations:', err);
+    return [];
+  }
+}
+
+export async function dequeueMutation(mutationId: string): Promise<void> {
+  try {
+    const doc = await getQueueDB().get(mutationId);
+    await getQueueDB().remove(doc);
+  } catch (err: unknown) {
+    if ((err as PouchDB.Core.Error).status !== 404) {
+      console.warn('[PouchDB] Failed to dequeue mutation ' + mutationId + ':', err);
+    }
+  }
+}
+
+export async function clearQueuedMutations(): Promise<void> {
+  try {
+    const result = await getQueueDB().allDocs({ include_docs: true });
+    const deletes = result.rows
+      .filter((r) => r.doc)
+      .map((r) => ({ ...r.doc!, _deleted: true as const }));
+    if (deletes.length > 0) {
+      await getQueueDB().bulkDocs(deletes);
+    }
+  } catch (err) {
+    console.warn('[PouchDB] Failed to clear queued mutations:', err);
+  }
+}
+
 export async function clearAllLocalCache(): Promise<void> {
   try {
     if (_boardsDB)  { await _boardsDB.destroy();  _boardsDB  = null; }
@@ -236,6 +315,7 @@ export async function clearAllLocalCache(): Promise<void> {
     if (_metaDB)    { await _metaDB.destroy();    _metaDB    = null; }
     if (_userDB)    { await _userDB.destroy();    _userDB    = null; }
     if (_profileDB) { await _profileDB.destroy(); _profileDB = null; }
+    if (_queueDB)   { await _queueDB.destroy();   _queueDB   = null; }
   } catch (err) {
     console.warn('[PouchDB] Failed to clear all cache:', err);
   }
