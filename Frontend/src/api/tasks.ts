@@ -92,7 +92,7 @@ export async function updateTask(
 }
 
 /**
- * Update task status (e.g. todo -> doing -> done)
+ * Update task status (e.g. todo -> in-progress -> done)
  */
 export async function moveTaskStatus(
   taskId: string,

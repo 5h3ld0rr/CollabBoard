@@ -3,15 +3,15 @@ import { useAuth } from './AuthContext';
 import * as tasksApi from '../api/tasks';
 import * as boardsApi from '../api/boards';
 import {
-  getCachedBoards,
   saveBoardsToCache,
-  getCachedBoard,
   saveBoardToCache,
-  deleteCachedBoard,
-  getCachedTasks,
+  getCachedBoards,
+  getCachedBoard,
   saveTasksToCache,
+  getCachedTasks,
   updateCachedTask,
   deleteCachedTask,
+  deleteCachedBoard,
   clearCachedBoardTasks,
 } from '../db';
 import type { Board, Task, TaskStatus, User } from '../types';
@@ -297,6 +297,10 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     } catch (err) {
       console.warn('[LocalFirst] Network loadBoards failed, falling back to IDB cache:', err);
+      const cached = await getCachedBoards();
+      if (cached && cached.length > 0) {
+        dispatch({ type: 'SET_BOARDS', payload: cached });
+      }
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
       dispatch({ type: 'SET_SYNCING', payload: false });
@@ -321,7 +325,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           saveBoardToCache(board),
           saveTasksToCache(boardTasks, boardId),
         ]);
-      } else if (!hasCached) {
+      } else {
         dispatch({
           type: 'SET_ACTIVE_BOARD',
           payload: { board: null, tasks: [] },
@@ -329,7 +333,16 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     } catch (err) {
       console.warn(`[LocalFirst] Network loadBoard for ${boardId} failed:`, err);
-      if (!hasCached) {
+      const [cachedBoard, cachedTasks] = await Promise.all([
+        getCachedBoard(boardId),
+        getCachedTasks(boardId),
+      ]);
+      if (cachedBoard) {
+        dispatch({
+          type: 'SET_ACTIVE_BOARD',
+          payload: { board: cachedBoard, tasks: cachedTasks || [] },
+        });
+      } else {
         dispatch({
           type: 'SET_ACTIVE_BOARD',
           payload: { board: null, tasks: [] },
@@ -362,6 +375,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const deleteTask = useCallback(async (taskId: string) => {
     await tasksApi.deleteTask(taskId);
     dispatch({ type: 'DELETE_TASK', payload: { taskId } });
+    await deleteCachedTask(taskId);
   }, []);
 
   const moveTaskStatus = useCallback(async (taskId: string, newStatus: TaskStatus) => {
@@ -381,14 +395,15 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       await updateCachedTask(updated);
     } catch (err) {
       if (state.activeBoard) {
-        await loadBoard(state.activeBoard.id, true);
+        await loadBoard(state.activeBoard.id);
       }
       throw err;
     }
-  }, [state.activeBoard, loadBoard]);
+  }, [state.tasks, state.activeBoard, loadBoard]);
 
   const clearBoardTasks = useCallback(async (boardId: string) => {
     dispatch({ type: 'CLEAR_BOARD_TASKS', payload: { boardId } });
+    await clearCachedBoardTasks(boardId);
   }, []);
 
   const addBoard = useCallback(async (boardInput: Partial<Board> & { title: string }) => {
@@ -408,6 +423,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const deleteBoard = useCallback(async (boardId: string) => {
     await boardsApi.deleteBoard(boardId);
     dispatch({ type: 'DELETE_BOARD', payload: { boardId } });
+    await deleteCachedBoard(boardId);
   }, []);
 
   const toggleFavoriteBoard = useCallback(async (boardId: string) => {
@@ -433,6 +449,10 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const updatedBoard = await boardsApi.removeBoardMember(boardId, memberId);
     dispatch({ type: 'UPDATE_BOARD', payload: updatedBoard });
   }, []);
+
+  const syncLocalCache = useCallback(async () => {
+    await loadBoards();
+  }, [loadBoards]);
 
   // Reactively load boards when token changes
   useEffect(() => {

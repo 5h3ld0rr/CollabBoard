@@ -1,21 +1,40 @@
-﻿import PouchDB from 'pouchdb-browser';
-import type { Board, Task } from '../types';
+import PouchDB from 'pouchdb-browser';
+import type { Board, Task, User } from '../types';
 
 // ---------------------------------------------------------------------------
-// Database instances  (one per logical "store" for clean separation)
+// Database instances — lazy-initialized to avoid opening IndexedDB prematurely
 // ---------------------------------------------------------------------------
 
-const boardsDB = new PouchDB<Board>('collabboard_boards');
-const tasksDB  = new PouchDB<Task>('collabboard_tasks');
-const metaDB   = new PouchDB<{ key: string; timestamp: number }>('collabboard_meta');
+let _boardsDB:  PouchDB.Database<Board> | null = null;
+let _tasksDB:   PouchDB.Database<Task> | null = null;
+let _metaDB:    PouchDB.Database<{ key: string; timestamp: number }> | null = null;
+let _userDB:    PouchDB.Database<User & { id: string }> | null = null;
+let _profileDB: PouchDB.Database<{ id: string; details: any }> | null = null;
+
+function getBoardsDB()  { return _boardsDB  ??= new PouchDB<Board>('collabboard_boards'); }
+function getTasksDB()   { return _tasksDB   ??= new PouchDB<Task>('collabboard_tasks'); }
+function getMetaDB()    { return _metaDB    ??= new PouchDB<{ key: string; timestamp: number }>('collabboard_meta'); }
+function getUserDB()    { return _userDB    ??= new PouchDB<User & { id: string }>('collabboard_user'); }
+function getProfileDB() { return _profileDB ??= new PouchDB<{ id: string; details: any }>('collabboard_profile'); }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Map our domain id → PouchDB _id on write */
+/**
+ * Map our domain id → PouchDB _id on write.
+ * Strips any Mongoose / Mongo internal keys starting with '_' (such as __v)
+ * which CouchDB/PouchDB strictly disallows as reserved document members.
+ */
 function toDoc<T extends { id: string }>(doc: T): T & PouchDB.Core.IdMeta {
-  return { ...doc, _id: doc.id };
+  const clean: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(doc as Record<string, unknown>)) {
+    if (!key.startsWith('_')) {
+      clean[key] = value;
+    }
+  }
+  clean._id = doc.id;
+  return clean as unknown as T & PouchDB.Core.IdMeta;
 }
 
 /** Strip PouchDB internals from a retrieved document */
@@ -52,7 +71,7 @@ async function upsert<T extends { id: string }>(
 
 export async function getCachedBoards(): Promise<Board[]> {
   try {
-    const result = await boardsDB.allDocs({ include_docs: true });
+    const result = await getBoardsDB().allDocs({ include_docs: true });
     return result.rows
       .filter(row => row.doc)
       .map(row => fromDoc(row.doc!));
@@ -64,7 +83,7 @@ export async function getCachedBoards(): Promise<Board[]> {
 
 export async function getCachedBoard(boardId: string): Promise<Board | null> {
   try {
-    const doc = await boardsDB.get(boardId);
+    const doc = await getBoardsDB().get(boardId);
     return fromDoc(doc);
   } catch (err: unknown) {
     if ((err as PouchDB.Core.Error).status === 404) return null;
@@ -76,7 +95,7 @@ export async function getCachedBoard(boardId: string): Promise<Board | null> {
 export async function saveBoardsToCache(boards: Board[]): Promise<void> {
   if (!Array.isArray(boards) || boards.length === 0) return;
   try {
-    await Promise.all(boards.filter(b => b?.id).map(b => upsert(boardsDB, b)));
+    await Promise.all(boards.filter(b => b?.id).map(b => upsert(getBoardsDB(), b)));
   } catch (err) {
     console.warn('[PouchDB] Failed to save boards to cache:', err);
   }
@@ -85,7 +104,7 @@ export async function saveBoardsToCache(boards: Board[]): Promise<void> {
 export async function saveBoardToCache(board: Board): Promise<void> {
   if (!board?.id) return;
   try {
-    await upsert(boardsDB, board);
+    await upsert(getBoardsDB(), board);
   } catch (err) {
     console.warn('[PouchDB] Failed to save board ' + board.id + ' to cache:', err);
   }
@@ -94,19 +113,19 @@ export async function saveBoardToCache(board: Board): Promise<void> {
 export async function deleteCachedBoard(boardId: string): Promise<void> {
   try {
     try {
-      const doc = await boardsDB.get(boardId);
-      await boardsDB.remove(doc);
+      const doc = await getBoardsDB().get(boardId);
+      await getBoardsDB().remove(doc);
     } catch (err: unknown) {
       if ((err as PouchDB.Core.Error).status !== 404) throw err;
     }
 
-    const result = await tasksDB.allDocs({ include_docs: true });
+    const result = await getTasksDB().allDocs({ include_docs: true });
     const boardTasks = result.rows
       .filter(row => row.doc && (row.doc as unknown as Task).boardId === boardId)
       .map(row => ({ ...row.doc!, _deleted: true as const }));
 
     if (boardTasks.length > 0) {
-      await tasksDB.bulkDocs(boardTasks);
+      await getTasksDB().bulkDocs(boardTasks);
     }
   } catch (err) {
     console.warn('[PouchDB] Failed to delete board ' + boardId + ' from cache:', err);
@@ -119,7 +138,7 @@ export async function deleteCachedBoard(boardId: string): Promise<void> {
 
 export async function getCachedTasks(boardId?: string): Promise<Task[]> {
   try {
-    const result = await tasksDB.allDocs({ include_docs: true });
+    const result = await getTasksDB().allDocs({ include_docs: true });
     const all = result.rows
       .filter(row => row.doc)
       .map(row => fromDoc(row.doc!));
@@ -132,7 +151,7 @@ export async function getCachedTasks(boardId?: string): Promise<Task[]> {
 
 export async function getCachedTask(taskId: string): Promise<Task | null> {
   try {
-    const doc = await tasksDB.get(taskId);
+    const doc = await getTasksDB().get(taskId);
     return fromDoc(doc);
   } catch (err: unknown) {
     if ((err as PouchDB.Core.Error).status === 404) return null;
@@ -147,7 +166,7 @@ export async function saveTasksToCache(tasks: Task[], clearBoardId?: string): Pr
     if (clearBoardId) {
       await clearCachedBoardTasks(clearBoardId);
     }
-    await Promise.all(tasks.filter(t => t?.id).map(t => upsert(tasksDB, t)));
+    await Promise.all(tasks.filter(t => t?.id).map(t => upsert(getTasksDB(), t)));
   } catch (err) {
     console.warn('[PouchDB] Failed to save tasks to cache:', err);
   }
@@ -156,7 +175,7 @@ export async function saveTasksToCache(tasks: Task[], clearBoardId?: string): Pr
 export async function updateCachedTask(task: Task): Promise<void> {
   if (!task?.id) return;
   try {
-    await upsert(tasksDB, task);
+    await upsert(getTasksDB(), task);
   } catch (err) {
     console.warn('[PouchDB] Failed to update cached task ' + task.id + ':', err);
   }
@@ -164,8 +183,8 @@ export async function updateCachedTask(task: Task): Promise<void> {
 
 export async function deleteCachedTask(taskId: string): Promise<void> {
   try {
-    const doc = await tasksDB.get(taskId);
-    await tasksDB.remove(doc);
+    const doc = await getTasksDB().get(taskId);
+    await getTasksDB().remove(doc);
   } catch (err: unknown) {
     if ((err as PouchDB.Core.Error).status === 404) return;
     console.warn('[PouchDB] Failed to delete cached task ' + taskId + ':', err);
@@ -174,13 +193,13 @@ export async function deleteCachedTask(taskId: string): Promise<void> {
 
 export async function clearCachedBoardTasks(boardId: string): Promise<void> {
   try {
-    const result = await tasksDB.allDocs({ include_docs: true });
+    const result = await getTasksDB().allDocs({ include_docs: true });
     const toDelete = result.rows
       .filter(row => row.doc && (row.doc as unknown as Task).boardId === boardId)
       .map(row => ({ ...row.doc!, _deleted: true as const }));
 
     if (toDelete.length > 0) {
-      await tasksDB.bulkDocs(toDelete);
+      await getTasksDB().bulkDocs(toDelete);
     }
   } catch (err) {
     console.warn('[PouchDB] Failed to clear tasks for board ' + boardId + ':', err);
@@ -193,7 +212,7 @@ export async function clearCachedBoardTasks(boardId: string): Promise<void> {
 
 export async function setLastSyncTime(key: string, timestamp: number = Date.now()): Promise<void> {
   try {
-    const metaTyped = metaDB as unknown as PouchDB.Database<{ id: string; key: string; timestamp: number } & object>;
+    const metaTyped = getMetaDB() as unknown as PouchDB.Database<{ id: string; key: string; timestamp: number } & object>;
     await upsert(metaTyped, { id: key, key, timestamp });
   } catch (err) {
     console.warn('[PouchDB] Failed to set last sync for ' + key + ':', err);
@@ -202,7 +221,7 @@ export async function setLastSyncTime(key: string, timestamp: number = Date.now(
 
 export async function getLastSyncTime(key: string): Promise<number | null> {
   try {
-    const doc = await metaDB.get(key);
+    const doc = await getMetaDB().get(key);
     return (doc as unknown as { timestamp: number }).timestamp ?? null;
   } catch (err: unknown) {
     if ((err as PouchDB.Core.Error).status === 404) return null;
@@ -212,17 +231,65 @@ export async function getLastSyncTime(key: string): Promise<number | null> {
 
 export async function clearAllLocalCache(): Promise<void> {
   try {
-    await boardsDB.destroy();
-    await tasksDB.destroy();
-    await metaDB.destroy();
-    // Re-open so the module stays usable after clearing
-    const nb = new PouchDB<Board>('collabboard_boards');
-    const nt = new PouchDB<Task>('collabboard_tasks');
-    const nm = new PouchDB<{ key: string; timestamp: number }>('collabboard_meta');
-    Object.assign(boardsDB, nb);
-    Object.assign(tasksDB, nt);
-    Object.assign(metaDB, nm);
+    if (_boardsDB)  { await _boardsDB.destroy();  _boardsDB  = null; }
+    if (_tasksDB)   { await _tasksDB.destroy();   _tasksDB   = null; }
+    if (_metaDB)    { await _metaDB.destroy();    _metaDB    = null; }
+    if (_userDB)    { await _userDB.destroy();    _userDB    = null; }
+    if (_profileDB) { await _profileDB.destroy(); _profileDB = null; }
   } catch (err) {
     console.warn('[PouchDB] Failed to clear all cache:', err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// User & Profile Cache Operations
+// ---------------------------------------------------------------------------
+
+export async function saveCachedUser(user: User): Promise<void> {
+  try {
+    await upsert(getUserDB() as unknown as PouchDB.Database<User & { id: string } & object>, {
+      ...user,
+      id: 'current_user',
+    });
+  } catch (err) {
+    console.warn('[PouchDB] Failed to cache user:', err);
+  }
+}
+
+export async function getCachedUser(): Promise<User | null> {
+  try {
+    const doc = await getUserDB().get('current_user');
+    return fromDoc(doc as unknown as PouchDB.Core.ExistingDocument<User & { id: string } & object>);
+  } catch {
+    return null;
+  }
+}
+
+export async function clearCachedUser(): Promise<void> {
+  try {
+    const doc = await getUserDB().get('current_user');
+    await getUserDB().remove(doc);
+  } catch {
+    // Ignore if doesn't exist
+  }
+}
+
+export async function saveCachedProfileDetails(details: any): Promise<void> {
+  try {
+    await upsert(getProfileDB() as unknown as PouchDB.Database<{ id: string; details: any } & object>, {
+      id: 'profile_details',
+      details,
+    });
+  } catch (err) {
+    console.warn('[PouchDB] Failed to cache profile details:', err);
+  }
+}
+
+export async function getCachedProfileDetails(): Promise<any | null> {
+  try {
+    const doc = await getProfileDB().get('profile_details');
+    return (doc as any).details ?? null;
+  } catch {
+    return null;
   }
 }
