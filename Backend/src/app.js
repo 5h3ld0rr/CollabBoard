@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import { config } from './config.js';
 import { requestId } from './middleware/requestId.js';
 import { requestLogger } from './middleware/requestLogger.js';
@@ -24,6 +25,7 @@ app.use(
   })
 );
 app.use(express.json({ limit: '100kb' }));
+app.use(cookieParser());
 app.use(requestId);
 app.use(requestLogger);
 

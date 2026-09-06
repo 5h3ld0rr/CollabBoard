@@ -4,9 +4,10 @@ import { Board } from '../models/Board.js';
 function formatBoard(doc) {
   if (!doc) return null;
   const obj = typeof doc.toObject === 'function' ? doc.toObject({ virtuals: true }) : { ...doc };
+  const { _id, __v, ...rest } = obj;
   return {
-    ...obj,
-    id: String(obj.id || obj._id),
+    ...rest,
+    id: String(obj.id || _id),
     workspaceId: String(obj.workspaceId),
     ownerId: String(obj.ownerId),
     members: Array.isArray(obj.members) ? obj.members.map(String) : [],

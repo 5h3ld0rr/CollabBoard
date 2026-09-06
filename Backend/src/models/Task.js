@@ -30,7 +30,7 @@ const taskSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: {
-        values: ['todo', 'doing', 'in-progress', 'done'],
+        values: ['todo', 'in-progress', 'done'],
         message: '{VALUE} is not a valid task status',
       },
       default: 'todo',
@@ -41,7 +41,7 @@ const taskSchema = new mongoose.Schema(
         values: ['low', 'normal', 'medium', 'high', 'urgent'],
         message: '{VALUE} is not a valid task priority',
       },
-      default: 'normal',
+      default: 'medium',
     },
     assignee: {
       type: String,

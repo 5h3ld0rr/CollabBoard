@@ -12,7 +12,7 @@ export async function enrichBoard(board) {
   const boardTasks = await taskRepo.findByBoardId(board.id);
   const totalTasks = boardTasks.length;
   const todoCount = boardTasks.filter((t) => t.status === 'todo').length;
-  const inProgressCount = boardTasks.filter((t) => t.status === 'in-progress' || t.status === 'doing').length;
+  const inProgressCount = boardTasks.filter((t) => t.status === 'in-progress').length;
   const doneCount = boardTasks.filter((t) => t.status === 'done').length;
 
   let workspaceName = '';

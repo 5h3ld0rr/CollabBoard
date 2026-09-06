@@ -12,10 +12,9 @@ dns.setServers(['8.8.8.8', '1.1.1.1']);
 export async function connectDb() {
   mongoose.set('strictQuery', true);
   try {
-    await mongoose.connect(config.mongoUri, {
-      serverSelectionTimeoutMS: 15000,
-    });
-    console.log('✅ MongoDB connected successfully');
+    console.log('🔃 Connecting to DB ...');
+    await mongoose.connect(config.mongoUri, { serverSelectionTimeoutMS: 4000 });
+    console.log('✅ DB connected successfully');
   } catch (error) {
     console.error('❌ Failed to connect to MongoDB:');
     console.error(error.message);

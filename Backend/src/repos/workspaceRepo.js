@@ -4,41 +4,29 @@ import { Workspace } from '../models/Workspace.js';
 function formatWorkspace(doc) {
   if (!doc) return null;
   const obj = typeof doc.toObject === 'function' ? doc.toObject({ virtuals: true }) : { ...doc };
+  const { _id, __v, ownerId, admins, members, ...rest } = obj;
   return {
-    ...obj,
-    id: String(obj.id || obj._id),
-    ownerId: String(obj.ownerId),
-    admins: Array.isArray(obj.admins) ? obj.admins.map(String) : [],
-    members: Array.isArray(obj.members) ? obj.members.map(String) : [],
+    ...rest,
+    id: String(obj.id || _id),
   };
 }
 
 export const workspaceRepo = {
-  async listByUserId(userId) {
-    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
-      return [];
-    }
-    const uid = String(userId);
-    const docs = await Workspace.find({
-      $or: [{ ownerId: uid }, { members: uid }],
-    });
+  async listByUserId() {
+    const docs = await Workspace.find();
+    const workspaces = docs.map(formatWorkspace);
 
-    const userWorkspaces = docs.map(formatWorkspace);
-
-    // If user has no workspaces, provision a default workspace automatically from backend
-    if (userWorkspaces.length === 0) {
+    // If no workspaces exist, provision a default workspace automatically
+    if (workspaces.length === 0) {
       const defaultWs = await this.create({
         name: 'My Workspace',
         description: 'Personal workspace for sprint boards and tasks',
         color: 'from-indigo-600 to-violet-600',
-        ownerId: uid,
-        admins: [uid],
-        members: [uid],
       });
       return [defaultWs];
     }
 
-    return userWorkspaces;
+    return workspaces;
   },
 
   async findAll(query = {}) {
@@ -58,21 +46,11 @@ export const workspaceRepo = {
     name,
     description = '',
     color = 'from-indigo-600 to-violet-600',
-    ownerId,
-    admins = [],
-    members = [],
   }) {
-    const uid = String(ownerId);
-    const uniqueMembers = Array.from(new Set([uid, ...members.map(String)]));
-    const uniqueAdmins = Array.from(new Set([uid, ...admins.map(String)]));
-
     const doc = await Workspace.create({
       name: name.trim(),
       description: description.trim(),
       color,
-      ownerId: uid,
-      admins: uniqueAdmins,
-      members: uniqueMembers,
     });
 
     return formatWorkspace(doc);
@@ -83,15 +61,12 @@ export const workspaceRepo = {
       return null;
     }
 
-    const existing = await this.findById(workspaceId);
-    if (!existing) return null;
-
-    const payload = { ...updates };
-    if (updates.admins) {
-      payload.admins = Array.from(new Set([String(existing.ownerId), ...updates.admins.map(String)]));
-    }
-    if (updates.members) {
-      payload.members = Array.from(new Set([String(existing.ownerId), ...updates.members.map(String)]));
+    const allowed = ['name', 'description', 'color'];
+    const payload = {};
+    for (const key of allowed) {
+      if (updates[key] !== undefined) {
+        payload[key] = typeof updates[key] === 'string' ? updates[key].trim() : updates[key];
+      }
     }
 
     const doc = await Workspace.findByIdAndUpdate(workspaceId, payload, { new: true });
