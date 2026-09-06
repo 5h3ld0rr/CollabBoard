@@ -9,7 +9,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import type { Board } from '../../types';
-import { formatRelativeTime } from '../../utils';
+import { formatRelativeTime, getInitials } from '../../utils';
 
 interface BoardCardProps {
   board: Board;
@@ -146,7 +146,7 @@ export const BoardCard: React.FC<BoardCardProps> = React.memo(({
                   title={member.name}
                   className={`w-6 h-6 rounded-full ${member.color || 'bg-indigo-600'} text-white font-bold text-[9px] flex items-center justify-center ring-2 ring-slate-900 shadow-sm`}
                 >
-                  {member.initials || (member.name ? member.name.slice(0, 2).toUpperCase() : 'U')}
+                  {member.initials || getInitials(member.name)}
                 </div>
               ))}
             </div>

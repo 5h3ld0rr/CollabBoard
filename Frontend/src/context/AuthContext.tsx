@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import * as authApi from '../api/auth';
 import { getCachedUser, saveCachedUser, clearCachedUser } from '../db';
+import { getInitials } from '../utils';
 import type { User } from '../types';
 
 interface AuthContextType {
@@ -39,7 +40,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
         const cachedUser = await getCachedUser();
         if (cachedUser) {
-          setUser(cachedUser);
+          const userWithInitials: User = {
+            ...cachedUser,
+            initials: cachedUser.initials || getInitials(cachedUser.name),
+          };
+          setUser(userWithInitials);
           setToken('cookie-session');
         }
       } catch {
@@ -49,9 +54,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // 2. Validate current session against backend via HTTP-only cookie
       try {
         const currentUser = await authApi.getMe();
-        setUser(currentUser);
+        const userWithInitials: User = {
+          ...currentUser,
+          initials: currentUser.initials || getInitials(currentUser.name),
+        };
+        setUser(userWithInitials);
         setToken('cookie-session');
-        await saveCachedUser(currentUser);
+        await saveCachedUser(userWithInitials);
       } catch {
         setUser(null);
         setToken(null);
@@ -76,9 +85,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = async (credentials: authApi.LoginInput) => {
     const result = await authApi.login(credentials);
-    setUser(result.user);
+    const userWithInitials: User = {
+      ...result.user,
+      initials: result.user.initials || getInitials(result.user.name),
+    };
+    setUser(userWithInitials);
     setToken(result.token || 'cookie-session');
-    await saveCachedUser(result.user);
+    await saveCachedUser(userWithInitials);
   };
 
   const register = async (data: authApi.RegisterInput) => {
@@ -109,14 +122,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const newName = updatedData.name !== undefined ? updatedData.name : base.name;
       const computedInitials =
         updatedData.initials ||
-        (newName
-          ? newName
-              .split(' ')
-              .filter(Boolean)
-              .map((part) => part[0]?.toUpperCase())
-              .slice(0, 2)
-              .join('')
-          : base.initials) ||
+        (newName ? getInitials(newName) : base.initials) ||
         'AC';
 
       const nextUser: User = {

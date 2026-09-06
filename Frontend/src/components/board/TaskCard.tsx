@@ -8,6 +8,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import type { Task, TaskPriority, TaskStatus } from '../../types';
+import { getInitials } from '../../utils';
 
 interface TaskCardProps {
   task: Task;
@@ -150,7 +151,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           {task.assignee ? (
             (() => {
               const name = typeof task.assignee === 'object' && task.assignee !== null ? task.assignee.name : String(task.assignee);
-              const initials = typeof task.assignee === 'object' && task.assignee?.initials ? task.assignee.initials : name.slice(0, 2).toUpperCase();
+              const initials = getInitials(typeof task.assignee === 'object' && task.assignee?.initials ? task.assignee.initials : name);
               const color = typeof task.assignee === 'object' && task.assignee?.color ? task.assignee.color : 'bg-indigo-600';
               const firstName = name.split(' ')[0] || name;
 

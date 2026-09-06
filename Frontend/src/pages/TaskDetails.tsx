@@ -39,7 +39,7 @@ import {
 } from '../db';
 import { useAuth } from '../context/AuthContext';
 import type { Task, Board, TaskStatus, TaskPriority, User, TaskComment } from '../types';
-import { formatRelativeTime } from '../utils';
+import { formatRelativeTime, getInitials, hasTaskChanged, hasBoardChanged } from '../utils';
 
 const PRIORITY_CONFIG: Record<
   TaskPriority,
@@ -154,8 +154,11 @@ export const TaskDetails: React.FC = () => {
         if (!isMounted) return;
 
         if (foundTask) {
-          setTask(foundTask);
-          await updateCachedTask(foundTask);
+          const taskHasChanged = !cachedTask || hasTaskChanged(cachedTask, foundTask);
+          if (taskHasChanged) {
+            setTask(foundTask);
+            await updateCachedTask(foundTask);
+          }
 
           const [foundBoard, taskComments] = await Promise.all([
             getBoardById(foundTask.boardId),
@@ -163,10 +166,13 @@ export const TaskDetails: React.FC = () => {
           ]);
           if (!isMounted) return;
 
-          setBoard(foundBoard);
-          if (foundBoard) {
-            setBoardMembers(foundBoard.members || []);
-            await saveBoardToCache(foundBoard);
+          const boardHasChanged = !board || hasBoardChanged(board, foundBoard);
+          if (boardHasChanged) {
+            setBoard(foundBoard);
+            if (foundBoard) {
+              setBoardMembers(foundBoard.members || []);
+              await saveBoardToCache(foundBoard);
+            }
           }
           setComments(taskComments);
         } else if (!cachedTask) {
@@ -575,7 +581,7 @@ export const TaskDetails: React.FC = () => {
                         className={`w-8 h-8 rounded-xl ${authUser?.color || 'bg-indigo-600'} text-white font-bold text-xs flex items-center justify-center shrink-0 mt-1 shadow`}
                         title={authUser?.name || 'User'}
                       >
-                        {authUser?.initials || (authUser?.name ? authUser.name.slice(0, 2).toUpperCase() : 'U')}
+                        {getInitials(authUser?.initials || authUser?.name)}
                       </div>
                       <div className="flex-1 space-y-2">
                         <textarea
@@ -631,7 +637,7 @@ export const TaskDetails: React.FC = () => {
                                 <div
                                   className={`w-6 h-6 rounded-lg ${comment.author.color} text-white font-bold text-[10px] flex items-center justify-center shadow-sm`}
                                 >
-                                  {comment.author.initials}
+                                  {getInitials(comment.author.initials || comment.author.name)}
                                 </div>
                                 <div>
                                   <span className="text-xs font-semibold text-slate-200 mr-2">
@@ -718,7 +724,11 @@ export const TaskDetails: React.FC = () => {
                     (() => {
                       const name = typeof task.assignee === 'object' && task.assignee !== null ? task.assignee.name : String(task.assignee);
                       const color = typeof task.assignee === 'object' && task.assignee?.color ? task.assignee.color : 'bg-indigo-600';
-                      const initials = typeof task.assignee === 'object' && task.assignee?.initials ? task.assignee.initials : name.slice(0, 2).toUpperCase();
+                      const initials = getInitials(
+                        typeof task.assignee === 'object' && task.assignee?.initials
+                          ? task.assignee.initials
+                          : name
+                      );
                       const email = typeof task.assignee === 'object' && task.assignee?.email ? task.assignee.email : '';
 
                       return (

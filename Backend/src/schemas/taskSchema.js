@@ -10,6 +10,8 @@ export const createTaskSchema = z.object({
   priority: z.enum(['low', 'normal', 'medium', 'high', 'urgent']).default('medium'),
   assignee: z.string().trim().optional().default(''),
   boardId: z.string().trim().min(1, 'boardId is required'),
+  tags: z.array(z.string()).optional().default([]),
+  order: z.coerce.number().optional(),
   dueDate: z.string().optional(),
 });
 
@@ -23,6 +25,8 @@ export const updateTaskSchema = z.object({
   priority: z.enum(['low', 'normal', 'medium', 'high', 'urgent']).optional(),
   assignee: z.string().trim().optional(),
   boardId: z.string().trim().optional(),
+  tags: z.array(z.string()).optional(),
+  order: z.coerce.number().optional(),
   dueDate: z.string().optional(),
   version: z.coerce.number().int().nonnegative().optional(),
 });

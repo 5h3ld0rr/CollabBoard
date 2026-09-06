@@ -13,6 +13,7 @@ import { Logo } from "./Logo";
 import { WorkspaceSwitcher } from "../workspace/WorkspaceSwitcher";
 import { useAuth } from "../../context";
 import type { Workspace } from "../../types";
+import { getInitials } from "../../utils";
 
 interface NavbarProps {
   workspaces?: Workspace[];
@@ -51,17 +52,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const displayName = user?.name || "Alex Chen";
   const displayEmail = user?.email || "alex.chen@collabboard.io";
-  const displayInitials =
-    user?.initials ||
-    (displayName
-      ? displayName
-          .split(" ")
-          .filter(Boolean)
-          .map((part) => part[0]?.toUpperCase())
-          .slice(0, 2)
-          .join("")
-      : "AC") ||
-    "AC";
+  const displayInitials = user?.initials || getInitials(displayName, "AC");
 
   const notificationsRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);

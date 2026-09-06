@@ -4,15 +4,18 @@ import { userRepo } from '../repos/userRepo.js';
 import { assertBoardAccess } from './boardService.js';
 import { NotFoundError, ForbiddenError } from '../utils/AppError.js';
 
+function getInitials(name) {
+  if (!name || typeof name !== 'string') return 'U';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'U';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 function formatAuthor(user, authorId) {
   const name = user?.name || `User ${authorId}`;
   const email = user?.email || `user${authorId}@nsbm.lk`;
-  const initials = name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase() || 'U';
+  const initials = user?.initials || getInitials(name);
 
   return {
     id: String(authorId),

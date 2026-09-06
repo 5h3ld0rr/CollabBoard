@@ -15,6 +15,7 @@ import {
   clearCachedBoardTasks,
 } from '../db';
 import type { Board, Task, TaskStatus, User } from '../types';
+import { hasBoardsChanged, hasBoardChanged, hasTasksChanged } from '../utils';
 
 /* ==========================================================================
    State & Action Types
@@ -286,68 +287,78 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [state, dispatch] = useReducer(boardReducer, initialState);
   const { token } = useAuth();
 
-  const loadBoards = useCallback(async () => {
-    dispatch({ type: 'SET_LOADING', payload: true });
+  const loadBoards = useCallback(async (forceRefresh = false) => {
+    // 1. Instant Cache Hydration from PouchDB (0ms delay)
+    const cachedBoards = await getCachedBoards();
+    if (cachedBoards && cachedBoards.length > 0) {
+      dispatch({ type: 'SET_BOARDS', payload: cachedBoards });
+    } else {
+      dispatch({ type: 'SET_LOADING', payload: true });
+    }
+
+    // 2. Background Revalidation from API
     try {
-      const boards = await boardsApi.getBoards();
-      if (boards && boards.length >= 0) {
-        dispatch({ type: 'SET_BOARDS', payload: boards });
-        // Write fresh data to IndexedDB
-        await saveBoardsToCache(boards);
+      const serverBoards = await boardsApi.getBoards();
+      if (serverBoards && serverBoards.length >= 0) {
+        const changed = forceRefresh || hasBoardsChanged(cachedBoards, serverBoards);
+        if (changed) {
+          dispatch({ type: 'SET_BOARDS', payload: serverBoards });
+          await saveBoardsToCache(serverBoards);
+        }
       }
     } catch (err) {
-      console.warn('[LocalFirst] Network loadBoards failed, falling back to IDB cache:', err);
-      const cached = await getCachedBoards();
-      if (cached && cached.length > 0) {
-        dispatch({ type: 'SET_BOARDS', payload: cached });
-      }
+      console.warn('[LocalFirst] Background loadBoards failed, retaining cached data:', err);
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
       dispatch({ type: 'SET_SYNCING', payload: false });
     }
   }, []);
 
-  const loadBoard = useCallback(async (boardId: string) => {
-    dispatch({ type: 'SET_LOADING', payload: true });
+  const loadBoard = useCallback(async (boardId: string, forceRefresh = false) => {
+    // 1. Instant Cache Hydration from PouchDB (0ms delay)
+    const [cachedBoard, cachedTasks] = await Promise.all([
+      getCachedBoard(boardId),
+      getCachedTasks(boardId),
+    ]);
+
+    if (cachedBoard) {
+      dispatch({
+        type: 'SET_ACTIVE_BOARD',
+        payload: { board: cachedBoard, tasks: cachedTasks || [] },
+      });
+    } else {
+      dispatch({ type: 'SET_LOADING', payload: true });
+    }
+
+    // 2. Background Revalidation from API
     try {
-      const [board, boardTasks] = await Promise.all([
+      const [serverBoard, serverTasks] = await Promise.all([
         boardsApi.getBoardById(boardId),
         tasksApi.getBoardTasks(boardId),
       ]);
 
-      if (board) {
-        dispatch({
-          type: 'SET_ACTIVE_BOARD',
-          payload: { board, tasks: boardTasks },
-        });
-        // Update IndexedDB Cache
-        await Promise.all([
-          saveBoardToCache(board),
-          saveTasksToCache(boardTasks, boardId),
-        ]);
-      } else {
+      if (serverBoard) {
+        const boardChanged = forceRefresh || hasBoardChanged(cachedBoard, serverBoard);
+        const tasksChanged = forceRefresh || hasTasksChanged(cachedTasks, serverTasks);
+
+        if (boardChanged || tasksChanged) {
+          dispatch({
+            type: 'SET_ACTIVE_BOARD',
+            payload: { board: serverBoard, tasks: serverTasks },
+          });
+          await Promise.all([
+            saveBoardToCache(serverBoard),
+            saveTasksToCache(serverTasks, boardId),
+          ]);
+        }
+      } else if (!cachedBoard) {
         dispatch({
           type: 'SET_ACTIVE_BOARD',
           payload: { board: null, tasks: [] },
         });
       }
     } catch (err) {
-      console.warn(`[LocalFirst] Network loadBoard for ${boardId} failed:`, err);
-      const [cachedBoard, cachedTasks] = await Promise.all([
-        getCachedBoard(boardId),
-        getCachedTasks(boardId),
-      ]);
-      if (cachedBoard) {
-        dispatch({
-          type: 'SET_ACTIVE_BOARD',
-          payload: { board: cachedBoard, tasks: cachedTasks || [] },
-        });
-      } else {
-        dispatch({
-          type: 'SET_ACTIVE_BOARD',
-          payload: { board: null, tasks: [] },
-        });
-      }
+      console.warn(`[LocalFirst] Background loadBoard for ${boardId} failed, retaining cached data:`, err);
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
       dispatch({ type: 'SET_SYNCING', payload: false });

@@ -43,6 +43,7 @@ import {
 } from "../constants";
 import { saveCachedProfileDetails, getCachedProfileDetails } from "../db";
 import type { Task, TaskStatus, Workspace, User } from "../types";
+import { getInitials as extractInitials } from "../utils";
 
 type ProfileTab =
   | "overview"
@@ -293,12 +294,7 @@ export const Profile: React.FC = () => {
   });
 
   const getInitials = (fullName: string) => {
-    return fullName
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
+    return extractInitials(fullName);
   };
 
   return (

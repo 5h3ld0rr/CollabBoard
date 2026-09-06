@@ -45,6 +45,7 @@ export const taskRepo = {
         typeof taskData.assignee === 'object' && taskData.assignee !== null
           ? taskData.assignee.name || taskData.assignee.id || ''
           : taskData.assignee ?? '',
+      tags: Array.isArray(taskData.tags) ? taskData.tags : [],
       dueDate: taskData.dueDate ? new Date(taskData.dueDate) : null,
       position:
         typeof taskData.position === 'number'
@@ -74,6 +75,9 @@ export const taskRepo = {
     }
 
     const { id, _id, version, ...payload } = updates;
+    if (payload.order !== undefined && payload.position === undefined) {
+      payload.position = payload.order;
+    }
     if (payload.assignee && typeof payload.assignee === 'object') {
       payload.assignee = payload.assignee.name || payload.assignee.id || '';
     }

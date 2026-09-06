@@ -47,6 +47,10 @@ const taskSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    tags: {
+      type: [String],
+      default: [],
+    },
     dueDate: {
       type: Date,
       default: null,
@@ -85,6 +89,11 @@ taskSchema.set('toJSON', {
     if (ret._id) {
       ret.id = ret._id.toString();
       delete ret._id;
+    }
+    ret.boardId = String(ret.boardId || '');
+    ret.tags = Array.isArray(ret.tags) ? ret.tags : [];
+    if (ret.order === undefined && ret.position !== undefined) {
+      ret.order = ret.position;
     }
     return ret;
   },
