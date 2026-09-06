@@ -83,24 +83,16 @@ export const Home: React.FC = () => {
           crystal-clear sprint coordination.
         </p>
 
-        {/* CTA Buttons */}
-        <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto justify-center">
+        {/* CTA Button */}
+        <div className="mt-8 sm:mt-10 flex items-center justify-center w-full sm:w-auto">
           <Button
             to="/register"
             size="lg"
             variant="primary"
-            className="w-full sm:w-auto"
+            className="w-full sm:w-auto shadow-xl shadow-indigo-600/25 hover:shadow-indigo-600/40 transition-all"
             iconRight={<ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />}
           >
             Create Free Workspace
-          </Button>
-          <Button
-            to="/login"
-            size="lg"
-            variant="secondary"
-            className="w-full sm:w-auto"
-          >
-            Sign In to Existing Board
           </Button>
         </div>
 
@@ -535,23 +527,15 @@ export const Home: React.FC = () => {
             Create your account in seconds and start organizing tasks with your team today.
           </p>
 
-          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+          <div className="mt-8 flex items-center justify-center">
             <Button
               to="/register"
               size="lg"
               variant="primary"
-              className="w-full sm:w-auto"
+              className="w-full sm:w-auto shadow-xl shadow-indigo-600/25 hover:shadow-indigo-600/40 transition-all"
               iconRight={<ArrowRight className="w-4 h-4" />}
             >
               Get Started Now
-            </Button>
-            <Button
-              to="/login"
-              size="lg"
-              variant="secondary"
-              className="w-full sm:w-auto"
-            >
-              Sign In
             </Button>
           </div>
         </div>

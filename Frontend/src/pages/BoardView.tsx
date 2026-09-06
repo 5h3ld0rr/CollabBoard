@@ -282,16 +282,15 @@ export const BoardView: React.FC = () => {
       }
 
       // 3. Filter by Status
-      const normalizedStatus = task.status === ("doing" as any) ? "in-progress" : task.status;
-      if (selectedStatus !== "all" && normalizedStatus !== selectedStatus) {
+      if (selectedStatus !== "all" && task.status !== selectedStatus) {
         return false;
       }
 
       // 4. Filter by Overdue
       if (isOverdueFilter) {
         const isTaskOverdue =
-          normalizedStatus !== "done" &&
-          Boolean(task.dueDate) &&
+          task.dueDate !== undefined &&
+          task.dueDate !== null &&
           new Date(task.dueDate!).getTime() < today;
         if (!isTaskOverdue) return false;
       }

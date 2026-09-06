@@ -7,6 +7,7 @@ import {
   Layers,
   ShieldCheck,
   Sparkles,
+  AlertCircle,
 } from 'lucide-react';
 import type { Board, Workspace } from '../../types';
 import { COLOR_OPTIONS } from '../../constants';
@@ -16,7 +17,7 @@ interface CreateBoardModalProps {
   onClose: () => void;
   workspaces: Workspace[];
   currentWorkspaceId?: string;
-  onCreateBoard: (board: Board) => void;
+  onCreateBoard: (board: Board) => Promise<void> | void;
 }
 
 const ICON_OPTIONS = [
@@ -40,6 +41,7 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
   const [selectedIcon, setSelectedIcon] = useState(ICON_OPTIONS[0].name);
   const [tagInput, setTagInput] = useState('Frontend, Core');
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -47,12 +49,13 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
       setTitle('');
       setDescription('');
       setError(null);
+      setIsSubmitting(false);
     }
   }, [isOpen, currentWorkspaceId, workspaces]);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
       setError('Please provide a board title.');
@@ -86,8 +89,20 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
       updatedAt: 'Just now',
     };
 
-    onCreateBoard(newBoard);
-    onClose();
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await onCreateBoard(newBoard);
+      onClose();
+    } catch (err: any) {
+      let msg = err.message || 'Failed to create board';
+      if (err.details && Array.isArray(err.details) && err.details.length > 0) {
+        msg = err.details.map((d: any) => d.message || d.field).join('. ');
+      }
+      setError(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -116,8 +131,9 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
         </div>
 
         {error && (
-          <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-medium">
-            {error}
+          <div className="mb-4 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-medium flex items-center space-x-2.5 animate-shake">
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+            <span className="leading-relaxed">{error}</span>
           </div>
         )}
 
@@ -238,16 +254,26 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="inline-flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 transition-all active:scale-95"
+              disabled={isSubmitting}
+              className="inline-flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 transition-all active:scale-95 cursor-pointer"
             >
-              <Plus className="w-4 h-4" />
-              <span>Create Board</span>
+              {isSubmitting ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Creating...</span>
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4" />
+                  <span>Create Board</span>
+                </>
+              )}
             </button>
           </div>
         </form>

@@ -36,6 +36,12 @@ const PRIORITY_BADGES: Record<TaskPriority, { label: string; bg: string; text: s
     text: 'text-blue-300',
     border: 'border-blue-500/30',
   },
+  normal: {
+    label: 'Normal',
+    bg: 'bg-blue-500/15',
+    text: 'text-blue-300',
+    border: 'border-blue-500/30',
+  },
   low: {
     label: 'Low',
     bg: 'bg-slate-500/15',

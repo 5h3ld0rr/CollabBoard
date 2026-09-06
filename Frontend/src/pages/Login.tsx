@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import {
   Mail,
   Lock,
@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   WifiOff,
   AlertCircle,
+  CheckCircle2,
   Sparkles,
 } from "lucide-react";
 import {
@@ -24,8 +25,12 @@ export const Login: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
 
+  const location = useLocation();
+  const locationState = location.state as { registeredEmail?: string; message?: string } | null;
+  const [successNotice, setSuccessNotice] = useState<string | null>(locationState?.message || null);
+
   const [formData, setFormData] = useState({
-    email: "",
+    email: locationState?.registeredEmail || "",
     password: "",
     rememberMe: false,
   });
@@ -41,6 +46,7 @@ export const Login: React.FC = () => {
       [name]: type === "checkbox" ? checked : value,
     }));
     if (error) setError(null);
+    if (successNotice) setSuccessNotice(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -63,6 +69,7 @@ export const Login: React.FC = () => {
       await login({
         email: formData.email,
         password: formData.password,
+        rememberMe: formData.rememberMe,
       });
       navigate("/dashboard");
     } catch (err: any) {
@@ -157,6 +164,13 @@ export const Login: React.FC = () => {
                 Enter your credentials below to access your boards.
               </p>
             </div>
+
+            {successNotice && (
+              <div className="mb-5 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center space-x-3 text-emerald-400 text-sm animate-fade-in">
+                <CheckCircle2 className="w-5 h-5 shrink-0" />
+                <span>{successNotice}</span>
+              </div>
+            )}
 
             {error && (
               <div className="mb-5 p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center space-x-3 text-red-400 text-sm animate-shake">

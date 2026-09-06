@@ -5,7 +5,6 @@ import {
   Check,
   Plus,
   Settings,
-  Users,
 } from 'lucide-react';
 import type { Workspace } from '../../types';
 
@@ -109,12 +108,7 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
                         )}
                       </div>
                       <div className="flex items-center space-x-2 text-[10px] text-slate-400 font-normal">
-                        <span>{ws.boardCount || 0} boards</span>
-                        <span>•</span>
-                        <span className="flex items-center space-x-0.5">
-                          <Users className="w-2.5 h-2.5" />
-                          <span>{ws.memberCount || 1} members</span>
-                        </span>
+                        <span>{ws.boardCount || 0} {ws.boardCount === 1 ? 'board' : 'boards'}</span>
                       </div>
                     </div>
                   </div>

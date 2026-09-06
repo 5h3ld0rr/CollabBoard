@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { WifiOff, Database, Check, RefreshCw } from 'lucide-react';
+import { WifiOff, Check, RefreshCw } from 'lucide-react';
 
 interface OfflineIndicatorProps {
   onSync?: () => void;
@@ -62,10 +62,5 @@ export const OfflineIndicator: React.FC<OfflineIndicatorProps> = ({ onSync, isSy
     );
   }
 
-  return (
-    <div className="hidden sm:inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-slate-900/80 border border-slate-800 text-slate-400 text-[11px] font-medium">
-      <Database className="w-3 h-3 text-indigo-400" />
-      <span>IDB Local Cache</span>
-    </div>
-  );
+  return null;
 };

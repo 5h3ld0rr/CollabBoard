@@ -2,20 +2,18 @@ import React, { useState, useEffect } from 'react';
 import {
   X,
   Settings,
-  Users,
-  Trash2,
-  UserPlus,
   Check,
   AlertTriangle,
+  AlertCircle,
 } from 'lucide-react';
-import type { Workspace, User } from '../../types';
+import type { Workspace } from '../../types';
 import { COLOR_OPTIONS } from '../../constants';
 
 interface ManageWorkspaceModalProps {
   isOpen: boolean;
   onClose: () => void;
   workspace?: Workspace | null;
-  onUpdateWorkspace: (updated: Workspace) => void;
+  onUpdateWorkspace: (updated: Workspace) => Promise<void> | void;
   onDeleteWorkspace?: (id: string) => void;
 }
 
@@ -26,102 +24,64 @@ export const ManageWorkspaceModal: React.FC<ManageWorkspaceModalProps> = ({
   onUpdateWorkspace,
   onDeleteWorkspace,
 }) => {
-  const [activeTab, setActiveTab] = useState<'general' | 'members' | 'danger'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'danger'>('general');
   const [name, setName] = useState(workspace?.name || '');
   const [description, setDescription] = useState(workspace?.description || '');
   const [color, setColor] = useState(workspace?.color || COLOR_OPTIONS[0].value);
-  const [members, setMembers] = useState<User[]>(workspace?.members || []);
-  
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'Admin' | 'Member'>('Member');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (workspace) {
       setName(workspace.name);
       setDescription(workspace.description);
       setColor(workspace.color || COLOR_OPTIONS[0].value);
-      setMembers(workspace.members || []);
     }
     setConfirmDelete(false);
     setSuccessMessage(null);
+    setErrorMessage(null);
+    setIsSubmitting(false);
   }, [workspace, isOpen]);
 
   if (!isOpen || !workspace) return null;
 
-  const handleSaveGeneral = (e: React.FormEvent) => {
+  const handleSaveGeneral = async (e: React.FormEvent) => {
     e.preventDefault();
-    const updated: Workspace = {
-      ...workspace,
-      name: name.trim() || workspace.name,
-      description: description.trim(),
-      color,
-      members,
-      memberCount: members.length,
-    };
-    onUpdateWorkspace(updated);
-    onClose();
-  };
+    if (!name.trim()) {
+      setErrorMessage('Please provide a workspace name.');
+      return;
+    }
+    if (name.trim().length < 2) {
+      setErrorMessage('Workspace name must be at least 2 characters.');
+      return;
+    }
 
-  const handleInviteMember = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inviteEmail.trim()) return;
-
-    const initials = inviteEmail
-      .split('@')[0]
-      .slice(0, 2)
-      .toUpperCase();
-
-    const newUser: User = {
-      id: `usr-${Date.now()}`,
-      name: inviteEmail.split('@')[0],
-      email: inviteEmail.trim(),
-      initials,
-      color: 'bg-indigo-600',
-      role: inviteRole,
-    };
-
-    const newMembers = [...members, newUser];
-    setMembers(newMembers);
-    setInviteEmail('');
-    
-    const updated: Workspace = {
-      ...workspace,
-      members: newMembers,
-      memberCount: newMembers.length,
-    };
-    onUpdateWorkspace(updated);
-    setSuccessMessage(`Invited ${inviteEmail} as ${inviteRole}!`);
-    setTimeout(() => setSuccessMessage(null), 2500);
-  };
-
-  const handleRemoveMember = (userId: string) => {
-    if (members.length <= 1) return;
-    const newMembers = members.filter((m) => m.id !== userId);
-    setMembers(newMembers);
-    const updated: Workspace = {
-      ...workspace,
-      members: newMembers,
-      memberCount: newMembers.length,
-    };
-    onUpdateWorkspace(updated);
-  };
-
-  const handleChangeRole = (userId: string, newRole: 'Admin' | 'Member') => {
-    const updatedMembers = members.map((m) =>
-      m.id === userId ? { ...m, role: newRole } : m
-    );
-    setMembers(updatedMembers);
-    const updated: Workspace = {
-      ...workspace,
-      members: updatedMembers,
-      memberCount: updatedMembers.length,
-    };
-    onUpdateWorkspace(updated);
-    const target = members.find((m) => m.id === userId);
-    setSuccessMessage(`Updated role for ${target ? target.name : 'member'} to ${newRole}`);
-    setTimeout(() => setSuccessMessage(null), 2500);
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    try {
+      const updated: Workspace = {
+        ...workspace,
+        name: name.trim() || workspace.name,
+        description: description.trim(),
+        color,
+      };
+      await onUpdateWorkspace(updated);
+      setSuccessMessage('Workspace settings updated successfully!');
+      setTimeout(() => {
+        setSuccessMessage(null);
+        onClose();
+      }, 600);
+    } catch (err: any) {
+      let msg = err.message || 'Failed to update workspace';
+      if (err.details && Array.isArray(err.details) && err.details.length > 0) {
+        msg = err.details.map((d: any) => d.message || d.field).join('. ');
+      }
+      setErrorMessage(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDelete = () => {
@@ -152,7 +112,7 @@ export const ManageWorkspaceModal: React.FC<ManageWorkspaceModalProps> = ({
           </div>
           <div>
             <h2 className="text-xl font-bold text-white">{workspace.name}</h2>
-            <p className="text-xs text-slate-400">Workspace Settings, Roles & Collaborators</p>
+            <p className="text-xs text-slate-400">Workspace Settings & Customization</p>
           </div>
         </div>
 
@@ -160,34 +120,25 @@ export const ManageWorkspaceModal: React.FC<ManageWorkspaceModalProps> = ({
         <div className="flex items-center space-x-2 border-b border-slate-800 pb-3 mb-6 text-xs font-semibold">
           <button
             onClick={() => setActiveTab('general')}
-            className={`px-3 py-1.5 rounded-xl transition ${
-              activeTab === 'general'
-                ? 'bg-indigo-600 text-white'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-            }`}
-          >
-            General
-          </button>
-          <button
-            onClick={() => setActiveTab('members')}
             className={`px-3 py-1.5 rounded-xl transition flex items-center space-x-1.5 ${
-              activeTab === 'members'
-                ? 'bg-indigo-600 text-white'
+              activeTab === 'general'
+                ? 'bg-indigo-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
             }`}
           >
-            <Users className="w-3.5 h-3.5" />
-            <span>Members ({members.length})</span>
+            <Settings className="w-3.5 h-3.5" />
+            <span>General</span>
           </button>
           <button
             onClick={() => setActiveTab('danger')}
-            className={`px-3 py-1.5 rounded-xl transition ${
+            className={`px-3 py-1.5 rounded-xl transition flex items-center space-x-1.5 ${
               activeTab === 'danger'
                 ? 'bg-rose-600/20 text-rose-300 border border-rose-500/30'
                 : 'text-slate-400 hover:text-rose-400 hover:bg-rose-500/10'
             }`}
           >
-            Danger Zone
+            <AlertTriangle className="w-3.5 h-3.5" />
+            <span>Danger Zone</span>
           </button>
         </div>
 
@@ -199,17 +150,28 @@ export const ManageWorkspaceModal: React.FC<ManageWorkspaceModalProps> = ({
           </div>
         )}
 
+        {/* Error Alert */}
+        {errorMessage && (
+          <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-medium flex items-center space-x-2 animate-fade-in">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
         {/* Tab 1: General Settings */}
         {activeTab === 'general' && (
           <form onSubmit={handleSaveGeneral} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Workspace Name
+                Workspace Name <span className="text-indigo-400">*</span>
               </label>
               <input
                 type="text"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (errorMessage) setErrorMessage(null);
+                }}
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
               />
             </div>
@@ -250,125 +212,33 @@ export const ManageWorkspaceModal: React.FC<ManageWorkspaceModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                disabled={isSubmitting}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="inline-flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 transition-all active:scale-95"
+                disabled={isSubmitting}
+                className="inline-flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 transition-all active:scale-95"
               >
-                <Check className="w-4 h-4" />
-                <span>Save Changes</span>
+                {isSubmitting ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>Save Changes</span>
+                  </>
+                )}
               </button>
             </div>
           </form>
         )}
 
-        {/* Tab 2: Members & Roles */}
-        {activeTab === 'members' && (
-          <div className="space-y-5">
-            {/* Invite Form */}
-            <form onSubmit={handleInviteMember} className="flex gap-2 items-center">
-              <input
-                type="email"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="colleague@collabboard.io"
-                className="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              />
-              <select
-                value={inviteRole}
-                onChange={(e) => setInviteRole(e.target.value as 'Admin' | 'Member')}
-                className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 focus:outline-none"
-              >
-                <option value="Member">Member</option>
-                <option value="Admin">Admin</option>
-              </select>
-              <button
-                type="submit"
-                className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md flex items-center space-x-1 shrink-0"
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-                <span>Invite</span>
-              </button>
-            </form>
-
-            {/* Member List */}
-            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-              {members.map((member) => {
-                const isObj = typeof member === 'object' && member !== null;
-                const id = isObj ? member.id : String(member);
-                const name = isObj && member.name ? member.name : `User ${id}`;
-                const email = isObj && member.email ? member.email : `user${id}@nsbm.lk`;
-                const initials = isObj && member.initials ? member.initials : name.slice(0, 2).toUpperCase();
-                const color = isObj && member.color ? member.color : 'bg-indigo-600';
-                const role = isObj && member.role ? member.role : 'Member';
-                const isOwner = role === 'Owner';
-
-                return (
-                  <div
-                    key={id}
-                    className="flex items-center justify-between p-3 rounded-xl bg-slate-950/60 border border-slate-800"
-                  >
-                    <div className="flex items-center space-x-3 min-w-0">
-                      <div
-                        className={`w-8 h-8 rounded-xl ${color} text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-sm`}
-                      >
-                        {initials}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center space-x-1.5">
-                          <p className="text-xs font-semibold text-white truncate">{name}</p>
-                          {isOwner && (
-                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                              Owner
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-slate-400 truncate">{email}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center space-x-2 shrink-0">
-                      {isOwner ? (
-                        <span className="px-2.5 py-1 text-[11px] font-semibold text-amber-300 bg-slate-900 border border-slate-700/80 rounded-lg">
-                          Owner
-                        </span>
-                      ) : (
-                        <select
-                          value={role === 'Admin' ? 'Admin' : 'Member'}
-                          onChange={(e) =>
-                            handleChangeRole(
-                              id,
-                              e.target.value as 'Admin' | 'Member'
-                            )
-                          }
-                          className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 border border-slate-700 text-indigo-300 hover:border-indigo-500 cursor-pointer focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        >
-                          <option value="Member">Member</option>
-                          <option value="Admin">Admin</option>
-                        </select>
-                      )}
-
-                      {!isOwner && members.length > 1 && (
-                        <button
-                          onClick={() => handleRemoveMember(id)}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
-                          title="Remove member"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Tab 3: Danger Zone */}
+        {/* Tab 2: Danger Zone */}
         {activeTab === 'danger' && (
           <div className="space-y-4 p-4 rounded-2xl bg-rose-500/5 border border-rose-500/20">
             <div className="flex items-start space-x-3">

@@ -39,6 +39,7 @@ import {
 } from '../db';
 import { useAuth } from '../context/AuthContext';
 import type { Task, Board, TaskStatus, TaskPriority, User, TaskComment } from '../types';
+import { formatRelativeTime } from '../utils';
 
 const PRIORITY_CONFIG: Record<
   TaskPriority,
@@ -65,6 +66,13 @@ const PRIORITY_CONFIG: Record<
     border: 'border-blue-500/30',
     dot: 'bg-blue-500',
   },
+  normal: {
+    label: 'Normal',
+    bg: 'bg-blue-500/15',
+    text: 'text-blue-300',
+    border: 'border-blue-500/30',
+    dot: 'bg-blue-500',
+  },
   low: {
     label: 'Low',
     bg: 'bg-slate-500/15',
@@ -79,25 +87,6 @@ const STATUS_STEPS: { id: TaskStatus; label: string; color: string }[] = [
   { id: 'in-progress', label: 'In Progress', color: 'bg-indigo-400' },
   { id: 'done', label: 'Completed', color: 'bg-emerald-400' },
 ];
-
-const formatRelativeTime = (isoString: string): string => {
-  try {
-    const date = new Date(isoString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  } catch {
-    return 'Recently';
-  }
-};
 
 export const TaskDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();

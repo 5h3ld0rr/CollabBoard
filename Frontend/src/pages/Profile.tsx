@@ -41,6 +41,7 @@ import {
   DEFAULT_ACTIVE_SESSIONS,
   SUBSCRIPTION_PLANS,
 } from "../constants";
+import { saveCachedProfileDetails, getCachedProfileDetails } from "../db";
 import type { Task, TaskStatus, Workspace, User } from "../types";
 
 type ProfileTab =
@@ -79,30 +80,15 @@ export const Profile: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ProfileTab>("overview");
 
   // Saved & Form State
-  const [savedProfile, setSavedProfile] = useState<UserProfileDetails>(() => {
-    const stored = localStorage.getItem("user_profile_details");
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        return {
-          ...parsed,
-          name: authUser?.name || parsed.name || currentUser.name,
-          email: authUser?.email || parsed.email || currentUser.email,
-        };
-      } catch {
-        // fallback
-      }
-    }
-    return {
-      name: currentUser.name,
-      username: currentUser.email ? currentUser.email.split("@")[0] : "alex.chen",
-      email: currentUser.email,
-      role: "Lead Full-Stack Engineer",
-      company: "CollabBoard Labs",
-      location: "San Francisco, CA",
-      bio: "Specializing in real-time collaborative systems, CRDT state sync, and high-performance WebGL & React interfaces.",
-      memberSince: "Member since Oct 2024",
-    };
+  const [savedProfile, setSavedProfile] = useState<UserProfileDetails>({
+    name: currentUser.name,
+    username: currentUser.email ? currentUser.email.split("@")[0] : "alex.chen",
+    email: currentUser.email,
+    role: "Lead Full-Stack Engineer",
+    company: "CollabBoard Labs",
+    location: "San Francisco, CA",
+    bio: "Specializing in real-time collaborative systems, CRDT state sync, and high-performance WebGL & React interfaces.",
+    memberSince: "Member since Oct 2024",
   });
 
   const [name, setName] = useState(savedProfile.name);
@@ -119,18 +105,43 @@ export const Profile: React.FC = () => {
     "monthly",
   );
 
-  // Keep fields synced if authUser loads later and no custom profile was set
+  // Load cached profile from PouchDB and keep synced with authUser
   useEffect(() => {
-    if (authUser && !localStorage.getItem("user_profile_details")) {
-      setName(authUser.name);
-      setEmail(authUser.email);
-      setSavedProfile((prev) => ({
-        ...prev,
-        name: authUser.name,
-        email: authUser.email,
-        username: authUser.email ? authUser.email.split("@")[0] : prev.username,
-      }));
+    async function loadPouchProfile() {
+      try {
+        const cached = await getCachedProfileDetails();
+        if (cached) {
+          const merged = {
+            ...cached,
+            name: authUser?.name || cached.name,
+            email: authUser?.email || cached.email,
+          };
+          setSavedProfile(merged);
+          setName(merged.name);
+          setUsername(merged.username);
+          setEmail(merged.email);
+          if (merged.role) setRole(merged.role);
+          if (merged.company) setCompany(merged.company);
+          if (merged.location) setLocation(merged.location);
+          if (merged.bio) setBio(merged.bio);
+          return;
+        }
+      } catch {
+        // Fallback to authUser
+      }
+
+      if (authUser) {
+        setName(authUser.name);
+        setEmail(authUser.email);
+        setSavedProfile((prev) => ({
+          ...prev,
+          name: authUser.name,
+          email: authUser.email,
+          username: authUser.email ? authUser.email.split("@")[0] : prev.username,
+        }));
+      }
     }
+    loadPouchProfile();
   }, [authUser]);
 
   // Check if any personal info field has unsaved changes
@@ -206,7 +217,7 @@ export const Profile: React.FC = () => {
       memberSince: savedProfile.memberSince,
     };
     setSavedProfile(updated);
-    localStorage.setItem("user_profile_details", JSON.stringify(updated));
+    saveCachedProfileDetails(updated);
 
     // Update global AuthContext user
     updateUser({
@@ -985,9 +996,7 @@ export const Profile: React.FC = () => {
 
                   <div className="pt-3 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-400">
                     <div className="flex items-center space-x-3">
-                      <span>{ws.boardCount} boards</span>
-                      <span>•</span>
-                      <span>{ws.memberCount} members</span>
+                      <span>{ws.boardCount} {ws.boardCount === 1 ? 'board' : 'boards'}</span>
                     </div>
                     <Link
                       to="/dashboard"

@@ -4,4 +4,5 @@ export * from "./BackButton";
 export * from "./AmbientBackground";
 export * from "./Navbar";
 export * from "./ProtectedRoute";
+export * from "./PublicRoute";
 export * from "./OfflineIndicator";
