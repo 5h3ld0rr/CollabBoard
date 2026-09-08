@@ -17,13 +17,14 @@ export interface RegisterInput {
 export interface LoginInput {
   email: string;
   password: string;
+  rememberMe?: boolean;
 }
 
 /**
  * Register a new user account
  */
-export async function register(input: RegisterInput): Promise<AuthResponse['data']> {
-  const res = await request<AuthResponse>('/api/auth/register', {
+export async function register(input: RegisterInput): Promise<{ user: User; token?: string }> {
+  const res = await request<{ data: { user: User; token?: string } }>('/api/auth/register', {
     method: 'POST',
     body: JSON.stringify(input),
   });
@@ -47,4 +48,17 @@ export async function login(input: LoginInput): Promise<AuthResponse['data']> {
 export async function getMe(): Promise<User> {
   const res = await request<{ data: { user: User } }>('/api/auth/me');
   return res.data.user;
+}
+
+/**
+ * Log out and clear server-side session cookie
+ */
+export async function logout(): Promise<void> {
+  try {
+    await request('/api/auth/logout', {
+      method: 'POST',
+    });
+  } catch {
+    // Ignore errors on logout
+  }
 }

@@ -8,9 +8,9 @@ export interface ApiErrorDetail {
 export class ApiError extends Error {
   code: string;
   status: number;
-  details?: ApiErrorDetail[];
+  details?: any;
 
-  constructor(message: string, status: number, code = 'API_ERROR', details?: ApiErrorDetail[]) {
+  constructor(message: string, status: number, code = 'API_ERROR', details?: any) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
@@ -23,8 +23,17 @@ async function toApiError(res: Response): Promise<ApiError> {
   try {
     const errorBody = await res.json();
     const errorInfo = errorBody.error || errorBody;
+    let message = errorInfo.message || `Request failed with status ${res.status}`;
+    if (errorInfo.details && Array.isArray(errorInfo.details) && errorInfo.details.length > 0) {
+      const detailedMessages = errorInfo.details
+        .map((d: any) => d.message || d.field)
+        .filter(Boolean);
+      if (detailedMessages.length > 0) {
+        message = detailedMessages.join('. ');
+      }
+    }
     return new ApiError(
-      errorInfo.message || `Request failed with status ${res.status}`,
+      message,
       res.status,
       errorInfo.code || 'UNKNOWN_ERROR',
       errorInfo.details
@@ -35,25 +44,21 @@ async function toApiError(res: Response): Promise<ApiError> {
 }
 
 /**
- * Universal HTTP client sending Bearer JWT token and handling centralized errors & 401 expiration
+ * Universal HTTP client relying on HTTP-only cookies and handling centralized errors & 401 expiration
  */
 export async function request<T = any>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem('token');
-
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...((options.headers as Record<string, string>) || {}),
   };
 
   const res = await fetch(BASE + path, {
+    credentials: 'include',
     ...options,
     headers,
   });
 
   if (res.status === 401) {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
     window.dispatchEvent(new Event('auth:expired'));
   }
 

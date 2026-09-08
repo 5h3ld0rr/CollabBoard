@@ -4,15 +4,18 @@ import { userRepo } from '../repos/userRepo.js';
 import { assertBoardAccess } from './boardService.js';
 import { NotFoundError, ForbiddenError } from '../utils/AppError.js';
 
-function formatAuthor(authorId, authorName, authorEmail) {
-  const name = authorName || 'Team Member';
-  const email = authorEmail || 'member@collabboard.io';
-  const initials = name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase() || 'TM';
+function getInitials(name) {
+  if (!name || typeof name !== 'string') return 'U';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'U';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function formatAuthor(user, authorId) {
+  const name = user?.name || `User ${authorId}`;
+  const email = user?.email || `user${authorId}@nsbm.lk`;
+  const initials = user?.initials || getInitials(name);
 
   return {
     id: String(authorId),
@@ -34,13 +37,24 @@ export async function listTaskComments(taskId, userId) {
 
   await assertBoardAccess(task.boardId, userId);
 
-  const comments = await commentRepo.listByTaskId(taskId);
-  return comments.map((c) => ({
+  const rawComments = await commentRepo.listByTaskId(taskId);
+
+  // Batch lookup authors to prevent N+1 queries
+  const userIds = [...new Set(rawComments.map((c) => String(c.authorId)))];
+  const userMap = new Map();
+  await Promise.all(
+    userIds.map(async (uid) => {
+      const user = await userRepo.findById(uid);
+      if (user) userMap.set(uid, user);
+    })
+  );
+
+  return rawComments.map((c) => ({
     id: c.id,
     taskId: c.taskId,
     content: c.content,
     createdAt: c.createdAt,
-    author: formatAuthor(c.authorId, c.authorName, c.authorEmail),
+    author: formatAuthor(userMap.get(String(c.authorId)), c.authorId),
   }));
 }
 
@@ -56,14 +70,10 @@ export async function addTaskComment(taskId, content, userId) {
   await assertBoardAccess(task.boardId, userId);
 
   const user = await userRepo.findById(userId);
-  const authorName = user?.name || 'Team Member';
-  const authorEmail = user?.email || 'member@collabboard.io';
 
   const newComment = await commentRepo.create({
     taskId,
     authorId: userId,
-    authorName,
-    authorEmail,
     content,
   });
 
@@ -72,7 +82,7 @@ export async function addTaskComment(taskId, content, userId) {
     taskId: newComment.taskId,
     content: newComment.content,
     createdAt: newComment.createdAt,
-    author: formatAuthor(userId, authorName, authorEmail),
+    author: formatAuthor(user, userId),
   };
 }
 

@@ -21,7 +21,7 @@ import {
   User as UserIcon,
 } from 'lucide-react';
 import { Navbar, AmbientBackground } from '../components/common';
-import { TaskModal } from '../components/board';
+import { TaskModal, ConflictModal } from '../components/board';
 import {
   getTaskById,
   getBoardById,
@@ -31,8 +31,18 @@ import {
   updateTask as apiUpdateTask,
   deleteTask as apiDeleteTask,
 } from '../api';
+import {
+  getCachedTask,
+  getCachedBoard,
+  updateCachedTask,
+  deleteCachedTask,
+  saveBoardToCache,
+  enqueueMutation,
+} from '../db';
+import { flushSyncQueue } from '../sync';
 import { useAuth } from '../context/AuthContext';
 import type { Task, Board, TaskStatus, TaskPriority, User, TaskComment } from '../types';
+import { formatRelativeTime, getInitials, hasTaskChanged, hasBoardChanged } from '../utils';
 
 const PRIORITY_CONFIG: Record<
   TaskPriority,
@@ -59,6 +69,13 @@ const PRIORITY_CONFIG: Record<
     border: 'border-blue-500/30',
     dot: 'bg-blue-500',
   },
+  normal: {
+    label: 'Normal',
+    bg: 'bg-blue-500/15',
+    text: 'text-blue-300',
+    border: 'border-blue-500/30',
+    dot: 'bg-blue-500',
+  },
   low: {
     label: 'Low',
     bg: 'bg-slate-500/15',
@@ -73,25 +90,6 @@ const STATUS_STEPS: { id: TaskStatus; label: string; color: string }[] = [
   { id: 'in-progress', label: 'In Progress', color: 'bg-indigo-400' },
   { id: 'done', label: 'Completed', color: 'bg-emerald-400' },
 ];
-
-const formatRelativeTime = (isoString: string): string => {
-  try {
-    const date = new Date(isoString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  } catch {
-    return 'Recently';
-  }
-};
 
 export const TaskDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -117,6 +115,11 @@ export const TaskDetails: React.FC = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // 409 OCC Conflict Resolution State
+  const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
+  const [conflictLocalTask, setConflictLocalTask] = useState<Task | null>(null);
+  const [conflictServerTask, setConflictServerTask] = useState<Task | null>(null);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
@@ -124,14 +127,33 @@ export const TaskDetails: React.FC = () => {
     }, 3000);
   };
 
-  // Find task across all mock boards via API
+  // Find task across all mock boards via API and IndexedDB cache
   useEffect(() => {
     let isMounted = true;
-    setIsLoading(true);
 
     async function loadData() {
       if (!id) {
         setIsLoading(false);
+        return;
+      }
+
+      // 1. Instant Cache Hydration from IndexedDB (0ms delay)
+      const cachedTask = await getCachedTask(id);
+      if (cachedTask && isMounted) {
+        setTask(cachedTask);
+        const cachedBoard = await getCachedBoard(cachedTask.boardId);
+        if (cachedBoard && isMounted) {
+          setBoard(cachedBoard);
+          setBoardMembers(cachedBoard.members || []);
+        }
+        setIsLoading(false);
+      } else {
+        setIsLoading(true);
+      }
+
+      // 2. Background Revalidation from API (Skip if offline)
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        if (isMounted) setIsLoading(false);
         return;
       }
 
@@ -140,23 +162,34 @@ export const TaskDetails: React.FC = () => {
         if (!isMounted) return;
 
         if (foundTask) {
-          setTask(foundTask);
+          const taskHasChanged = !cachedTask || hasTaskChanged(cachedTask, foundTask);
+          if (taskHasChanged) {
+            setTask(foundTask);
+            await updateCachedTask(foundTask);
+          }
+
           const [foundBoard, taskComments] = await Promise.all([
             getBoardById(foundTask.boardId),
             getTaskComments(foundTask.id),
           ]);
           if (!isMounted) return;
 
-          setBoard(foundBoard);
-          if (foundBoard) {
-            setBoardMembers(foundBoard.members || []);
+          const boardHasChanged = !board || hasBoardChanged(board, foundBoard);
+          if (boardHasChanged) {
+            setBoard(foundBoard);
+            if (foundBoard) {
+              setBoardMembers(foundBoard.members || []);
+              await saveBoardToCache(foundBoard);
+            }
           }
           setComments(taskComments);
-        } else {
+        } else if (!cachedTask) {
           setTask(null);
           setBoard(null);
           setComments([]);
         }
+      } catch (err) {
+        console.warn('[TaskDetails] Network fetch failed, retaining cached data:', err);
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -166,6 +199,36 @@ export const TaskDetails: React.FC = () => {
 
     return () => {
       isMounted = false;
+    };
+  }, [id]);
+
+  // Auto-sync active task and flush queue when connection is restored
+  useEffect(() => {
+    const handleOnline = async () => {
+      try {
+        const { processed } = await flushSyncQueue();
+        if (processed > 0) {
+          console.log(`[TaskDetails] Flushed ${processed} offline mutations`);
+        }
+      } catch (err) {
+        console.warn('[TaskDetails] Flush sync queue failed on reconnect:', err);
+      }
+      if (id) {
+        try {
+          const found = await getTaskById(id);
+          if (found) {
+            setTask(found);
+            await updateCachedTask(found);
+          }
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
     };
   }, [id]);
 
@@ -180,30 +243,122 @@ export const TaskDetails: React.FC = () => {
 
   const handleStatusChange = async (newStatus: TaskStatus) => {
     if (!task) return;
-    try {
-      const updated = await apiUpdateTask(task.id, { status: newStatus });
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    if (isOffline) {
+      const updated: Task = {
+        ...task,
+        status: newStatus,
+        updatedAt: new Date().toISOString(),
+      };
       setTask(updated);
+      await updateCachedTask(updated);
+      await enqueueMutation({
+        type: 'MOVE_TASK_STATUS',
+        entityId: task.id,
+        payload: { status: newStatus },
+      });
+      showToast(`Status updated to ${newStatus === 'in-progress' ? 'In Progress' : newStatus === 'done' ? 'Completed' : 'To Do'} (saved locally, will sync when online)`);
+      return;
+    }
+
+    try {
+      const updated = await apiUpdateTask(task.id, { status: newStatus, version: task.version });
+      setTask(updated);
+      await updateCachedTask(updated);
       showToast(`Status updated to ${newStatus === 'in-progress' ? 'In Progress' : newStatus === 'done' ? 'Completed' : 'To Do'}`);
-    } catch {
-      setTask((prev) => (prev ? { ...prev, status: newStatus, updatedAt: new Date().toISOString() } : null));
+    } catch (err: any) {
+      if (err?.status === 409 || err?.code === 'CONFLICT') {
+        const serverDoc = err.details?.current || (await getTaskById(task.id)) || task;
+        setConflictLocalTask({ ...task, status: newStatus });
+        setConflictServerTask(serverDoc);
+        setIsConflictModalOpen(true);
+      } else {
+        showToast(err?.message || 'Failed to update status');
+      }
     }
   };
 
   const handleSaveTask = async (savedTask: Task) => {
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    if (isOffline) {
+      const updated: Task = {
+        ...savedTask,
+        updatedAt: new Date().toISOString(),
+      };
+      setTask(updated);
+      await updateCachedTask(updated);
+      await enqueueMutation({
+        type: 'UPDATE_TASK',
+        entityId: savedTask.id,
+        payload: updated,
+      });
+      setIsEditModalOpen(false);
+      showToast('Task updated locally (will sync when online)');
+      return;
+    }
+
     try {
       const updated = await apiUpdateTask(savedTask.id, savedTask);
       setTask(updated);
-    } catch {
-      setTask(savedTask);
+      await updateCachedTask(updated);
+      setIsEditModalOpen(false);
+      showToast('Task updated successfully');
+    } catch (err: any) {
+      if (err?.status === 409 || err?.code === 'CONFLICT') {
+        // Handle 409 OCC Conflict State
+        let serverDoc = err.details?.current;
+        if (!serverDoc) {
+          serverDoc = await getTaskById(savedTask.id);
+        }
+        if (serverDoc) {
+          setConflictLocalTask(savedTask);
+          setConflictServerTask(serverDoc);
+          setIsConflictModalOpen(true);
+        } else {
+          showToast('Conflict detected. Please retry.');
+        }
+      } else {
+        showToast(err?.message || 'Failed to update task');
+      }
     }
-    setIsEditModalOpen(false);
-    showToast('Task updated successfully');
+  };
+
+  const handleConflictOverwrite = async (resolvedTask: Task) => {
+    const updated = await apiUpdateTask(resolvedTask.id, resolvedTask);
+    setTask(updated);
+    await updateCachedTask(updated);
+    showToast('Changes saved (force overwrite applied)');
+  };
+
+  const handleConflictDiscard = (serverTask: Task) => {
+    setTask(serverTask);
+    updateCachedTask(serverTask);
+    showToast("Reverted to server's latest version");
+  };
+
+  const handleConflictMerge = async (mergedTask: Task) => {
+    const updated = await apiUpdateTask(mergedTask.id, mergedTask);
+    setTask(updated);
+    await updateCachedTask(updated);
+    showToast('Merged version saved successfully');
   };
 
   const handleDeleteTask = async () => {
     if (!task) return;
-    await apiDeleteTask(task.id);
-    showToast('Task deleted successfully');
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    await deleteCachedTask(task.id);
+
+    if (isOffline) {
+      await enqueueMutation({
+        type: 'DELETE_TASK',
+        entityId: task.id,
+        payload: {},
+      });
+    } else {
+      await apiDeleteTask(task.id);
+    }
+
+    showToast(isOffline ? 'Task deleted locally (will sync when online)' : 'Task deleted successfully');
     setIsDeleteModalOpen(false);
     if (board) {
       navigate(`/boards/${board.id}`);
@@ -215,6 +370,11 @@ export const TaskDetails: React.FC = () => {
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!commentInput.trim() || !task) return;
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      showToast('Cannot post comments while offline');
+      return;
+    }
 
     setIsSubmittingComment(true);
     try {
@@ -511,7 +671,7 @@ export const TaskDetails: React.FC = () => {
                         className={`w-8 h-8 rounded-xl ${authUser?.color || 'bg-indigo-600'} text-white font-bold text-xs flex items-center justify-center shrink-0 mt-1 shadow`}
                         title={authUser?.name || 'User'}
                       >
-                        {authUser?.initials || (authUser?.name ? authUser.name.slice(0, 2).toUpperCase() : 'U')}
+                        {getInitials(authUser?.initials || authUser?.name)}
                       </div>
                       <div className="flex-1 space-y-2">
                         <textarea
@@ -567,7 +727,7 @@ export const TaskDetails: React.FC = () => {
                                 <div
                                   className={`w-6 h-6 rounded-lg ${comment.author.color} text-white font-bold text-[10px] flex items-center justify-center shadow-sm`}
                                 >
-                                  {comment.author.initials}
+                                  {getInitials(comment.author.initials || comment.author.name)}
                                 </div>
                                 <div>
                                   <span className="text-xs font-semibold text-slate-200 mr-2">
@@ -654,7 +814,11 @@ export const TaskDetails: React.FC = () => {
                     (() => {
                       const name = typeof task.assignee === 'object' && task.assignee !== null ? task.assignee.name : String(task.assignee);
                       const color = typeof task.assignee === 'object' && task.assignee?.color ? task.assignee.color : 'bg-indigo-600';
-                      const initials = typeof task.assignee === 'object' && task.assignee?.initials ? task.assignee.initials : name.slice(0, 2).toUpperCase();
+                      const initials = getInitials(
+                        typeof task.assignee === 'object' && task.assignee?.initials
+                          ? task.assignee.initials
+                          : name
+                      );
                       const email = typeof task.assignee === 'object' && task.assignee?.email ? task.assignee.email : '';
 
                       return (
@@ -830,6 +994,18 @@ export const TaskDetails: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+      {/* 409 Conflict Resolution Modal */}
+      {isConflictModalOpen && conflictLocalTask && conflictServerTask && (
+        <ConflictModal
+          isOpen={isConflictModalOpen}
+          onClose={() => setIsConflictModalOpen(false)}
+          localTask={conflictLocalTask}
+          serverTask={conflictServerTask}
+          onOverwrite={handleConflictOverwrite}
+          onDiscard={handleConflictDiscard}
+          onMerge={handleConflictMerge}
+        />
       )}
     </div>
   );

@@ -85,7 +85,12 @@ export const Register: React.FC = () => {
         email: formData.email,
         password: formData.password,
       });
-      navigate("/dashboard");
+      navigate("/login", {
+        state: {
+          registeredEmail: formData.email,
+          message: "Account created successfully! Please sign in with your password.",
+        },
+      });
     } catch (err: any) {
       setError(err.message || "Failed to create account. Please try again.");
     } finally {

@@ -1,192 +1,404 @@
-import { randomUUID } from 'node:crypto';
-
-const seededUsers = {
-  '1': {
-    id: '1',
-    name: 'User 1',
-    email: 'user1@nsbm.lk',
-    initials: 'U1',
-    color: 'bg-indigo-600',
-  },
-  '2': {
-    id: '2',
-    name: 'User 2',
-    email: 'user2@nsbm.lk',
-    initials: 'U2',
-    color: 'bg-emerald-600',
-  },
-};
-
-// In-memory tasks collection with seeded tasks matching schema
-const tasks = [
-  {
-    id: 't1',
-    title: 'Design Dashboard Wireframes',
-    description: 'Create Figma mocks for the main board layout',
-    status: 'done',
-    priority: 'high',
-    assignee: seededUsers['1'],
-    boardId: 'b1',
-    tags: ['Design', 'UI/UX'],
-    order: 0,
-    version: 1,
-    dueDate: '2026-09-01T00:00:00.000Z',
-    createdAt: '2026-08-20T10:00:00.000Z',
-    updatedAt: '2026-08-20T10:00:00.000Z',
-  },
-  {
-    id: 't2',
-    title: 'Develop REST API Pipeline',
-    description: 'Setup Express server, error handling, and auth middleware',
-    status: 'in-progress',
-    priority: 'high',
-    assignee: seededUsers['2'],
-    boardId: 'b1',
-    tags: ['Backend', 'API'],
-    order: 1,
-    version: 1,
-    dueDate: '2026-09-05T00:00:00.000Z',
-    createdAt: '2026-08-21T11:00:00.000Z',
-    updatedAt: '2026-08-21T11:00:00.000Z',
-  },
-  {
-    id: 't3',
-    title: 'Write API Contract Documentation',
-    description: 'Document REST contract endpoints in README and export Postman tests',
-    status: 'todo',
-    priority: 'medium',
-    assignee: seededUsers['1'],
-    boardId: 'b1',
-    tags: ['Docs', 'Postman'],
-    order: 2,
-    version: 1,
-    dueDate: '2026-09-10T00:00:00.000Z',
-    createdAt: '2026-08-22T14:30:00.000Z',
-    updatedAt: '2026-08-22T14:30:00.000Z',
-  },
-  {
-    id: 't4',
-    title: 'Marketing Campaign Launch Plan',
-    description: 'Prepare campaign materials and landing page assets',
-    status: 'in-progress',
-    priority: 'high',
-    assignee: seededUsers['2'],
-    boardId: 'b2',
-    tags: ['Marketing', 'Launch'],
-    order: 0,
-    version: 1,
-    dueDate: '2026-09-15T00:00:00.000Z',
-    createdAt: '2026-08-23T09:00:00.000Z',
-    updatedAt: '2026-08-23T09:00:00.000Z',
-  },
-  {
-    id: 't5',
-    title: 'Design System & Component Tokens',
-    description: 'Establish Figma tokens and WCAG AA accessibility color contrast guidelines',
-    status: 'in-progress',
-    priority: 'high',
-    assignee: seededUsers['1'],
-    boardId: 'b3',
-    tags: ['Design', 'Tokens'],
-    order: 0,
-    version: 1,
-    dueDate: '2026-09-20T00:00:00.000Z',
-    createdAt: '2026-08-24T10:00:00.000Z',
-    updatedAt: '2026-08-24T10:00:00.000Z',
-  },
-  {
-    id: 't6',
-    title: 'Mobile Micro-interactions',
-    description: 'Prototype fluid gestures and haptic feedback specs for mobile dashboard',
-    status: 'todo',
-    priority: 'medium',
-    assignee: seededUsers['1'],
-    boardId: 'b3',
-    tags: ['UX', 'Mobile'],
-    order: 1,
-    version: 1,
-    dueDate: '2026-09-25T00:00:00.000Z',
-    createdAt: '2026-08-25T11:00:00.000Z',
-    updatedAt: '2026-08-25T11:00:00.000Z',
-  },
-];
-
-function normalizeAssignee(assignee) {
-  if (!assignee) return null;
-  if (typeof assignee === 'object' && assignee !== null) return assignee;
-  if (typeof assignee === 'string' && seededUsers[assignee]) return seededUsers[assignee];
-  if (typeof assignee === 'string') {
-    return {
-      id: `usr-${Date.now()}`,
-      name: assignee,
-      email: `${assignee.toLowerCase().replace(/\s+/g, '')}@collabboard.io`,
-      initials: assignee.slice(0, 2).toUpperCase(),
-      color: 'bg-indigo-600',
-    };
-  }
-  return null;
-}
+import mongoose from 'mongoose';
+import { Task } from '../models/Task.js';
 
 export const taskRepo = {
-  async findAll() {
-    return [...tasks];
+  /**
+   * Find all tasks matching optional query criteria
+   */
+  async findAll(query = {}) {
+    const docs = await Task.find(query);
+    return docs.map((doc) => doc.toJSON());
   },
 
+  /**
+   * Find a single task by its MongoDB ObjectId
+   */
   async findById(taskId) {
-    return tasks.find((t) => String(t.id) === String(taskId)) ?? null;
+    if (!taskId || !mongoose.Types.ObjectId.isValid(taskId)) {
+      return null;
+    }
+    const doc = await Task.findById(taskId);
+    return doc ? doc.toJSON() : null;
   },
 
+  /**
+   * Find all tasks belonging to a specific board
+   */
   async findByBoardId(boardId) {
-    return tasks.filter((t) => String(t.boardId) === String(boardId));
+    if (!boardId) return [];
+    const docs = await Task.find({ boardId: String(boardId) });
+    return docs.map((doc) => doc.toJSON());
   },
 
+  /**
+   * Create a new task document in MongoDB
+   */
   async create(taskData) {
-    const rawStatus = taskData.status ?? 'todo';
-    const status = rawStatus === 'doing' ? 'in-progress' : rawStatus;
-    const newTask = {
-      id: randomUUID(),
-      title: taskData.title.trim(),
+    const doc = await Task.create({
+      title: taskData.title?.trim(),
       description: taskData.description?.trim() ?? '',
-      status,
-      priority: taskData.priority ?? 'medium',
-      assignee: normalizeAssignee(taskData.assignee),
       boardId: String(taskData.boardId),
+      columnId: taskData.columnId ?? null,
+      status: taskData.status ?? 'todo',
+      priority: taskData.priority ?? 'normal',
+      assignee:
+        typeof taskData.assignee === 'object' && taskData.assignee !== null
+          ? taskData.assignee.name || taskData.assignee.id || ''
+          : taskData.assignee ?? '',
       tags: Array.isArray(taskData.tags) ? taskData.tags : [],
-      order: typeof taskData.order === 'number' ? taskData.order : 0,
-      version: 1,
-      dueDate: taskData.dueDate ?? null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    tasks.push(newTask);
-    return newTask;
+      dueDate: taskData.dueDate ? new Date(taskData.dueDate) : null,
+      position:
+        typeof taskData.position === 'number'
+          ? taskData.position
+          : typeof taskData.order === 'number'
+          ? taskData.order
+          : 0,
+      done: taskData.done ?? (taskData.status === 'done'),
+      version: 0,
+    });
+
+    return doc.toJSON();
   },
 
-  async update(taskId, updates) {
-    const index = tasks.findIndex((t) => String(t.id) === String(taskId));
-    if (index === -1) return null;
+  /**
+   * Update task atomically with Optimistic Concurrency Control (OCC).
+   * If expectedVersion is specified, update matches version and increments it.
+   */
+  async update(taskId, updates, expectedVersion) {
+    if (!taskId || !mongoose.Types.ObjectId.isValid(taskId)) {
+      return null;
+    }
 
-    const existing = tasks[index];
-    const rawStatus = updates.status ?? existing.status;
-    const status = rawStatus === 'doing' ? 'in-progress' : rawStatus;
+    const query = { _id: taskId };
+    if (expectedVersion !== undefined && expectedVersion !== null) {
+      query.version = Number(expectedVersion);
+    }
 
-    const updated = {
-      ...existing,
-      ...updates,
-      status,
-      assignee: updates.assignee !== undefined ? normalizeAssignee(updates.assignee) : existing.assignee,
-      tags: updates.tags !== undefined ? (Array.isArray(updates.tags) ? updates.tags : []) : (existing.tags || []),
-      version: (existing.version || 1) + 1,
-      updatedAt: new Date().toISOString(),
-    };
-    tasks[index] = updated;
-    return updated;
+    const { id, _id, version, ...payload } = updates;
+    if (payload.order !== undefined && payload.position === undefined) {
+      payload.position = payload.order;
+    }
+    if (payload.assignee && typeof payload.assignee === 'object') {
+      payload.assignee = payload.assignee.name || payload.assignee.id || '';
+    }
+    if (payload.dueDate) {
+      payload.dueDate = new Date(payload.dueDate);
+    }
+
+    const doc = await Task.findOneAndUpdate(
+      query,
+      {
+        $set: payload,
+        $inc: { version: 1 },
+      },
+      { new: true }
+    );
+
+    return doc ? doc.toJSON() : null;
   },
 
+  /**
+   * Aggregation Pipeline 1: "How many tasks per assignee are overdue on this board?"
+   *
+   * Matches overdue tasks on the board, groups them by assignee, counts the overdue tasks,
+   * collects task IDs, and $lookup joins user details from the 'users' collection.
+   *
+   * @param {string} boardId - The board ID
+   * @returns {Promise<Array<object>>} List of assignees with overdueCount, taskIds, and user info
+   */
+  async getOverdueTasksPerAssignee(boardId) {
+    const now = new Date();
+    const boardMatch = mongoose.Types.ObjectId.isValid(boardId)
+      ? { $in: [String(boardId), new mongoose.Types.ObjectId(boardId)] }
+      : String(boardId);
+
+    const pipeline = [
+      {
+        $match: {
+          boardId: boardMatch,
+          dueDate: { $lt: now },
+          status: { $ne: 'done' },
+        },
+      },
+      {
+        $addFields: {
+          assigneeId: {
+            $ifNull: [
+              '$assigneeId',
+              {
+                $cond: {
+                  if: { $eq: [{ $type: '$assignee' }, 'object'] },
+                  then: '$assignee.id',
+                  else: {
+                    $cond: {
+                      if: { $gt: [{ $strLenBytes: { $ifNull: ['$assignee', ''] } }, 0] },
+                      then: '$assignee',
+                      else: null,
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      },
+      {
+        $group: {
+          _id: '$assigneeId',
+          overdueCount: { $sum: 1 },
+          taskIds: { $push: '$_id' },
+        },
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'assignee',
+        },
+      },
+      {
+        $project: {
+          overdueCount: 1,
+          taskIds: 1,
+          assignee: {
+            $cond: {
+              if: { $gt: [{ $size: '$assignee' }, 0] },
+              then: {
+                _id: { $arrayElemAt: ['$assignee._id', 0] },
+                name: { $arrayElemAt: ['$assignee.name', 0] },
+                email: { $arrayElemAt: ['$assignee.email', 0] },
+              },
+              else: null,
+            },
+          },
+        },
+      },
+      { $sort: { overdueCount: -1 } },
+    ];
+
+    return Task.aggregate(pipeline);
+  },
+
+  /**
+   * Aggregation Pipeline 2: Board summary metrics (task counts by priority and status).
+   *
+   * Aggregates tasks on the board into counts by status, counts by priority,
+   * and total task count.
+   *
+   * @param {string} boardId - The board ID
+   * @returns {Promise<object>} Summary metrics containing byStatus, byPriority, and totalTasks
+   */
+  async getBoardSummaryMetrics(boardId) {
+    const boardMatch = mongoose.Types.ObjectId.isValid(boardId)
+      ? { $in: [String(boardId), new mongoose.Types.ObjectId(boardId)] }
+      : String(boardId);
+
+    const pipeline = [
+      { $match: { boardId: boardMatch } },
+      {
+        $facet: {
+          byStatus: [
+            { $group: { _id: '$status', count: { $sum: 1 } } },
+            { $sort: { count: -1 } },
+          ],
+          byPriority: [
+            { $group: { _id: '$priority', count: { $sum: 1 } } },
+            { $sort: { count: -1 } },
+          ],
+          totalTasks: [{ $count: 'count' }],
+        },
+      },
+      {
+        $project: {
+          byStatus: 1,
+          byPriority: 1,
+          totalTasks: { $ifNull: [{ $arrayElemAt: ['$totalTasks.count', 0] }, 0] },
+        },
+      },
+    ];
+
+    const [result] = await Task.aggregate(pipeline);
+    return {
+      totalTasks: result?.totalTasks ?? 0,
+      byStatus: result?.byStatus ?? [],
+      byPriority: result?.byPriority ?? [],
+    };
+  },
+
+  /**
+   * Board Analytics Aggregation Pipeline (Single Round-Trip)
+   *
+   * Runs a single $facet aggregation that answers two real analytical questions
+   * for a given board in one MongoDB round-trip (Learning Outcome 4):
+   *
+   *   1. overduePerAssignee — "How many tasks per assignee are overdue on this board?"
+   *      Matches tasks where dueDate < now AND status != 'done', groups by assignee,
+   *      then $lookup-joins to the users collection to populate assignee details.
+   *
+   *   2. summary — task counts broken down by status and by priority,
+   *      plus total task count and overdue task count for the board.
+   *
+   * @param {string} boardId - The board ID to aggregate tasks for
+   * @returns {Promise<object>} Analytics payload with overduePerAssignee + summary
+   */
+  async getBoardAnalytics(boardId) {
+    const now = new Date();
+    const boardMatch = mongoose.Types.ObjectId.isValid(boardId)
+      ? { $in: [String(boardId), new mongoose.Types.ObjectId(boardId)] }
+      : String(boardId);
+
+    const pipeline = [
+      // ── Stage 1: Match only tasks that belong to this board ──────────────
+      { $match: { boardId: boardMatch } },
+
+      // ── Stage 2: Normalise the assignee field into a scalar _assigneeId ──
+      // Handles documents with existing `assigneeId`, embedded object `assignee`,
+      // or plain string `assignee`.
+      {
+        $addFields: {
+          _assigneeId: {
+            $ifNull: [
+              '$assigneeId',
+              {
+                $cond: {
+                  if: { $eq: [{ $type: '$assignee' }, 'object'] },
+                  then: '$assignee.id',
+                  else: {
+                    $cond: {
+                      if: { $gt: [{ $strLenBytes: { $ifNull: ['$assignee', ''] } }, 0] },
+                      then: '$assignee',
+                      else: null,
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      },
+
+      // ── Stage 3: $facet splits the stream into parallel sub-pipelines ─────
+      // All sub-pipelines operate on the same matched+normalised documents,
+      // meaning the entire analytics response is produced in a single DB round-trip.
+      {
+        $facet: {
+          // ── Sub-pipeline A: Overdue tasks per assignee ─────────────────
+          // Answers: "How many tasks per assignee are overdue on this board?"
+          overduePerAssignee: [
+            {
+              $match: {
+                dueDate: { $lt: now },          // past the deadline
+                status: { $ne: 'done' },        // not yet completed
+              },
+            },
+            {
+              $group: {
+                _id: '$_assigneeId',            // group by normalised assignee id
+                overdueCount: { $sum: 1 },      // count overdue tasks
+                taskIds: { $push: '$_id' },     // collect task ids for reference
+              },
+            },
+            // Join to users collection to populate assignee name/email
+            {
+              $lookup: {
+                from: 'users',
+                localField: '_id',              // the assignee id we grouped by
+                foreignField: '_id',            // users._id (also a string in seed data)
+                as: 'assigneeDetails',
+              },
+            },
+            // Flatten the single-element array returned by $lookup
+            {
+              $addFields: {
+                assignee: { $arrayElemAt: ['$assigneeDetails', 0] },
+              },
+            },
+            {
+              $project: {
+                assigneeDetails: 0,             // remove the raw lookup array
+                'assignee.passwordHash': 0,     // never expose password hashes
+                'assignee.__v': 0,
+              },
+            },
+            { $sort: { overdueCount: -1 } },   // most overdue first
+          ],
+
+          // ── Sub-pipeline B: Task counts by status ──────────────────────
+          byStatus: [
+            { $group: { _id: '$status', count: { $sum: 1 } } },
+            { $sort: { count: -1 } },
+          ],
+
+          // ── Sub-pipeline C: Task counts by priority ────────────────────
+          byPriority: [
+            { $group: { _id: '$priority', count: { $sum: 1 } } },
+            { $sort: { count: -1 } },
+          ],
+
+          // ── Sub-pipeline D: Total task count ──────────────────────────
+          totalTasks: [{ $count: 'count' }],
+
+          // ── Sub-pipeline E: Overdue task count (board-level) ──────────
+          totalOverdue: [
+            {
+              $match: {
+                dueDate: { $lt: now },
+                status: { $ne: 'done' },
+              },
+            },
+            { $count: 'count' },
+          ],
+        },
+      },
+
+      // ── Stage 4: Reshape the $facet output into a clean response shape ───
+      {
+        $project: {
+          overduePerAssignee: 1,
+          byStatus: 1,
+          byPriority: 1,
+          totalTasks: { $ifNull: [{ $arrayElemAt: ['$totalTasks.count', 0] }, 0] },
+          totalOverdue: { $ifNull: [{ $arrayElemAt: ['$totalOverdue.count', 0] }, 0] },
+        },
+      },
+    ];
+
+    const [result] = await Task.aggregate(pipeline);
+
+    // Guarantee safe defaults when the board has no tasks yet
+    const totalTasks = result?.totalTasks ?? 0;
+    const totalOverdue = result?.totalOverdue ?? 0;
+    const overduePerAssignee = result?.overduePerAssignee ?? [];
+    const byStatus = result?.byStatus ?? [];
+    const byPriority = result?.byPriority ?? [];
+
+    return {
+      boardId: String(boardId),
+      generatedAt: now.toISOString(),
+      totalTasks,
+      totalOverdue,
+      overduePerAssignee,
+      byStatus,
+      byPriority,
+      summary: {
+        totalTasks,
+        totalOverdue,
+        byStatus,
+        byPriority,
+      },
+    };
+  },
+
+  /**
+   * Delete task by its MongoDB ObjectId
+   */
   async delete(taskId) {
-    const index = tasks.findIndex((t) => String(t.id) === String(taskId));
-    if (index === -1) return false;
-    tasks.splice(index, 1);
-    return true;
+    if (!taskId || !mongoose.Types.ObjectId.isValid(taskId)) {
+      return false;
+    }
+    const result = await Task.findByIdAndDelete(taskId);
+    return Boolean(result);
   },
 };
+

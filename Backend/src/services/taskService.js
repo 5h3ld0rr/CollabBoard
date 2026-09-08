@@ -1,7 +1,7 @@
 import { taskRepo } from '../repos/taskRepo.js';
 import { boardRepo } from '../repos/boardRepo.js';
 import { assertBoardAccess } from './boardService.js';
-import { NotFoundError, ForbiddenError } from '../utils/AppError.js';
+import { NotFoundError, ForbiddenError, ConflictError } from '../utils/AppError.js';
 
 /**
  * Lists tasks with filtering, sorting, pagination, and board ownership authorization
@@ -95,7 +95,8 @@ export async function createTask(taskData, userId) {
 }
 
 /**
- * Update an existing task ensuring user has access to current (and new) board
+ * Update an existing task ensuring user has access to current (and new) board.
+ * Enforces Optimistic Concurrency Control (OCC) using the version field.
  */
 export async function updateTask(taskId, updates, userId) {
   const task = await taskRepo.findById(taskId);
@@ -109,11 +110,34 @@ export async function updateTask(taskId, updates, userId) {
     await assertBoardAccess(updates.boardId, userId);
   }
 
-  return taskRepo.update(taskId, updates);
+  // If client provided a version in updates, check for version mismatch
+  if (updates.version !== undefined && updates.version !== null) {
+    if (Number(updates.version) !== Number(task.version)) {
+      throw new ConflictError('Task was modified by someone else', {
+        current: task,
+        yourVersion: Number(updates.version),
+      });
+    }
+  }
+
+  const expectedVersion =
+    updates.version !== undefined && updates.version !== null ? Number(updates.version) : task.version;
+
+  const updated = await taskRepo.update(taskId, updates, expectedVersion);
+  if (!updated) {
+    const current = await taskRepo.findById(taskId);
+    if (!current) throw new NotFoundError('Task');
+    throw new ConflictError('Task was modified by someone else', {
+      current,
+      yourVersion: expectedVersion,
+    });
+  }
+
+  return updated;
 }
 
 /**
- * Move task status within its lifecycle (todo -> doing -> done)
+ * Move task status within its lifecycle (todo -> doing -> done) with OCC verification
  */
 export async function moveTaskStatus(taskId, newStatus, userId) {
   const task = await taskRepo.findById(taskId);
@@ -122,7 +146,16 @@ export async function moveTaskStatus(taskId, newStatus, userId) {
   }
 
   await assertBoardAccess(task.boardId, userId);
-  return taskRepo.update(taskId, { status: newStatus });
+  const updated = await taskRepo.update(taskId, { status: newStatus }, task.version);
+  if (!updated) {
+    const current = await taskRepo.findById(taskId);
+    if (!current) throw new NotFoundError('Task');
+    throw new ConflictError('Task was modified by someone else', {
+      current,
+      yourVersion: task.version,
+    });
+  }
+  return updated;
 }
 
 /**
@@ -138,3 +171,48 @@ export async function deleteTask(taskId, userId) {
   await taskRepo.delete(taskId);
   return true;
 }
+
+/**
+ * Returns board analytics computed in a single MongoDB aggregation round-trip.
+ *
+ * Answers:
+ *  1. "How many tasks per assignee are overdue on this board?" (overduePerAssignee)
+ *  2. Task distribution by status and priority (summary metrics)
+ *
+ * Authorization: Only board members/owners may fetch analytics.
+ *
+ * @param {string} boardId - The board to analyse
+ * @param {string} userId  - The requesting user (for access control)
+ * @returns {Promise<object>} Aggregated analytics data
+ */
+export async function getBoardAnalytics(boardId, userId) {
+  // Reuse existing access guard — throws 403/404 if unauthorized
+  await assertBoardAccess(boardId, userId);
+  return taskRepo.getBoardAnalytics(boardId);
+}
+
+/**
+ * Returns overdue tasks grouped by assignee for a specific board.
+ * Answers: "How many tasks per assignee are overdue on this board?"
+ *
+ * @param {string} boardId - The board ID
+ * @param {string} userId  - The requesting user
+ * @returns {Promise<Array<object>>}
+ */
+export async function getOverdueTasksPerAssignee(boardId, userId) {
+  await assertBoardAccess(boardId, userId);
+  return taskRepo.getOverdueTasksPerAssignee(boardId);
+}
+
+/**
+ * Returns summary metrics (counts by status and priority) for a specific board.
+ *
+ * @param {string} boardId - The board ID
+ * @param {string} userId  - The requesting user
+ * @returns {Promise<object>}
+ */
+export async function getBoardSummaryMetrics(boardId, userId) {
+  await assertBoardAccess(boardId, userId);
+  return taskRepo.getBoardSummaryMetrics(boardId);
+}
+

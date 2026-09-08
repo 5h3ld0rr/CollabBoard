@@ -41,7 +41,9 @@ import {
   DEFAULT_ACTIVE_SESSIONS,
   SUBSCRIPTION_PLANS,
 } from "../constants";
+import { saveCachedProfileDetails, getCachedProfileDetails } from "../db";
 import type { Task, TaskStatus, Workspace, User } from "../types";
+import { getInitials as extractInitials } from "../utils";
 
 type ProfileTab =
   | "overview"
@@ -51,9 +53,20 @@ type ProfileTab =
   | "preferences"
   | "security";
 
+interface UserProfileDetails {
+  name: string;
+  username: string;
+  email: string;
+  role: string;
+  company: string;
+  location: string;
+  bio: string;
+  memberSince: string;
+}
+
 export const Profile: React.FC = () => {
   const navigate = useNavigate();
-  const { user: authUser } = useAuth();
+  const { user: authUser, updateUser } = useAuth();
   const { state: { boards: contextBoards, tasks: contextTasks } } = useBoard();
 
   const currentUser: User = authUser || {
@@ -68,9 +81,9 @@ export const Profile: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ProfileTab>("overview");
 
   // Saved & Form State
-  const [savedProfile, setSavedProfile] = useState({
+  const [savedProfile, setSavedProfile] = useState<UserProfileDetails>({
     name: currentUser.name,
-    username: currentUser.email.split("@")[0],
+    username: currentUser.email ? currentUser.email.split("@")[0] : "alex.chen",
     email: currentUser.email,
     role: "Lead Full-Stack Engineer",
     company: "CollabBoard Labs",
@@ -92,6 +105,45 @@ export const Profile: React.FC = () => {
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">(
     "monthly",
   );
+
+  // Load cached profile from PouchDB and keep synced with authUser
+  useEffect(() => {
+    async function loadPouchProfile() {
+      try {
+        const cached = await getCachedProfileDetails();
+        if (cached) {
+          const merged = {
+            ...cached,
+            name: authUser?.name || cached.name,
+            email: authUser?.email || cached.email,
+          };
+          setSavedProfile(merged);
+          setName(merged.name);
+          setUsername(merged.username);
+          setEmail(merged.email);
+          if (merged.role) setRole(merged.role);
+          if (merged.company) setCompany(merged.company);
+          if (merged.location) setLocation(merged.location);
+          if (merged.bio) setBio(merged.bio);
+          return;
+        }
+      } catch {
+        // Fallback to authUser
+      }
+
+      if (authUser) {
+        setName(authUser.name);
+        setEmail(authUser.email);
+        setSavedProfile((prev) => ({
+          ...prev,
+          name: authUser.name,
+          email: authUser.email,
+          username: authUser.email ? authUser.email.split("@")[0] : prev.username,
+        }));
+      }
+    }
+    loadPouchProfile();
+  }, [authUser]);
 
   // Check if any personal info field has unsaved changes
   const isProfileDirty =
@@ -155,7 +207,7 @@ export const Profile: React.FC = () => {
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
-    setSavedProfile({
+    const updated = {
       name,
       username,
       email,
@@ -164,7 +216,16 @@ export const Profile: React.FC = () => {
       location,
       bio,
       memberSince: savedProfile.memberSince,
+    };
+    setSavedProfile(updated);
+    saveCachedProfileDetails(updated);
+
+    // Update global AuthContext user
+    updateUser({
+      name,
+      email,
     });
+
     showToast("Profile details updated successfully!");
   };
 
@@ -233,12 +294,7 @@ export const Profile: React.FC = () => {
   });
 
   const getInitials = (fullName: string) => {
-    return fullName
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
+    return extractInitials(fullName);
   };
 
   return (
@@ -936,9 +992,7 @@ export const Profile: React.FC = () => {
 
                   <div className="pt-3 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-400">
                     <div className="flex items-center space-x-3">
-                      <span>{ws.boardCount} boards</span>
-                      <span>•</span>
-                      <span>{ws.memberCount} members</span>
+                      <span>{ws.boardCount} {ws.boardCount === 1 ? 'board' : 'boards'}</span>
                     </div>
                     <Link
                       to="/dashboard"

@@ -1,6 +1,7 @@
 import { boardRepo } from '../repos/boardRepo.js';
 import { taskRepo } from '../repos/taskRepo.js';
 import { userRepo } from '../repos/userRepo.js';
+import { workspaceRepo } from '../repos/workspaceRepo.js';
 import { NotFoundError, ForbiddenError } from '../utils/AppError.js';
 
 /**
@@ -11,8 +12,16 @@ export async function enrichBoard(board) {
   const boardTasks = await taskRepo.findByBoardId(board.id);
   const totalTasks = boardTasks.length;
   const todoCount = boardTasks.filter((t) => t.status === 'todo').length;
-  const inProgressCount = boardTasks.filter((t) => t.status === 'in-progress' || t.status === 'doing').length;
+  const inProgressCount = boardTasks.filter((t) => t.status === 'in-progress').length;
   const doneCount = boardTasks.filter((t) => t.status === 'done').length;
+
+  let workspaceName = '';
+  if (board.workspaceId) {
+    const ws = await workspaceRepo.findById(board.workspaceId);
+    if (ws) {
+      workspaceName = ws.name;
+    }
+  }
 
   const rawMembers = Array.isArray(board.members) ? board.members : [];
   const populatedMembers = await Promise.all(
@@ -26,12 +35,8 @@ export async function enrichBoard(board) {
       const boardRole = isOwner ? 'Admin' : (idx === 0 ? 'Admin' : 'Editor');
 
       if (user) {
-        const initials = (user.name || 'User')
-          .split(' ')
-          .map((n) => n[0])
-          .join('')
-          .toUpperCase()
-          .slice(0, 2);
+        const parts = (user.name || 'User').trim().split(/\s+/).filter(Boolean);
+        const initials = user.initials || (parts.length === 1 ? parts[0].slice(0, 2).toUpperCase() : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase());
         const color = memberId === '1' ? 'bg-indigo-600' : memberId === '2' ? 'bg-emerald-600' : 'bg-fuchsia-600';
 
         return {
@@ -59,6 +64,7 @@ export async function enrichBoard(board) {
 
   return {
     ...board,
+    workspaceName,
     members: populatedMembers,
     stats: {
       totalTasks,
@@ -110,8 +116,15 @@ export async function getBoard(boardId, userId) {
  * Create a new board owned by the requesting user
  */
 export async function createBoard(boardData, userId) {
+  let targetWorkspaceId = boardData.workspaceId;
+  if (!targetWorkspaceId) {
+    const userWorkspaces = await workspaceRepo.listByUserId(userId);
+    targetWorkspaceId = userWorkspaces[0]?.id || null;
+  }
+
   const created = await boardRepo.create({
     ...boardData,
+    workspaceId: targetWorkspaceId,
     ownerId: userId,
   });
   return enrichBoard(created);

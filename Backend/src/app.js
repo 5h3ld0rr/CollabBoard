@@ -1,5 +1,7 @@
+import mongoose from 'mongoose';
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import { config } from './config.js';
 import { requestId } from './middleware/requestId.js';
 import { requestLogger } from './middleware/requestLogger.js';
@@ -23,13 +25,32 @@ app.use(
   })
 );
 app.use(express.json({ limit: '100kb' }));
+app.use(cookieParser());
 app.use(requestId);
 app.use(requestLogger);
 
+/* Root Endpoint (Public) */
+app.get('/', (req, res) => {
+  res.json({
+    name: 'CollabBoard REST API',
+    version: '1.0.0',
+    status: 'running',
+    docs: '/api/docs',
+    health: '/api/health',
+  });
+});
+
 /* Health Check Endpoint (Public) */
 app.get('/api/health', (req, res) => {
+  const readyStates = ['disconnected', 'connected', 'connecting', 'disconnecting'];
+  const dbStatus = readyStates[mongoose.connection.readyState] ?? 'unknown';
+
   res.json({
     status: 'ok',
+    database: {
+      status: dbStatus,
+      connected: mongoose.connection.readyState === 1,
+    },
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
   });

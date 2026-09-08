@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import * as authApi from '../api/auth';
+import { getCachedUser, saveCachedUser, clearCachedUser } from '../db';
+import { getInitials } from '../utils';
 import type { User } from '../types';
 
 interface AuthContextType {
@@ -9,37 +11,60 @@ interface AuthContextType {
   isLoading: boolean;
   login: (credentials: authApi.LoginInput) => Promise<void>;
   register: (data: authApi.RegisterInput) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
+  updateUser: (updatedData: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('user');
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
+  const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Sync token validation on mount
+  // Sync auth state on mount using HTTP-only cookie + PouchDB cache
   useEffect(() => {
+    // One-time cleanup of any legacy web storage keys
+    try {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('remember_me');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('user');
+    } catch {
+      // Ignore if storage is inaccessible
+    }
+
     async function initAuth() {
-      const storedToken = localStorage.getItem('token');
-      if (!storedToken) {
-        setIsLoading(false);
-        return;
+      // 1. Instantly load cached user from PouchDB if available
+      try {
+        const cachedUser = await getCachedUser();
+        if (cachedUser) {
+          const userWithInitials: User = {
+            ...cachedUser,
+            initials: cachedUser.initials || getInitials(cachedUser.name),
+          };
+          setUser(userWithInitials);
+          setToken('cookie-session');
+        }
+      } catch {
+        // Fallback to network
       }
 
+      // 2. Validate current session against backend via HTTP-only cookie
       try {
         const currentUser = await authApi.getMe();
-        setUser(currentUser);
-        localStorage.setItem('user', JSON.stringify(currentUser));
+        const userWithInitials: User = {
+          ...currentUser,
+          initials: currentUser.initials || getInitials(currentUser.name),
+        };
+        setUser(userWithInitials);
+        setToken('cookie-session');
+        await saveCachedUser(userWithInitials);
       } catch {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
         setUser(null);
         setToken(null);
+        await clearCachedUser();
       } finally {
         setIsLoading(false);
       }
@@ -51,6 +76,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const handleExpired = () => {
       setUser(null);
       setToken(null);
+      clearCachedUser();
     };
 
     window.addEventListener('auth:expired', handleExpired);
@@ -58,36 +84,57 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const login = async (credentials: authApi.LoginInput) => {
-    setIsLoading(true);
-    try {
-      const result = await authApi.login(credentials);
-      localStorage.setItem('token', result.token);
-      localStorage.setItem('user', JSON.stringify(result.user));
-      setToken(result.token);
-      setUser(result.user);
-    } finally {
-      setIsLoading(false);
-    }
+    const result = await authApi.login(credentials);
+    const userWithInitials: User = {
+      ...result.user,
+      initials: result.user.initials || getInitials(result.user.name),
+    };
+    setUser(userWithInitials);
+    setToken(result.token || 'cookie-session');
+    await saveCachedUser(userWithInitials);
   };
 
   const register = async (data: authApi.RegisterInput) => {
-    setIsLoading(true);
+    await authApi.register(data);
+    // Do not log in automatically - redirect to login page for manual login
+  };
+
+  const logout = async () => {
     try {
-      const result = await authApi.register(data);
-      localStorage.setItem('token', result.token);
-      localStorage.setItem('user', JSON.stringify(result.user));
-      setToken(result.token);
-      setUser(result.user);
+      await authApi.logout();
     } finally {
-      setIsLoading(false);
+      setUser(null);
+      setToken(null);
+      await clearCachedUser();
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setUser(null);
-    setToken(null);
+  const updateUser = (updatedData: Partial<User>) => {
+    setUser((prev) => {
+      const base: User = prev || {
+        id: 'usr-1',
+        name: 'Alex Chen',
+        email: 'alex.chen@collabboard.io',
+        initials: 'AC',
+        color: 'from-indigo-600 to-violet-600',
+      };
+
+      const newName = updatedData.name !== undefined ? updatedData.name : base.name;
+      const computedInitials =
+        updatedData.initials ||
+        (newName ? getInitials(newName) : base.initials) ||
+        'AC';
+
+      const nextUser: User = {
+        ...base,
+        ...updatedData,
+        name: newName,
+        initials: computedInitials,
+      };
+
+      saveCachedUser(nextUser);
+      return nextUser;
+    });
   };
 
   return (
@@ -95,11 +142,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       value={{
         user,
         token,
-        isAuthenticated: !!token && !!user,
+        isAuthenticated: !!user,
         isLoading,
         login,
         register,
         logout,
+        updateUser,
       }}
     >
       {children}

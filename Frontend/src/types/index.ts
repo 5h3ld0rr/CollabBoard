@@ -1,5 +1,5 @@
 export type TaskStatus = 'todo' | 'in-progress' | 'done';
-export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+export type TaskPriority = 'low' | 'normal' | 'medium' | 'high' | 'urgent';
 
 export interface User {
   id: string;
@@ -62,9 +62,9 @@ export interface Workspace {
   id: string;
   name: string;
   description: string;
-  boardCount: number;
-  memberCount: number;
+  boardCount?: number;
   color?: string;
+  memberCount?: number;
   role?: 'Owner' | 'Admin' | 'Member';
   members?: User[];
 }

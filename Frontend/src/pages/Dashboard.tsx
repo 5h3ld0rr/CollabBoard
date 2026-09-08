@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   Plus,
   Filter,
@@ -7,24 +7,25 @@ import {
   Search,
   Sparkles,
   Star,
-  Activity,
   CheckCircle2,
-  Clock,
-  Layers,
-} from 'lucide-react';
-import { Navbar, AmbientBackground } from '../components/common';
-import { WorkspaceStats } from '../components/dashboard/WorkspaceStats';
-import { BoardCard } from '../components/dashboard/BoardCard';
-import { CreateBoardModal } from '../components/dashboard/CreateBoardModal';
-import { CreateWorkspaceModal, ManageWorkspaceModal } from '../components/workspace';
-import { useBoard } from '../context';
+} from "lucide-react";
+import { Navbar, AmbientBackground } from "../components/common";
+import { WorkspaceStats } from "../components/dashboard/WorkspaceStats";
+import { BoardCard } from "../components/dashboard/BoardCard";
+import { CreateBoardModal } from "../components/dashboard/CreateBoardModal";
+import {
+  CreateWorkspaceModal,
+  ManageWorkspaceModal,
+  WorkspaceSkeleton,
+} from "../components/workspace";
+import { useBoard } from "../context";
 import {
   getWorkspaces,
   createWorkspace as apiCreateWorkspace,
   updateWorkspace as apiUpdateWorkspace,
   deleteWorkspace as apiDeleteWorkspace,
-} from '../api';
-import type { Board, Workspace } from '../types';
+} from "../api";
+import type { Board, Workspace } from "../types";
 
 export const Dashboard: React.FC = () => {
   const { workspaceId } = useParams<{ workspaceId: string }>();
@@ -38,16 +39,22 @@ export const Dashboard: React.FC = () => {
   } = useBoard();
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null);
-  const [managingWorkspace, setManagingWorkspace] = useState<Workspace | null>(null);
-  const [activeTab, setActiveTab] = useState<'all' | 'starred'>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'updated' | 'tasks' | 'title'>('updated');
-  
+  const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(true);
+  const [managingWorkspace, setManagingWorkspace] = useState<Workspace | null>(
+    null,
+  );
+  const [activeTab, setActiveTab] = useState<"all" | "starred">("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<"updated" | "tasks" | "title">(
+    "updated",
+  );
+
   // Modals state
   const [isCreateBoardModalOpen, setIsCreateBoardModalOpen] = useState(false);
-  const [isCreateWorkspaceModalOpen, setIsCreateWorkspaceModalOpen] = useState(false);
-  const [isManageWorkspaceModalOpen, setIsManageWorkspaceModalOpen] = useState(false);
+  const [isCreateWorkspaceModalOpen, setIsCreateWorkspaceModalOpen] =
+    useState(false);
+  const [isManageWorkspaceModalOpen, setIsManageWorkspaceModalOpen] =
+    useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -57,63 +64,76 @@ export const Dashboard: React.FC = () => {
     }, 3000);
   };
 
-  // Load workspaces and boards from live API
+  // Derive active workspace directly from state without delayed useEffect redirects
+  const currentWorkspace = useMemo(() => {
+    if (workspaces.length === 0) return null;
+    if (workspaceId) {
+      const match = workspaces.find((w) => w.id === workspaceId);
+      if (match) return match;
+      return null;
+    }
+    return workspaces[0];
+  }, [workspaces, workspaceId]);
+
+  // Load workspaces and boards from live API once on mount
   useEffect(() => {
+    let isMounted = true;
     async function load() {
       loadBoards();
-      const list = await getWorkspaces();
-      setWorkspaces(list);
-      if (list.length > 0) {
-        const targetId = workspaceId || 'ws-1';
-        const found = list.find((w) => w.id === targetId) || list[0];
-        setCurrentWorkspace(found);
-        setManagingWorkspace(found);
+      try {
+        const list = await getWorkspaces();
+        if (isMounted) {
+          setWorkspaces(list);
+        }
+      } catch (err) {
+        console.warn("Failed to load workspaces:", err);
+      } finally {
+        if (isMounted) {
+          setIsLoadingWorkspaces(false);
+        }
       }
     }
     load();
-  }, [workspaceId]);
+    return () => {
+      isMounted = false;
+    };
+  }, [loadBoards]);
 
-  // Sync workspace with URL when workspaceId route param changes
+  // If workspaceId in the URL is invalid/not found, navigate to the correct primary workspace
   useEffect(() => {
-    if (workspaceId && workspaces.length > 0) {
-      const found = workspaces.find((w) => w.id === workspaceId);
-      if (found) {
-        setCurrentWorkspace(found);
-        setManagingWorkspace(found);
+    if (workspaces.length > 0 && workspaceId) {
+      const isValid = workspaces.some((w) => w.id === workspaceId);
+      if (!isValid && workspaces[0]?.id) {
+        navigate(`/workspaces/${workspaces[0].id}`, { replace: true });
       }
     }
-  }, [workspaceId, workspaces]);
+  }, [workspaces, workspaceId, navigate]);
 
   // Workspace actions
   const handleSelectWorkspace = (ws: Workspace) => {
-    setCurrentWorkspace(ws);
-    setManagingWorkspace(ws);
     navigate(`/workspaces/${ws.id}`);
     showToast(`Switched to "${ws.name}"`);
   };
 
-  const handleCreateWorkspace = async (newWsData: Partial<Workspace> & { name: string }) => {
-    try {
-      const created = await apiCreateWorkspace(newWsData);
-      setWorkspaces((prev) => [...prev, created]);
-      setCurrentWorkspace(created);
-      navigate(`/workspaces/${created.id}`);
-      showToast(`Created workspace "${created.name}"!`);
-    } catch {
-      showToast('Failed to create workspace');
-    }
+  const handleCreateWorkspace = async (
+    newWsData: Partial<Workspace> & { name: string },
+  ) => {
+    const created = await apiCreateWorkspace(newWsData);
+    setWorkspaces((prev) => [...prev, created]);
+    navigate(`/workspaces/${created.id}`);
+    showToast(`Created workspace "${created.name}"!`);
   };
 
   const handleUpdateWorkspace = async (updatedWs: Workspace) => {
     try {
       const updated = await apiUpdateWorkspace(updatedWs.id, updatedWs);
-      setWorkspaces((prev) => prev.map((w) => (w.id === updated.id ? updated : w)));
-      if (currentWorkspace?.id === updated.id) {
-        setCurrentWorkspace(updated);
-      }
+      setWorkspaces((prev) =>
+        prev.map((w) => (w.id === updated.id ? updated : w)),
+      );
       showToast(`Updated workspace "${updated.name}"`);
-    } catch {
-      showToast('Failed to update workspace');
+    } catch (err: any) {
+      showToast(err.message || "Failed to update workspace");
+      throw err;
     }
   };
 
@@ -127,43 +147,45 @@ export const Dashboard: React.FC = () => {
       const remaining = workspaces.filter((w) => w.id !== deletedWorkspaceId);
       setWorkspaces(remaining);
       if (remaining.length > 0) {
-        setCurrentWorkspace(remaining[0]);
         navigate(`/workspaces/${remaining[0].id}`);
       }
-      setActiveTab('all');
-      showToast('Workspace deleted');
+      setActiveTab("all");
+      showToast("Workspace deleted");
     } catch {
-      showToast('Failed to delete workspace');
+      showToast("Failed to delete workspace");
     }
   };
 
   // Board actions
   const handleToggleFavorite = (boardId: string) => {
     toggleFavoriteBoard(boardId);
-    showToast('Toggled board favorite status');
+    showToast("Toggled board favorite status");
   };
 
   const handleCreateBoard = async (newBoard: Board) => {
-    try {
-      await addBoard(newBoard);
-      // update workspace boardCount
-      setWorkspaces((prev) =>
-        prev.map((w) =>
-          w.id === newBoard.workspaceId ? { ...w, boardCount: w.boardCount + 1 } : w
-        )
-      );
-      showToast(`Created board "${newBoard.title}"!`);
-    } catch {
-      showToast('Failed to create board');
-    }
+    await addBoard(newBoard);
+    // update workspace boardCount
+    setWorkspaces((prev) =>
+      prev.map((w) =>
+        w.id === newBoard.workspaceId
+          ? { ...w, boardCount: (w.boardCount || 0) + 1 }
+          : w,
+      ),
+    );
+    showToast(`Created board "${newBoard.title}"!`);
   };
 
   // Boards belonging to the currently active workspace
   const currentWorkspaceBoards = useMemo(() => {
     if (!currentWorkspace) return boards;
     return boards.filter((board) => {
-      const matchesId = board.workspaceId && String(board.workspaceId) === String(currentWorkspace.id);
-      const matchesName = board.workspaceName && board.workspaceName.toLowerCase() === currentWorkspace.name.toLowerCase();
+      const matchesId =
+        board.workspaceId &&
+        String(board.workspaceId) === String(currentWorkspace.id);
+      const matchesName =
+        board.workspaceName &&
+        board.workspaceName.toLowerCase() ===
+          currentWorkspace.name.toLowerCase();
       if (board.workspaceId || board.workspaceName) {
         return matchesId || matchesName;
       }
@@ -176,31 +198,39 @@ export const Dashboard: React.FC = () => {
     return currentWorkspaceBoards
       .filter((board) => {
         // Tab filter
-        if (activeTab === 'starred' && !board.isFavorite) {
+        if (activeTab === "starred" && !board.isFavorite) {
           return false;
         }
 
         // Search query filter
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase();
-          const matchTitle = (board.title || '').toLowerCase().includes(q);
-          const matchDesc = (board.description || '').toLowerCase().includes(q);
-          const matchWorkspace = (board.workspaceName || '').toLowerCase().includes(q);
-          const matchTags = (board.tags || []).some((t) => t.toLowerCase().includes(q));
-          if (!matchTitle && !matchDesc && !matchWorkspace && !matchTags) return false;
+          const matchTitle = (board.title || "").toLowerCase().includes(q);
+          const matchDesc = (board.description || "").toLowerCase().includes(q);
+          const matchWorkspace = (board.workspaceName || "")
+            .toLowerCase()
+            .includes(q);
+          const matchTags = (board.tags || []).some((t) =>
+            t.toLowerCase().includes(q),
+          );
+          if (!matchTitle && !matchDesc && !matchWorkspace && !matchTags)
+            return false;
         }
 
         return true;
       })
       .sort((a, b) => {
-        if (sortBy === 'title') {
-          return (a.title || '').localeCompare(b.title || '');
+        if (sortBy === "title") {
+          return (a.title || "").localeCompare(b.title || "");
         }
-        if (sortBy === 'tasks') {
+        if (sortBy === "tasks") {
           return (b.stats?.totalTasks || 0) - (a.stats?.totalTasks || 0);
         }
-        if (sortBy === 'updated') {
-          return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+        if (sortBy === "updated") {
+          return (
+            new Date(b.createdAt || 0).getTime() -
+            new Date(a.createdAt || 0).getTime()
+          );
         }
         if (sortBy === 'updated') {
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -208,6 +238,11 @@ export const Dashboard: React.FC = () => {
         return 0;
       });
   }, [currentWorkspaceBoards, activeTab, searchQuery, sortBy]);
+
+  // Display skeleton loader while initial data loads or while redirecting from an invalid workspace ID
+  if (isLoadingWorkspaces || (workspaces.length > 0 && !currentWorkspace)) {
+    return <WorkspaceSkeleton />;
+  }
 
   return (
     <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
@@ -246,11 +281,7 @@ export const Dashboard: React.FC = () => {
           <div>
             <div className="flex items-center space-x-2 text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-1">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>
-                {currentWorkspace
-                  ? `${currentWorkspace.name} Workspace`
-                  : "Workspace"}
-              </span>
+              <span>{currentWorkspace?.name || 'Workspace'}</span>
             </div>
             <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
               Engineering Sprint Boards
@@ -331,7 +362,7 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* Board Cards Grid */}
-        {currentWorkspaceBoards.length > 0 &&filteredBoards.length === 0 ? (
+        {currentWorkspaceBoards.length > 0 && filteredBoards.length === 0 ? (
           /* Search / Filter Empty State */
           <div className="rounded-3xl border border-slate-800/80 bg-slate-900/30 p-12 text-center max-w-md mx-auto my-12 space-y-4">
             <div className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center mx-auto text-slate-400">
@@ -386,51 +417,6 @@ export const Dashboard: React.FC = () => {
             ))}
           </div>
         )}
-
-        {/* Live Activity & System Health Footer Bar */}
-        <div className="mt-14 pt-8 border-t border-slate-800/80 grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="p-5 rounded-2xl bg-slate-900/40 border border-slate-800/80 flex items-start space-x-3.5">
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-              <Activity className="w-4 h-4 animate-pulse" />
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-white">
-                Live Multiplayer Sync
-              </h4>
-              <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
-                Connected to WebSocket engine. Real-time board broadcasts and
-                cursor presence enabled.
-              </p>
-            </div>
-          </div>
-
-          <div className="p-5 rounded-2xl bg-slate-900/40 border border-slate-800/80 flex items-start space-x-3.5">
-            <div className="w-8 h-8 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
-              <Layers className="w-4 h-4" />
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-white">
-                IndexedDB Local Cache
-              </h4>
-              <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
-                All boards synced locally. Offline mutations queue automatically
-                on network loss.
-              </p>
-            </div>
-          </div>
-
-          <div className="p-5 rounded-2xl bg-slate-900/40 border border-slate-800/80 flex items-start space-x-3.5">
-            <div className="w-8 h-8 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400 flex items-center justify-center shrink-0">
-              <Clock className="w-4 h-4" />
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-white">Sprint Velocity</h4>
-              <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
-                16 tasks completed across active boards in current sprint cycle.
-              </p>
-            </div>
-          </div>
-        </div>
       </main>
 
       {/* Create Board Modal */}

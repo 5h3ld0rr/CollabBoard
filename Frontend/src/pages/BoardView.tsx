@@ -23,8 +23,9 @@ import {
   FileQuestion,
 } from "lucide-react";
 import { Navbar, AmbientBackground } from "../components/common";
-import { Column, TaskModal, BoardSettingsModal } from "../components/board";
+import { Column, TaskModal, BoardSettingsModal, ConflictModal } from "../components/board";
 import { useBoard } from "../context";
+import * as tasksApi from "../api/tasks";
 import type { Board, Task, TaskStatus } from "../types";
 
 export const BoardView: React.FC = () => {
@@ -34,6 +35,7 @@ export const BoardView: React.FC = () => {
 
   const {
     state: { activeBoard: boardData, tasks, boardMembers, isLoading },
+    dispatch,
     loadBoard,
     addTask,
     updateTask,
@@ -65,6 +67,11 @@ export const BoardView: React.FC = () => {
     useState<TaskStatus>("todo");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+
+  // 409 OCC Conflict Resolution State
+  const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
+  const [conflictLocalTask, setConflictLocalTask] = useState<Task | null>(null);
+  const [conflictServerTask, setConflictServerTask] = useState<Task | null>(null);
 
   // Searchable Assignee Dropdown State
   const [isAssigneeDropdownOpen, setIsAssigneeDropdownOpen] = useState(false);
@@ -275,16 +282,15 @@ export const BoardView: React.FC = () => {
       }
 
       // 3. Filter by Status
-      const normalizedStatus = task.status === ("doing" as any) ? "in-progress" : task.status;
-      if (selectedStatus !== "all" && normalizedStatus !== selectedStatus) {
+      if (selectedStatus !== "all" && task.status !== selectedStatus) {
         return false;
       }
 
       // 4. Filter by Overdue
       if (isOverdueFilter) {
         const isTaskOverdue =
-          normalizedStatus !== "done" &&
-          Boolean(task.dueDate) &&
+          task.dueDate !== undefined &&
+          task.dueDate !== null &&
           new Date(task.dueDate!).getTime() < today;
         if (!isTaskOverdue) return false;
       }
@@ -340,14 +346,24 @@ export const BoardView: React.FC = () => {
 
   const handleConfirmDeleteTask = () => {
     if (!taskToDelete) return;
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
     deleteTask(taskToDelete.id);
-    showToast(`Task "${taskToDelete.title}" deleted`);
+    showToast(`Task "${taskToDelete.title}" deleted${isOffline ? ' locally (will sync when online)' : ''}`);
     setTaskToDelete(null);
   };
 
-  const handleMoveStatus = (taskId: string, newStatus: TaskStatus) => {
-    moveTaskStatus(taskId, newStatus);
-    showToast(`Task moved to ${newStatus.replace("-", " ")}`);
+  const handleMoveStatus = async (taskId: string, newStatus: TaskStatus) => {
+    try {
+      await moveTaskStatus(taskId, newStatus);
+      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+      showToast(`Task moved to ${newStatus.replace("-", " ")}${isOffline ? ' (saved locally, will sync when online)' : ''}`);
+    } catch (err: any) {
+      if (err?.status === 409 || err?.code === 'CONFLICT') {
+        showToast("⚠️ Task modified by someone else — reloaded latest board state");
+      } else {
+        showToast(err?.message || "Failed to move task");
+      }
+    }
   };
 
   const handleDropTask = (taskId: string, targetStatus: TaskStatus) => {
@@ -355,16 +371,52 @@ export const BoardView: React.FC = () => {
   };
 
   const handleSaveTask = async (savedTask: Task) => {
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
     const exists = tasks.some((t) => t.id === savedTask.id);
     if (exists) {
-      await updateTask(savedTask);
-      showToast("Task updated successfully");
+      try {
+        await updateTask(savedTask);
+        showToast(isOffline ? "Task updated locally (will sync when online)" : "Task updated successfully");
+      } catch (err: any) {
+        if (err?.status === 409 || err?.code === 'CONFLICT') {
+          // Handle 409 OCC Conflict State
+          let serverDoc = err.details?.current;
+          if (!serverDoc) {
+            serverDoc = await tasksApi.getTaskById(savedTask.id);
+          }
+          if (serverDoc) {
+            setConflictLocalTask(savedTask);
+            setConflictServerTask(serverDoc);
+            setIsConflictModalOpen(true);
+          } else {
+            showToast("Conflict detected. Reloading board...");
+            if (boardId) loadBoard(boardId, true);
+          }
+        } else {
+          showToast(err?.message || "Failed to update task");
+        }
+      }
     } else {
       if (boardData) {
         await addTask(boardData.id, savedTask);
-        showToast("New task added to board");
+        showToast(isOffline ? "New task added locally (will sync when online)" : "New task added to board");
       }
     }
+  };
+
+  const handleConflictOverwrite = async (resolvedTask: Task) => {
+    await updateTask(resolvedTask);
+    showToast("Changes saved (force overwrite applied)");
+  };
+
+  const handleConflictDiscard = (serverTask: Task) => {
+    dispatch({ type: 'UPDATE_TASK', payload: serverTask });
+    showToast("Reverted to server's latest version");
+  };
+
+  const handleConflictMerge = async (mergedTask: Task) => {
+    await updateTask(mergedTask);
+    showToast("Merged version saved successfully");
   };
 
   const handleUpdateBoard = (updatedBoard: Board) => {
@@ -981,6 +1033,19 @@ export const BoardView: React.FC = () => {
         />
       )}
 
+      {/* 409 Conflict Resolution Modal */}
+      {isConflictModalOpen && conflictLocalTask && conflictServerTask && (
+        <ConflictModal
+          isOpen={isConflictModalOpen}
+          onClose={() => setIsConflictModalOpen(false)}
+          localTask={conflictLocalTask}
+          serverTask={conflictServerTask}
+          onOverwrite={handleConflictOverwrite}
+          onDiscard={handleConflictDiscard}
+          onMerge={handleConflictMerge}
+        />
+      )}
+
       {/* Task Deletion Confirmation Dialog */}
       {taskToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
@@ -1026,3 +1091,4 @@ export const BoardView: React.FC = () => {
 };
 
 export default BoardView;
+

@@ -103,18 +103,21 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       assignee: assignedUser,
       tags: parsedTags.length > 0 ? parsedTags : ['General'],
       order: initialTask ? initialTask.order : 0,
-      version: initialTask ? initialTask.version + 1 : 1,
+      version: initialTask ? (typeof initialTask.version === 'number' ? initialTask.version : 0) : 0,
       dueDate: dueDate.trim() || undefined,
       createdAt: initialTask ? initialTask.createdAt : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
     setIsSubmitting(true);
-    setTimeout(() => {
+    try {
       onSaveTask(taskData);
-      setIsSubmitting(false);
       onClose();
-    }, 350); // Visible loading state on save
+    } catch (err) {
+      console.error('Failed to save task:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

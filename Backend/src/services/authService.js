@@ -21,22 +21,17 @@ export async function register({ email, password, name }) {
     name: name || 'User',
   });
 
-  // Automatically provision a default workspace on the backend for the new user
-  await workspaceRepo.create({
-    name: `${newUser.name}'s Workspace`,
-    description: 'Default team workspace for boards and tasks',
-    ownerId: newUser.id,
-    members: [newUser.id],
-  });
-
-  const token = jwt.sign(
-    { sub: newUser.id, email: newUser.email },
-    config.jwtSecret,
-    { expiresIn: '1h' }
-  );
+  // Automatically provision a default workspace on the backend if none exists
+  const existingWs = await workspaceRepo.findAll();
+  if (existingWs.length === 0) {
+    await workspaceRepo.create({
+      name: 'My Workspace',
+      description: 'Personal workspace for sprint boards and tasks',
+      color: 'from-indigo-600 to-violet-600',
+    });
+  }
 
   return {
-    token,
     user: publicUser(newUser),
   };
 }
@@ -44,7 +39,7 @@ export async function register({ email, password, name }) {
 /**
  * Authenticate user credentials and return signed JWT token
  */
-export async function login({ email, password }) {
+export async function login({ email, password, rememberMe = false }) {
   const user = await userRepo.findByEmail(email);
   if (!user) {
     throw new AppError('Invalid email or password', 401, 'BAD_CREDENTIALS');
@@ -55,15 +50,17 @@ export async function login({ email, password }) {
     throw new AppError('Invalid email or password', 401, 'BAD_CREDENTIALS');
   }
 
+  const expiresIn = rememberMe ? '30d' : '1d';
   const token = jwt.sign(
     { sub: user.id, email: user.email },
     config.jwtSecret,
-    { expiresIn: '1h' }
+    { expiresIn }
   );
 
   return {
     token,
     user: publicUser(user),
+    rememberMe,
   };
 }
 
