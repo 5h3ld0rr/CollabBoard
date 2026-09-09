@@ -137,7 +137,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
       } finally {
         setIsLoading(false);
       }
-    }, 150);
+    }, 500);
 
     return () => {
       clearTimeout(timer);
@@ -275,8 +275,14 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
           <Search className="w-4 h-4 text-slate-400 group-hover:text-indigo-400 transition-colors" />
         </div>
 
-        <div className="w-full pl-10 pr-4 py-1.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-400 group-hover:text-slate-200 group-hover:border-slate-700 transition-all shadow-inner select-none flex items-center">
+        <div className="w-full pl-10 pr-16 py-1.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-400 group-hover:text-slate-200 group-hover:border-slate-700 transition-all shadow-inner select-none flex items-center">
           <span>Search workspaces, boards, tasks...</span>
+        </div>
+
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center space-x-0.5 pointer-events-none">
+          <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-semibold text-slate-400 bg-slate-800/90 rounded border border-slate-700 shadow-xs flex items-center gap-0.5">
+            Ctrl + K
+          </kbd>
         </div>
       </div>
 
@@ -685,8 +691,11 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
                   <span>Close</span>
                 </span>
               </div>
-              <div className="text-slate-400 text-xs font-medium">
-                Global Search
+              <div className="text-slate-400 text-xs font-medium flex items-center space-x-1.5">
+                <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px] border border-slate-700">
+                  Ctrl + K
+                </kbd>
+                <span>Global Search</span>
               </div>
             </div>
           </div>
