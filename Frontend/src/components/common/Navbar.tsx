@@ -60,18 +60,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setIsSearchModalOpen(true);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
 
@@ -157,34 +145,18 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Middle: Global Search Bar */}
         {!shouldHideSearch && (
-          <>
-            <div className="flex-1 max-w-md hidden md:block">
-              <GlobalSearch
-                isOpen={isSearchModalOpen}
-                onOpenChange={setIsSearchModalOpen}
-                onSelectWorkspace={(ws) => {
-                  const matched = workspaces?.find((w) => w.id === ws.id);
-                  if (matched && onSelectWorkspace) {
-                    onSelectWorkspace(matched);
-                  }
-                }}
-              />
-            </div>
-            <div className="md:hidden">
-              {isSearchModalOpen && (
-                <GlobalSearch
-                  isOpen={isSearchModalOpen}
-                  onOpenChange={setIsSearchModalOpen}
-                  onSelectWorkspace={(ws) => {
-                    const matched = workspaces?.find((w) => w.id === ws.id);
-                    if (matched && onSelectWorkspace) {
-                      onSelectWorkspace(matched);
-                    }
-                  }}
-                />
-              )}
-            </div>
-          </>
+          <div className="flex-1 max-w-md hidden md:block">
+            <GlobalSearch
+              isOpen={isSearchModalOpen}
+              onOpenChange={setIsSearchModalOpen}
+              onSelectWorkspace={(ws) => {
+                const matched = workspaces?.find((w) => w.id === ws.id);
+                if (matched && onSelectWorkspace) {
+                  onSelectWorkspace(matched);
+                }
+              }}
+            />
+          </div>
         )}
 
         {/* Right Side: Network Status, Create CTA, Notifications, Profile */}

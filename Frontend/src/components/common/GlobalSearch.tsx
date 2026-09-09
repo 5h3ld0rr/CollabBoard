@@ -45,17 +45,18 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [internalIsOpen, setInternalIsOpen] = useState(false);
-  const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
+  const isControlled = controlledIsOpen !== undefined;
+  const isOpen = isControlled ? controlledIsOpen : internalIsOpen;
 
   const setIsOpen = useCallback(
     (value: boolean | ((prev: boolean) => boolean)) => {
-      setInternalIsOpen((prev) => {
-        const nextVal = typeof value === 'function' ? value(prev) : value;
-        onOpenChange?.(nextVal);
-        return nextVal;
-      });
+      const nextVal = typeof value === 'function' ? value(isOpen) : value;
+      if (!isControlled) {
+        setInternalIsOpen(nextVal);
+      }
+      onOpenChange?.(nextVal);
     },
-    [onOpenChange]
+    [isControlled, isOpen, onOpenChange]
   );
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<SearchCategory>('all');
