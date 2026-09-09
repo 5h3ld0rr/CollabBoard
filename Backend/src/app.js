@@ -11,6 +11,7 @@ import authRoutes from './routes/authRoutes.js';
 import boardRoutes from './routes/boardRoutes.js';
 import taskRoutes from './routes/taskRoutes.js';
 import workspaceRoutes from './routes/workspaceRoutes.js';
+import searchRoutes from './routes/searchRoutes.js';
 import docsRoutes from './routes/docsRoutes.js';
 
 const app = express();
@@ -62,6 +63,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/workspaces', workspaceRoutes);
 app.use('/api/boards', boardRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/search', searchRoutes);
 
 /* Central Error Catchers (Always registered last) */
 app.use(notFoundHandler);
