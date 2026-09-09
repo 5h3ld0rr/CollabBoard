@@ -262,8 +262,6 @@ export const Dashboard: React.FC = () => {
           }
           setIsManageWorkspaceModalOpen(true);
         }}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
       />
 
       {/* Toast Notification */}

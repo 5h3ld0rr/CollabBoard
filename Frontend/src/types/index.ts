@@ -117,3 +117,50 @@ export interface ColorOption {
   label: string;
   value: string;
 }
+
+export interface GlobalSearchResultWorkspace {
+  id: string;
+  name: string;
+  description: string;
+  color?: string;
+  boardCount?: number;
+}
+
+export interface GlobalSearchResultBoard {
+  id: string;
+  title: string;
+  description: string;
+  workspaceId: string;
+  workspaceName?: string;
+  tags?: string[];
+  isFavorite?: boolean;
+  stats?: {
+    totalTasks: number;
+    todoCount: number;
+    inProgressCount: number;
+    doneCount: number;
+  };
+  createdAt?: string;
+}
+
+export interface GlobalSearchResultTask {
+  id: string;
+  title: string;
+  description?: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  boardId: string;
+  boardTitle?: string;
+  workspaceId?: string;
+  workspaceName?: string;
+  tags?: string[];
+  dueDate?: string;
+  createdAt?: string;
+}
+
+export interface GlobalSearchResults {
+  workspaces: GlobalSearchResultWorkspace[];
+  boards: GlobalSearchResultBoard[];
+  tasks: GlobalSearchResultTask[];
+  total: number;
+}

@@ -3,3 +3,4 @@ export * from './auth';
 export * from './boards';
 export * from './tasks';
 export * from './workspaces';
+export * from './search';

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Logo } from "./Logo";
 import { WorkspaceSwitcher } from "../workspace/WorkspaceSwitcher";
+import { GlobalSearch } from "./GlobalSearch";
 import { useAuth } from "../../context";
 import type { Workspace } from "../../types";
 import { getInitials } from "../../utils";
@@ -35,8 +36,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSelectWorkspace,
   onOpenCreateWorkspace,
   onOpenManageWorkspace,
-  searchQuery = "",
-  onSearchChange,
+  searchQuery: _searchQuery = "",
+  onSearchChange: _onSearchChange,
   variant = "default",
   hideWorkspace = false,
   hideSearch = false,
@@ -46,6 +47,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const { user, logout } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotificationToast, setShowNotificationToast] = useState(false);
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isOnline, setIsOnline] = useState<boolean>(
     typeof navigator !== "undefined" ? navigator.onLine : true,
   );
@@ -56,19 +58,12 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const notificationsRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        searchInputRef.current?.focus();
-        searchInputRef.current?.select();
-      } else if (
-        e.key === "Escape" &&
-        document.activeElement === searchInputRef.current
-      ) {
-        searchInputRef.current?.blur();
+        setIsSearchModalOpen(true);
       }
     };
 
@@ -160,26 +155,36 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
         </div>
 
-        {/* Middle: Search Bar */}
+        {/* Middle: Global Search Bar */}
         {!shouldHideSearch && (
-          <div className="flex-1 max-w-md hidden md:block">
-            <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={searchQuery}
-                onChange={(e) => onSearchChange?.(e.target.value)}
-                placeholder="Search boards, tasks, or tags..."
-                className="w-full pl-10 pr-14 py-1.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500/50 transition-all shadow-inner"
+          <>
+            <div className="flex-1 max-w-md hidden md:block">
+              <GlobalSearch
+                isOpen={isSearchModalOpen}
+                onOpenChange={setIsSearchModalOpen}
+                onSelectWorkspace={(ws) => {
+                  const matched = workspaces?.find((w) => w.id === ws.id);
+                  if (matched && onSelectWorkspace) {
+                    onSelectWorkspace(matched);
+                  }
+                }}
               />
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center space-x-0.5 pointer-events-none">
-                <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-semibold text-slate-400 bg-slate-800 rounded border border-slate-700">
-                  Ctrl K
-                </kbd>
-              </div>
             </div>
-          </div>
+            <div className="md:hidden">
+              {isSearchModalOpen && (
+                <GlobalSearch
+                  isOpen={isSearchModalOpen}
+                  onOpenChange={setIsSearchModalOpen}
+                  onSelectWorkspace={(ws) => {
+                    const matched = workspaces?.find((w) => w.id === ws.id);
+                    if (matched && onSelectWorkspace) {
+                      onSelectWorkspace(matched);
+                    }
+                  }}
+                />
+              )}
+            </div>
+          </>
         )}
 
         {/* Right Side: Network Status, Create CTA, Notifications, Profile */}
@@ -210,6 +215,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </>
               )}
             </div>
+          )}
+
+          {/* Mobile Search Button */}
+          {!shouldHideSearch && (
+            <button
+              onClick={() => setIsSearchModalOpen(true)}
+              aria-label="Search"
+              className="md:hidden p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700 transition cursor-pointer"
+            >
+              <Search className="w-4 h-4" />
+            </button>
           )}
 
           {/* Notifications Button */}
