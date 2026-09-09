@@ -66,7 +66,7 @@ const taskSchema = new mongoose.Schema(
     // Optimistic Concurrency Control integer
     version: {
       type: Number,
-      default: 0,
+      default: 1,
       required: true,
     },
   },
