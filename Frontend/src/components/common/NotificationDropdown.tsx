@@ -136,7 +136,7 @@ export const NotificationDropdown: React.FC = () => {
 
       {/* Popover Dropdown */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-slate-900/95 border border-slate-700/80 shadow-2xl shadow-black/90 backdrop-blur-xl z-50 ring-1 ring-white/10 overflow-hidden animate-in fade-in zoom-in-95 duration-100 flex flex-col max-h-[520px]">
+        <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-slate-900/95 border border-slate-700/80 shadow-2xl shadow-black/90 backdrop-blur-xl z-50 ring-1 ring-white/10 overflow-hidden animate-in fade-in zoom-in-95 duration-100 flex flex-col max-h-130">
           {/* Header */}
           <div className="p-3.5 pb-2.5 border-b border-slate-800/80">
             <div className="flex items-center justify-between">
@@ -209,7 +209,7 @@ export const NotificationDropdown: React.FC = () => {
                 <p className="text-xs font-semibold text-slate-200">
                   {activeTab === 'unread' ? 'All caught up!' : 'No notifications yet'}
                 </p>
-                <p className="text-[11px] text-slate-400 mt-1 max-w-[200px]">
+                <p className="text-[11px] text-slate-400 mt-1 max-w-50">
                   {activeTab === 'unread'
                     ? 'You have read all your notifications.'
                     : 'New activity, assignments, and updates will show up here.'}
@@ -262,7 +262,7 @@ export const NotificationDropdown: React.FC = () => {
                       )}
                     </div>
 
-                    <p className="text-[11px] text-slate-400 leading-snug line-clamp-2 break-words">
+                    <p className="text-[11px] text-slate-400 leading-snug line-clamp-2 wrap-break-word">
                       {notif.message}
                     </p>
 

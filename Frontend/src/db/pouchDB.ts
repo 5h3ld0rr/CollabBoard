@@ -429,12 +429,10 @@ export async function deleteCachedNotification(id: string): Promise<void> {
 
 export async function clearCachedNotifications(): Promise<void> {
   try {
-    const result = await getNotificationsDB().allDocs();
-    const deleteDocs = result.rows.map(row => ({
-      _id: row.id,
-      _rev: row.value.rev,
-      _deleted: true,
-    }));
+    const result = await getNotificationsDB().allDocs({ include_docs: true });
+    const deleteDocs = result.rows
+      .filter(row => row.doc)
+      .map(row => ({ ...row.doc!, _deleted: true as const }));
     if (deleteDocs.length > 0) {
       await getNotificationsDB().bulkDocs(deleteDocs);
     }
