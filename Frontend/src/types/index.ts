@@ -117,3 +117,32 @@ export interface ColorOption {
   label: string;
   value: string;
 }
+
+export type NotificationType =
+  | 'task_assigned'
+  | 'task_status'
+  | 'task_comment'
+  | 'board_invite'
+  | 'system'
+  | 'mention';
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  timestamp: string;
+  read: boolean;
+  type: NotificationType;
+  linkUrl?: string;
+  actor?: {
+    name: string;
+    avatar?: string;
+    initials: string;
+    color?: string;
+  };
+  meta?: {
+    taskId?: string;
+    boardId?: string;
+    status?: TaskStatus;
+  };
+}

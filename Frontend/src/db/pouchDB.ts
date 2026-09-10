@@ -1,5 +1,5 @@
 import PouchDB from 'pouchdb-browser';
-import type { Board, Task, User } from '../types';
+import type { Board, Task, User, AppNotification } from '../types';
 
 // ---------------------------------------------------------------------------
 // Database instances — lazy-initialized to avoid opening IndexedDB prematurely
@@ -22,19 +22,21 @@ export interface QueuedMutation {
   createdAt: number;
 }
 
-let _boardsDB:  PouchDB.Database<Board> | null = null;
-let _tasksDB:   PouchDB.Database<Task> | null = null;
-let _metaDB:    PouchDB.Database<{ key: string; timestamp: number }> | null = null;
-let _userDB:    PouchDB.Database<User & { id: string }> | null = null;
-let _profileDB: PouchDB.Database<{ id: string; details: any }> | null = null;
-let _queueDB:   PouchDB.Database<QueuedMutation> | null = null;
+let _boardsDB:        PouchDB.Database<Board> | null = null;
+let _tasksDB:         PouchDB.Database<Task> | null = null;
+let _metaDB:          PouchDB.Database<{ key: string; timestamp: number }> | null = null;
+let _userDB:          PouchDB.Database<User & { id: string }> | null = null;
+let _profileDB:       PouchDB.Database<{ id: string; details: any }> | null = null;
+let _queueDB:         PouchDB.Database<QueuedMutation> | null = null;
+let _notificationsDB: PouchDB.Database<AppNotification> | null = null;
 
-function getBoardsDB()  { return _boardsDB  ??= new PouchDB<Board>('collabboard_boards'); }
-function getTasksDB()   { return _tasksDB   ??= new PouchDB<Task>('collabboard_tasks'); }
-function getMetaDB()    { return _metaDB    ??= new PouchDB<{ key: string; timestamp: number }>('collabboard_meta'); }
-function getUserDB()    { return _userDB    ??= new PouchDB<User & { id: string }>('collabboard_user'); }
-function getProfileDB() { return _profileDB ??= new PouchDB<{ id: string; details: any }>('collabboard_profile'); }
-function getQueueDB()   { return _queueDB   ??= new PouchDB<QueuedMutation>('collabboard_mutation_queue'); }
+function getBoardsDB()        { return _boardsDB        ??= new PouchDB<Board>('collabboard_boards'); }
+function getTasksDB()         { return _tasksDB         ??= new PouchDB<Task>('collabboard_tasks'); }
+function getMetaDB()          { return _metaDB          ??= new PouchDB<{ key: string; timestamp: number }>('collabboard_meta'); }
+function getUserDB()          { return _userDB          ??= new PouchDB<User & { id: string }>('collabboard_user'); }
+function getProfileDB()       { return _profileDB       ??= new PouchDB<{ id: string; details: any }>('collabboard_profile'); }
+function getQueueDB()         { return _queueDB         ??= new PouchDB<QueuedMutation>('collabboard_mutation_queue'); }
+function getNotificationsDB() { return _notificationsDB ??= new PouchDB<AppNotification>('collabboard_notifications'); }
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -371,5 +373,90 @@ export async function getCachedProfileDetails(): Promise<any | null> {
     return (doc as any).details ?? null;
   } catch {
     return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Notifications Cache Operations
+// ---------------------------------------------------------------------------
+
+export async function getCachedNotifications(): Promise<AppNotification[]> {
+  try {
+    const result = await getNotificationsDB().allDocs({ include_docs: true });
+    const notifications = result.rows
+      .filter(row => row.doc)
+      .map(row => fromDoc(row.doc!));
+
+    return notifications.sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+  } catch (err) {
+    console.warn('[PouchDB] Failed to get cached notifications:', err);
+    return [];
+  }
+}
+
+export async function saveNotificationToCache(notification: AppNotification): Promise<void> {
+  try {
+    await upsert(getNotificationsDB() as unknown as PouchDB.Database<AppNotification & object>, notification);
+  } catch (err) {
+    console.warn('[PouchDB] Failed to cache notification:', err);
+  }
+}
+
+export async function saveNotificationsToCache(notifications: AppNotification[]): Promise<void> {
+  try {
+    await Promise.all(
+      notifications.map(n =>
+        upsert(getNotificationsDB() as unknown as PouchDB.Database<AppNotification & object>, n)
+      )
+    );
+  } catch (err) {
+    console.warn('[PouchDB] Failed to cache multiple notifications:', err);
+  }
+}
+
+export async function deleteCachedNotification(id: string): Promise<void> {
+  try {
+    const doc = await getNotificationsDB().get(id);
+    await getNotificationsDB().remove(doc);
+  } catch (err: unknown) {
+    if ((err as PouchDB.Core.Error).status !== 404) {
+      console.warn('[PouchDB] Failed to delete notification:', err);
+    }
+  }
+}
+
+export async function clearCachedNotifications(): Promise<void> {
+  try {
+    const result = await getNotificationsDB().allDocs();
+    const deleteDocs = result.rows.map(row => ({
+      _id: row.id,
+      _rev: row.value.rev,
+      _deleted: true,
+    }));
+    if (deleteDocs.length > 0) {
+      await getNotificationsDB().bulkDocs(deleteDocs);
+    }
+  } catch (err) {
+    console.warn('[PouchDB] Failed to clear notifications:', err);
+  }
+}
+
+export function subscribeNotificationsChange(onChange: () => void): () => void {
+  try {
+    const feed = getNotificationsDB()
+      .changes({
+        since: 'now',
+        live: true,
+      })
+      .on('change', () => {
+        onChange();
+      });
+
+    return () => feed.cancel();
+  } catch (err) {
+    console.warn('[PouchDB] Failed to subscribe to notification changes:', err);
+    return () => {};
   }
 }
