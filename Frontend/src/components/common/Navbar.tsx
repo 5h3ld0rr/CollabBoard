@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Search,
-  Bell,
   Wifi,
   WifiOff,
   LogOut,
@@ -10,6 +9,7 @@ import {
   LayoutGrid,
 } from "lucide-react";
 import { Logo } from "./Logo";
+import { NotificationDropdown } from "./NotificationDropdown";
 import { WorkspaceSwitcher } from "../workspace/WorkspaceSwitcher";
 import { useAuth } from "../../context";
 import type { Workspace } from "../../types";
@@ -45,7 +45,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [showNotificationToast, setShowNotificationToast] = useState(false);
   const [isOnline, setIsOnline] = useState<boolean>(
     typeof navigator !== "undefined" ? navigator.onLine : true,
   );
@@ -54,7 +53,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   const displayEmail = user?.email || "alex.chen@collabboard.io";
   const displayInitials = user?.initials || getInitials(displayName, "AC");
 
-  const notificationsRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -92,12 +90,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
-        notificationsRef.current &&
-        !notificationsRef.current.contains(event.target as Node)
-      ) {
-        setShowNotificationToast(false);
-      }
-      if (
         profileRef.current &&
         !profileRef.current.contains(event.target as Node)
       ) {
@@ -105,13 +97,13 @@ export const Navbar: React.FC<NavbarProps> = ({
       }
     };
 
-    if (showNotificationToast || showProfileMenu) {
+    if (showProfileMenu) {
       document.addEventListener("mousedown", handleClickOutside);
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [showNotificationToast, showProfileMenu]);
+  }, [showProfileMenu]);
 
   const isProfileVariant = variant === "profile";
   const shouldHideWorkspace = hideWorkspace || isProfileVariant;
@@ -212,40 +204,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           )}
 
-          {/* Notifications Button */}
-          <div className="relative" ref={notificationsRef}>
-            <button
-              onClick={() => setShowNotificationToast((prev) => !prev)}
-              aria-label="Notifications"
-              className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700 transition relative cursor-pointer"
-            >
-              <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-indigo-500 ring-2 ring-slate-950" />
-            </button>
-
-            {showNotificationToast && (
-              <div className="absolute right-0 mt-2 w-72 p-3.5 rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black/90 backdrop-blur-xl z-50 ring-1 ring-white/10 animate-in fade-in zoom-in-95 duration-100">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-800 mb-2">
-                  <span className="text-xs font-bold text-white">
-                    Notifications
-                  </span>
-                  <span className="text-[10px] text-indigo-400 font-medium">
-                    1 New
-                  </span>
-                </div>
-                <div className="space-y-2 text-xs">
-                  <div className="p-2 rounded-lg bg-slate-800/60 border border-slate-700/50">
-                    <p className="text-slate-200 font-medium">
-                      Clara moved card to In Progress
-                    </p>
-                    <span className="text-[10px] text-slate-400">
-                      2 minutes ago
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          {/* Notifications Dropdown */}
+          <NotificationDropdown />
 
           {/* User Profile Menu */}
           <div className="relative" ref={profileRef}>
