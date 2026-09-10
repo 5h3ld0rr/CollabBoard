@@ -262,4 +262,156 @@ describe('Board API & Analytics', () => {
       expect(analytics).toHaveProperty('overduePerAssignee');
     });
   });
+
+  describe('Board Role Assignments & Security Edge Conditions', () => {
+    let owner;
+    let stranger;
+    let board;
+
+    beforeEach(async () => {
+      owner = authHeader(new mongoose.Types.ObjectId().toString(), 'board-owner@nsbm.lk');
+      stranger = authHeader(new mongoose.Types.ObjectId().toString(), 'board-stranger@nsbm.lk');
+
+      const ws = await Workspace.create({ name: 'Role Edge WS', ownerId: owner.userId });
+      board = await Board.create({
+        title: 'Role Test Board',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [owner.userId],
+      });
+    });
+
+    it('returns 400 VALIDATION_ERROR when adding member with an invalid role', async () => {
+      const candidateId = new mongoose.Types.ObjectId().toString();
+
+      const res = await request(app)
+        .post(`/api/boards/${board._id}/members`)
+        .set(owner.header)
+        .send({
+          userId: candidateId,
+          role: 'InvalidRole_SuperAdmin',
+        });
+
+      expect(res.status).toBe(400);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('VALIDATION_ERROR');
+    });
+
+    it('returns 400 VALIDATION_ERROR when adding member with missing or empty userId', async () => {
+      const res = await request(app)
+        .post(`/api/boards/${board._id}/members`)
+        .set(owner.header)
+        .send({
+          role: 'Editor',
+        });
+
+      expect(res.status).toBe(400);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('VALIDATION_ERROR');
+    });
+
+    it('denies access (403 Forbidden) when non-member attempts to add a collaborator to a board', async () => {
+      const candidateId = new mongoose.Types.ObjectId().toString();
+
+      const res = await request(app)
+        .post(`/api/boards/${board._id}/members`)
+        .set(stranger.header)
+        .send({
+          userId: candidateId,
+        });
+
+      expect(res.status).toBe(403);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('FORBIDDEN');
+    });
+
+    it('denies access (403 Forbidden) when non-member attempts to update board metadata', async () => {
+      const res = await request(app)
+        .patch(`/api/boards/${board._id}`)
+        .set(stranger.header)
+        .send({
+          title: 'Unauthorized Rename',
+        });
+
+      expect(res.status).toBe(403);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('FORBIDDEN');
+    });
+
+    it('returns 404 NOT_FOUND when attempting to update a non-existent board', async () => {
+      const fakeBoardId = new mongoose.Types.ObjectId().toString();
+
+      const res = await request(app)
+        .patch(`/api/boards/${fakeBoardId}`)
+        .set(owner.header)
+        .send({
+          title: 'Ghost Board Update',
+        });
+
+      expect(res.status).toBe(404);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('NOT_FOUND');
+    });
+
+    it('returns 404 NOT_FOUND when attempting to add a collaborator to a non-existent board', async () => {
+      const fakeBoardId = new mongoose.Types.ObjectId().toString();
+
+      const res = await request(app)
+        .post(`/api/boards/${fakeBoardId}/members`)
+        .set(owner.header)
+        .send({
+          userId: new mongoose.Types.ObjectId().toString(),
+        });
+
+      expect(res.status).toBe(404);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('NOT_FOUND');
+    });
+
+    it('returns 404 NOT_FOUND when attempting to remove a collaborator from a non-existent board', async () => {
+      const fakeBoardId = new mongoose.Types.ObjectId().toString();
+
+      const res = await request(app)
+        .delete(`/api/boards/${fakeBoardId}/members/some-user-id`)
+        .set(owner.header);
+
+      expect(res.status).toBe(404);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('NOT_FOUND');
+    });
+
+    it('denies access (403 Forbidden) when unauthorized user requests board analytics', async () => {
+      const res = await request(app)
+        .get(`/api/boards/${board._id}/analytics`)
+        .set(stranger.header);
+
+      expect(res.status).toBe(403);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('FORBIDDEN');
+    });
+
+    it('returns 404 NOT_FOUND when requesting analytics for a non-existent board', async () => {
+      const fakeBoardId = new mongoose.Types.ObjectId().toString();
+
+      const res = await request(app)
+        .get(`/api/boards/${fakeBoardId}/analytics`)
+        .set(owner.header);
+
+      expect(res.status).toBe(404);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('NOT_FOUND');
+    });
+
+    it('returns 404 NOT_FOUND when attempting to delete a non-existent board', async () => {
+      const fakeBoardId = new mongoose.Types.ObjectId().toString();
+
+      const res = await request(app)
+        .delete(`/api/boards/${fakeBoardId}`)
+        .set(owner.header);
+
+      expect(res.status).toBe(404);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('NOT_FOUND');
+    });
+  });
 });

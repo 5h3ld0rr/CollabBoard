@@ -176,4 +176,67 @@ describe('Workspace API', () => {
       expect(check).toBeNull();
     });
   });
+
+  describe('Workspace Role Assignments & Edge Conditions', () => {
+    it('returns 400 VALIDATION_ERROR when updating workspace with an invalid role', async () => {
+      const user = authHeader();
+      const ws = await Workspace.create({ name: 'WS Role Test' });
+
+      const res = await request(app)
+        .patch(`/api/workspaces/${ws._id}`)
+        .set(user.header)
+        .send({
+          role: 'InvalidRole_SuperAdmin',
+        });
+
+      expect(res.status).toBe(400);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('VALIDATION_ERROR');
+    });
+
+    it('returns 400 VALIDATION_ERROR when updating workspace with a name shorter than 2 characters', async () => {
+      const user = authHeader();
+      const ws = await Workspace.create({ name: 'Valid WS' });
+
+      const res = await request(app)
+        .patch(`/api/workspaces/${ws._id}`)
+        .set(user.header)
+        .send({
+          name: 'A',
+        });
+
+      expect(res.status).toBe(400);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('VALIDATION_ERROR');
+    });
+
+    it('returns 404 NOT_FOUND when updating a non-existent workspace', async () => {
+      const user = authHeader();
+      const fakeId = new mongoose.Types.ObjectId().toString();
+
+      const res = await request(app)
+        .patch(`/api/workspaces/${fakeId}`)
+        .set(user.header)
+        .send({
+          name: 'Ghost WS',
+        });
+
+      expect(res.status).toBe(404);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('NOT_FOUND');
+    });
+
+    it('returns 404 NOT_FOUND when deleting a non-existent workspace', async () => {
+      const user = authHeader();
+      const fakeId = new mongoose.Types.ObjectId().toString();
+
+      const res = await request(app)
+        .delete(`/api/workspaces/${fakeId}`)
+        .set(user.header);
+
+      expect(res.status).toBe(404);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('NOT_FOUND');
+    });
+  });
 });

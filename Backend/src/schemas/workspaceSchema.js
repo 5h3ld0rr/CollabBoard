@@ -16,4 +16,7 @@ export const updateWorkspaceSchema = z.object({
   name: z.string().trim().min(2, 'Workspace name must be at least 2 characters').optional(),
   description: z.string().trim().optional(),
   color: z.string().optional(),
+  role: z.enum(['Owner', 'Admin', 'Member'], {
+    errorMap: () => ({ message: 'Invalid workspace role' }),
+  }).optional(),
 });

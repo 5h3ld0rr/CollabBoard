@@ -499,4 +499,205 @@ describe('Member 4: Backend Task API & Status Lifecycle Transition Suite', () =>
       expect(code).toBe('VALIDATION_ERROR');
     });
   });
+
+  // ==========================================
+  // 6. Task Permission Edge Conditions & Negative Tests
+  // ==========================================
+  describe('Task Permissions Edge Conditions & Negative Cases', () => {
+    let authorizedUser;
+    let unauthorizedUser;
+    let board;
+    let task;
+
+    beforeEach(async () => {
+      authorizedUser = authHeader(new mongoose.Types.ObjectId().toString(), 'owner@nsbm.lk');
+      unauthorizedUser = authHeader(new mongoose.Types.ObjectId().toString(), 'stranger@nsbm.lk');
+
+      board = await Board.create({
+        title: 'Restricted Board',
+        ownerId: authorizedUser.userId,
+        members: [authorizedUser.userId],
+      });
+
+      task = await Task.create({
+        title: 'Confidential Task',
+        status: 'todo',
+        boardId: board._id.toString(),
+        done: false,
+        version: 1,
+      });
+    });
+
+    it('denies access (403 Forbidden) when user attempts to update a task without board/workspace permissions', async () => {
+      const res = await request(app)
+        .patch(`/api/tasks/${task._id}`)
+        .set(unauthorizedUser.header)
+        .send({
+          title: 'Hacked Title',
+          priority: 'urgent',
+        });
+
+      expect(res.status).toBe(403);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('FORBIDDEN');
+    });
+
+    it('denies access (403 Forbidden) when user attempts to move task status without permissions', async () => {
+      const res = await request(app)
+        .patch(`/api/tasks/${task._id}/status`)
+        .set(unauthorizedUser.header)
+        .send({
+          status: 'in-progress',
+        });
+
+      expect(res.status).toBe(403);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('FORBIDDEN');
+    });
+
+    it('denies access (403 Forbidden) when user attempts to move a task to a target board they lack access to', async () => {
+      const foreignOwner = authHeader(new mongoose.Types.ObjectId().toString(), 'foreign@nsbm.lk');
+      const foreignBoard = await Board.create({
+        title: 'Foreign Board',
+        ownerId: foreignOwner.userId,
+        members: [foreignOwner.userId],
+      });
+
+      const res = await request(app)
+        .patch(`/api/tasks/${task._id}`)
+        .set(authorizedUser.header)
+        .send({
+          boardId: foreignBoard._id.toString(),
+        });
+
+      expect(res.status).toBe(403);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('FORBIDDEN');
+    });
+
+    it('denies access (403 Forbidden) when unauthorized user attempts to delete a task', async () => {
+      const res = await request(app)
+        .delete(`/api/tasks/${task._id}`)
+        .set(unauthorizedUser.header);
+
+      expect(res.status).toBe(403);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('FORBIDDEN');
+    });
+
+    it('denies access (403 Forbidden) when unauthorized user attempts to fetch a single task', async () => {
+      const res = await request(app)
+        .get(`/api/tasks/${task._id}`)
+        .set(unauthorizedUser.header);
+
+      expect(res.status).toBe(403);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('FORBIDDEN');
+    });
+
+    it('returns 404 NOT_FOUND when attempting to update a non-existent task', async () => {
+      const fakeTaskId = new mongoose.Types.ObjectId().toString();
+
+      const res = await request(app)
+        .patch(`/api/tasks/${fakeTaskId}`)
+        .set(authorizedUser.header)
+        .send({
+          title: 'Ghost Task Update',
+        });
+
+      expect(res.status).toBe(404);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('NOT_FOUND');
+    });
+
+    it('returns 404 NOT_FOUND when attempting to move status on a non-existent task', async () => {
+      const fakeTaskId = new mongoose.Types.ObjectId().toString();
+
+      const res = await request(app)
+        .patch(`/api/tasks/${fakeTaskId}/status`)
+        .set(authorizedUser.header)
+        .send({
+          status: 'done',
+        });
+
+      expect(res.status).toBe(404);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('NOT_FOUND');
+    });
+
+    it('returns 404 NOT_FOUND when attempting to delete a non-existent task', async () => {
+      const fakeTaskId = new mongoose.Types.ObjectId().toString();
+
+      const res = await request(app)
+        .delete(`/api/tasks/${fakeTaskId}`)
+        .set(authorizedUser.header);
+
+      expect(res.status).toBe(404);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('NOT_FOUND');
+    });
+
+    it('returns 404 NOT_FOUND when fetching a non-existent task', async () => {
+      const fakeTaskId = new mongoose.Types.ObjectId().toString();
+
+      const res = await request(app)
+        .get(`/api/tasks/${fakeTaskId}`)
+        .set(authorizedUser.header);
+
+      expect(res.status).toBe(404);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('NOT_FOUND');
+    });
+
+    it('denies access (403 Forbidden) when unauthorized user attempts to comment on a task', async () => {
+      const res = await request(app)
+        .post(`/api/tasks/${task._id}/comments`)
+        .set(unauthorizedUser.header)
+        .send({
+          content: 'Sneaky comment',
+        });
+
+      expect(res.status).toBe(403);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('FORBIDDEN');
+    });
+
+    it("denies access (403 Forbidden) when user attempts to delete someone else's comment", async () => {
+      const commentRes = await request(app)
+        .post(`/api/tasks/${task._id}/comments`)
+        .set(authorizedUser.header)
+        .send({ content: 'Original author comment' });
+
+      expect(commentRes.status).toBe(201);
+      const commentId = commentRes.body.data.id;
+
+      // Add stranger as board member so they can access the board, but not own the comment
+      await Board.findByIdAndUpdate(board._id, {
+        $push: { members: unauthorizedUser.userId },
+      });
+
+      const deleteRes = await request(app)
+        .delete(`/api/tasks/${task._id}/comments/${commentId}`)
+        .set(unauthorizedUser.header);
+
+      expect(deleteRes.status).toBe(403);
+      const code = deleteRes.body.code || deleteRes.body.error?.code;
+      expect(code).toBe('FORBIDDEN');
+    });
+
+    it('returns 404 NOT_FOUND when adding comment to a non-existent task', async () => {
+      const fakeTaskId = new mongoose.Types.ObjectId().toString();
+
+      const res = await request(app)
+        .post(`/api/tasks/${fakeTaskId}/comments`)
+        .set(authorizedUser.header)
+        .send({
+          content: 'Orphan comment',
+        });
+
+      expect(res.status).toBe(404);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('NOT_FOUND');
+    });
+  });
 });
