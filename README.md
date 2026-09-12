@@ -25,7 +25,7 @@
 - 📊 **Dynamic Analytics & Metrics**: Real-time workspace statistics and board analytics tracking active boards, tasks in flight, completion rates, and collaborator sets.
 - 📖 **Interactive Swagger / OpenAPI Docs**: Interactive API playground and OpenAPI 3.0 contract specification at `/api/docs` and `/api/docs.json`.
 - 🧪 **Enterprise Test Automation & CI/CD**:
-  - Backend: 6 test suites (52 tests) using **Jest**, **Supertest**, and **mongodb-memory-server**.
+  - Backend: 6 test suites (78 tests) using **Jest**, **Supertest**, and **mongodb-memory-server**.
   - Frontend: Component and unit test suites using **Vitest**, **React Testing Library**, and **JSDOM**.
   - High-speed linting via **Oxlint**.
   - Continuous Integration pipeline running automated testing and coverage uploads via **GitHub Actions**.
