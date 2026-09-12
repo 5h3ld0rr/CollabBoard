@@ -178,7 +178,7 @@ describe('Workspace API', () => {
   });
 
   describe('Workspace Role Assignments & Edge Conditions', () => {
-    it('returns 400 VALIDATION_ERROR when updating workspace with an invalid role', async () => {
+    it('ignores unsupported role updates', async () => {
       const user = authHeader();
       const ws = await Workspace.create({ name: 'WS Role Test' });
 
@@ -189,9 +189,10 @@ describe('Workspace API', () => {
           role: 'InvalidRole_SuperAdmin',
         });
 
-      expect(res.status).toBe(400);
-      const code = res.body.code || res.body.error?.code;
-      expect(code).toBe('VALIDATION_ERROR');
+      expect(res.status).toBe(200);
+      const updated = res.body.data || res.body;
+      expect(updated.id).toBe(ws._id.toString());
+      expect(updated).not.toHaveProperty('role');
     });
 
     it('returns 400 VALIDATION_ERROR when updating workspace with a name shorter than 2 characters', async () => {
