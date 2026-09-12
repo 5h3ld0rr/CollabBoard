@@ -23,4 +23,4 @@ describe('initials utils', () => {
   it('handles irregular and extra whitespace correctly', () => {
     expect(getInitials('   Jane    Doe   ')).toBe('JD');
   });
-}
+});
