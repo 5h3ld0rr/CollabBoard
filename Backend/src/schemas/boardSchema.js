@@ -35,4 +35,7 @@ export const updateBoardSchema = z.object({
  */
 export const addMemberSchema = z.object({
   userId: z.string().trim().min(1, 'userId is required'),
+  role: z.enum(['Admin', 'Editor', 'Viewer', 'Member'], {
+    errorMap: () => ({ message: 'Invalid board member role' }),
+  }).optional(),
 });
