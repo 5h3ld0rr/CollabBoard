@@ -74,11 +74,11 @@ describe('api/boards', () => {
     const mockBoard = { id: 'b1', members: ['u1', 'u2'] };
     vi.spyOn(clientModule, 'request').mockResolvedValue({ data: mockBoard });
 
-    const addRes = await boardsApi.addBoardMember('b1', 'test@example.com');
+    const addRes = await boardsApi.addBoardMember('b1', 'u3');
     expect(addRes).toEqual(mockBoard);
     expect(clientModule.request).toHaveBeenCalledWith('/api/boards/b1/members', {
       method: 'POST',
-      body: JSON.stringify({ email: 'test@example.com' }),
+      body: JSON.stringify({ userId: 'u3' }),
     });
 
     const removeRes = await boardsApi.removeBoardMember('b1', 'u2');
