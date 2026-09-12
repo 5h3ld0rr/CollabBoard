@@ -5,14 +5,16 @@ export const handlers = [
     const body = (await request.json()) as any;
     
     if (body.email === 'test@example.com' && body.password === 'password') {
-      return HttpResponse.json({
-        token: 'mock-jwt-token',
-        user: {
-          id: '1',
-          name: 'Test User',
-          email: 'test@example.com',
-          initials: 'TU',
-          color: 'from-blue-500 to-indigo-500'
+return HttpResponse.json({
+        data: {
+          token: 'mock-jwt-token',
+          user: {
+            id: '1',
+            name: 'Test User',
+            email: 'test@example.com',
+            initials: 'TU',
+            color: 'from-blue-500 to-indigo-500'
+          },
         },
       });
     }
