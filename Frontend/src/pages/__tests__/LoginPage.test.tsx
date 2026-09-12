@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, it, expect, beforeAll, afterEach, afterAll, vi } from 'vitest';
 import { Login } from '../Login';
 import { AuthProvider } from '../../context/AuthContext';
@@ -44,9 +44,12 @@ describe('LoginPage Component', () => {
 
   it('handles successful login with MSW network mock', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/login']}>
         <AuthProvider>
-          <Login />
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/dashboard" element={<div>Dashboard Page</div>} />
+          </Routes>
         </AuthProvider>
       </MemoryRouter>
     );
@@ -61,7 +64,7 @@ describe('LoginPage Component', () => {
     await user.click(submitBtn);
 
     await waitFor(() => {
-      expect(screen.queryByText(/failed to log in/i)).not.toBeInTheDocument();
+      expect(screen.getByText('Dashboard Page')).toBeInTheDocument();
     });
   });
 });
