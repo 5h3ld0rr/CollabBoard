@@ -23,6 +23,7 @@ import {
   subscribeTaskCreated,
   subscribeTaskUpdated,
   subscribeTaskDeleted,
+  subscribeBoardUpdated,
 } from '../sync';
 import type { Board, Task, TaskStatus, User } from '../types';
 import { hasBoardsChanged, hasBoardChanged, hasTasksChanged } from '../utils';
@@ -303,7 +304,7 @@ const BoardContext = createContext<BoardContextValue | undefined>(undefined);
 
 export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(boardReducer, initialState);
-  const { token } = useAuth();
+  const { token, user } = useAuth();
 
   const loadBoards = useCallback(async (forceRefresh = false) => {
     // 1. Instant Cache Hydration from PouchDB (0ms delay)
@@ -742,21 +743,46 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
   }, [token, state.activeBoard?.id]);
 
-  // Real-Time Task Event Subscriptions with OCC Version Guard
+  // Real-Time Task & Board Event Subscriptions with OCC Version Guard & Echo Prevention
   useEffect(() => {
     if (!state.activeBoard?.id) return;
 
     const activeBoardId = state.activeBoard.id;
 
+    // Handle incoming board:updated (Slide 15 & 17)
+    const unsubBoard = subscribeBoardUpdated(async (payload) => {
+      if (payload.boardId !== activeBoardId) return;
+
+      // Echo Loop Guard (Slide 17): skip redundant state reload if current user made the change
+      if (payload.actorId && user?.id && String(payload.actorId) === String(user.id)) {
+        return;
+      }
+
+      if (payload.board) {
+        dispatch({ type: 'UPDATE_BOARD', payload: payload.board });
+        try {
+          await saveBoardToCache(payload.board);
+        } catch (err) {
+          console.warn('[BoardContext] Failed to cache board:updated:', err);
+        }
+      }
+    });
+
     // Handle incoming task:created
     const unsubCreated = subscribeTaskCreated(async (payload) => {
       if (payload.boardId !== activeBoardId) return;
 
+      // Echo Loop Guard (Slide 17)
+      if (payload.actorId && user?.id && String(payload.actorId) === String(user.id)) {
+        return;
+      }
+
       const incoming = payload.task;
-      const exists = state.tasks.some((t) => t.id === incoming.id);
-      if (!exists) {
-        dispatch({ type: 'ADD_TASK', payload: incoming });
+      dispatch({ type: 'ADD_TASK', payload: incoming });
+      try {
         await updateCachedTask(incoming);
+      } catch (err) {
+        console.warn('[BoardContext] Failed to cache task:created:', err);
       }
     });
 
@@ -764,13 +790,22 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const unsubUpdated = subscribeTaskUpdated(async (payload) => {
       if (payload.boardId !== activeBoardId) return;
 
+      // Echo Loop Guard (Slide 17)
+      if (payload.actorId && user?.id && String(payload.actorId) === String(user.id)) {
+        return;
+      }
+
       const incoming = payload.task;
       const current = state.tasks.find((t) => t.id === incoming.id);
 
       // OCC Version Guard: (if (incoming.version > current.version))
       if (!current || Number(incoming.version || 1) > Number(current.version || 0)) {
         dispatch({ type: 'UPDATE_TASK', payload: incoming });
-        await updateCachedTask(incoming);
+        try {
+          await updateCachedTask(incoming);
+        } catch (err) {
+          console.warn('[BoardContext] Failed to cache task:updated:', err);
+        }
       } else {
         console.warn(
           `[OCC Guard] Dropped stale/out-of-order task:updated event for task ${incoming.id}: incoming v${incoming.version} <= current v${current.version}`
@@ -782,16 +817,26 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const unsubDeleted = subscribeTaskDeleted(async (payload) => {
       if (payload.boardId !== activeBoardId) return;
 
+      // Echo Loop Guard (Slide 17)
+      if (payload.actorId && user?.id && String(payload.actorId) === String(user.id)) {
+        return;
+      }
+
       dispatch({ type: 'DELETE_TASK', payload: { taskId: payload.taskId } });
-      await deleteCachedTask(payload.taskId);
+      try {
+        await deleteCachedTask(payload.taskId);
+      } catch (err) {
+        console.warn('[BoardContext] Failed to delete cached task from socket event:', err);
+      }
     });
 
     return () => {
+      unsubBoard();
       unsubCreated();
       unsubUpdated();
       unsubDeleted();
     };
-  }, [state.activeBoard?.id, state.tasks]);
+  }, [state.activeBoard?.id, state.tasks, user?.id]);
 
   return (
     <BoardContext.Provider
