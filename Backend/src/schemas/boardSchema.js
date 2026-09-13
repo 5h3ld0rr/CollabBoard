@@ -6,7 +6,7 @@ import { z } from 'zod';
 export const createBoardSchema = z.object({
   title: z.string().trim().min(3, 'Board title must be at least 3 characters'),
   description: z.string().trim().optional().default(''),
-  members: z.array(z.string()).optional().default([]),
+  members: z.array(z.union([z.string(), z.object({ id: z.string() }).passthrough()])).optional().default([]),
   color: z.string().optional(),
   icon: z.string().optional(),
   tags: z.array(z.string()).optional(),
@@ -21,7 +21,8 @@ export const createBoardSchema = z.object({
 export const updateBoardSchema = z.object({
   title: z.string().trim().min(3, 'Board title must be at least 3 characters').optional(),
   description: z.string().trim().optional(),
-  members: z.array(z.string()).optional(),
+  members: z.array(z.union([z.string(), z.object({ id: z.string() }).passthrough()])).optional(),
+  memberRoles: z.record(z.string(), z.string()).optional(),
   color: z.string().optional(),
   icon: z.string().optional(),
   tags: z.array(z.string()).optional(),
@@ -35,4 +36,25 @@ export const updateBoardSchema = z.object({
  */
 export const addMemberSchema = z.object({
   userId: z.string().trim().min(1, 'userId is required'),
+  role: z.enum(['Admin', 'Editor', 'Viewer', 'Member'], {
+    errorMap: () => ({ message: 'Invalid board member role' }),
+  }).optional(),
+});
+
+/**
+ * Validation schema for Updating Member Role
+ */
+export const updateMemberRoleSchema = z.object({
+  role: z.enum(['Admin', 'Editor', 'Viewer'], {
+    errorMap: () => ({ message: 'Invalid role. Role must be Admin, Editor, or Viewer' }),
+  }),
+});
+
+/**
+ * Validation schema for Generating Temporary View Share Token
+ */
+export const createShareTokenSchema = z.object({
+  expiresIn: z.enum(['1h', '24h', '7d', 'never'], {
+    errorMap: () => ({ message: 'Invalid expiresIn. Allowed values: 1h, 24h, 7d, never' }),
+  }).optional().default('24h'),
 });

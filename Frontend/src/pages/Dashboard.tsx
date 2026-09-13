@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Plus,
-  Filter,
   ArrowUpDown,
   Search,
   Sparkles,
@@ -41,13 +40,11 @@ export const Dashboard: React.FC = () => {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(true);
   const [managingWorkspace, setManagingWorkspace] = useState<Workspace | null>(
-    null,
+    null
   );
   const [activeTab, setActiveTab] = useState<"all" | "starred">("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState<"updated" | "tasks" | "title">(
-    "updated",
-  );
+  const [sortBy, setSortBy] = useState<"updated" | "tasks" | "title">("updated");
 
   // Modals state
   const [isCreateBoardModalOpen, setIsCreateBoardModalOpen] = useState(false);
@@ -56,23 +53,28 @@ export const Dashboard: React.FC = () => {
   const [isManageWorkspaceModalOpen, setIsManageWorkspaceModalOpen] =
     useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = (msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToastMessage(msg);
-    setTimeout(() => {
+    toastTimerRef.current = setTimeout(() => {
       setToastMessage(null);
     }, 3000);
   };
 
-  // Derive active workspace directly from state without delayed useEffect redirects
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
+  // Derive active workspace directly from state
   const currentWorkspace = useMemo(() => {
     if (workspaces.length === 0) return null;
-    if (workspaceId) {
-      const match = workspaces.find((w) => w.id === workspaceId);
-      if (match) return match;
-      return null;
-    }
-    return workspaces[0];
+    return workspaceId
+      ? workspaces.find((w) => w.id === workspaceId) ?? null
+      : workspaces[0];
   }, [workspaces, workspaceId]);
 
   // Load workspaces and boards from live API once on mount
@@ -116,7 +118,7 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleCreateWorkspace = async (
-    newWsData: Partial<Workspace> & { name: string },
+    newWsData: Partial<Workspace> & { name: string }
   ) => {
     const created = await apiCreateWorkspace(newWsData);
     setWorkspaces((prev) => [...prev, created]);
@@ -128,11 +130,13 @@ export const Dashboard: React.FC = () => {
     try {
       const updated = await apiUpdateWorkspace(updatedWs.id, updatedWs);
       setWorkspaces((prev) =>
-        prev.map((w) => (w.id === updated.id ? updated : w)),
+        prev.map((w) => (w.id === updated.id ? updated : w))
       );
       showToast(`Updated workspace "${updated.name}"`);
-    } catch (err: any) {
-      showToast(err.message || "Failed to update workspace");
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to update workspace";
+      showToast(message);
       throw err;
     }
   };
@@ -164,13 +168,12 @@ export const Dashboard: React.FC = () => {
 
   const handleCreateBoard = async (newBoard: Board) => {
     await addBoard(newBoard);
-    // update workspace boardCount
     setWorkspaces((prev) =>
       prev.map((w) =>
         w.id === newBoard.workspaceId
           ? { ...w, boardCount: (w.boardCount || 0) + 1 }
-          : w,
-      ),
+          : w
+      )
     );
     showToast(`Created board "${newBoard.title}"!`);
   };
@@ -178,43 +181,45 @@ export const Dashboard: React.FC = () => {
   // Boards belonging to the currently active workspace
   const currentWorkspaceBoards = useMemo(() => {
     if (!currentWorkspace) return boards;
+    const wsId = String(currentWorkspace.id);
+    const wsName = currentWorkspace.name.toLowerCase();
+
     return boards.filter((board) => {
-      const matchesId =
-        board.workspaceId &&
-        String(board.workspaceId) === String(currentWorkspace.id);
-      const matchesName =
-        board.workspaceName &&
-        board.workspaceName.toLowerCase() ===
-          currentWorkspace.name.toLowerCase();
-      if (board.workspaceId || board.workspaceName) {
-        return matchesId || matchesName;
-      }
+      if (board.workspaceId) return String(board.workspaceId) === wsId;
+      if (board.workspaceName)
+        return board.workspaceName.toLowerCase() === wsName;
       return true;
     });
   }, [boards, currentWorkspace]);
 
+  const starredBoardsCount = useMemo(
+    () => currentWorkspaceBoards.filter((b) => b.isFavorite).length,
+    [currentWorkspaceBoards]
+  );
+
   // Filter and Sort Logic
   const filteredBoards = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
     return currentWorkspaceBoards
       .filter((board) => {
-        // Tab filter
         if (activeTab === "starred" && !board.isFavorite) {
           return false;
         }
 
-        // Search query filter
-        if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase();
-          const matchTitle = (board.title || "").toLowerCase().includes(q);
-          const matchDesc = (board.description || "").toLowerCase().includes(q);
+        if (query) {
+          const matchTitle = (board.title || "").toLowerCase().includes(query);
+          const matchDesc = (board.description || "").toLowerCase().includes(query);
           const matchWorkspace = (board.workspaceName || "")
             .toLowerCase()
-            .includes(q);
+            .includes(query);
           const matchTags = (board.tags || []).some((t) =>
-            t.toLowerCase().includes(q),
+            t.toLowerCase().includes(query)
           );
-          if (!matchTitle && !matchDesc && !matchWorkspace && !matchTags)
+
+          if (!matchTitle && !matchDesc && !matchWorkspace && !matchTags) {
             return false;
+          }
         }
 
         return true;
@@ -227,13 +232,9 @@ export const Dashboard: React.FC = () => {
           return (b.stats?.totalTasks || 0) - (a.stats?.totalTasks || 0);
         }
         if (sortBy === "updated") {
-          return (
-            new Date(b.createdAt || 0).getTime() -
-            new Date(a.createdAt || 0).getTime()
-          );
-        }
-        if (sortBy === 'updated') {
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+          const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+          return timeB - timeA;
         }
         return 0;
       });
@@ -255,15 +256,9 @@ export const Dashboard: React.FC = () => {
         onSelectWorkspace={handleSelectWorkspace}
         onOpenCreateWorkspace={() => setIsCreateWorkspaceModalOpen(true)}
         onOpenManageWorkspace={(ws) => {
-          if (ws) {
-            setManagingWorkspace(ws);
-          } else {
-            setManagingWorkspace(currentWorkspace);
-          }
+          setManagingWorkspace(ws ?? currentWorkspace);
           setIsManageWorkspaceModalOpen(true);
         }}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
       />
 
       {/* Toast Notification */}
@@ -281,7 +276,7 @@ export const Dashboard: React.FC = () => {
           <div>
             <div className="flex items-center space-x-2 text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-1">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>{currentWorkspace?.name || 'Workspace'}</span>
+              <span>{currentWorkspace?.name || "Workspace"}</span>
             </div>
             <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
               Engineering Sprint Boards
@@ -324,34 +319,31 @@ export const Dashboard: React.FC = () => {
               }`}
             >
               <Star className="w-3.5 h-3.5 fill-amber-400/80 text-amber-400" />
-              <span>
-                Starred (
-                {currentWorkspaceBoards.filter((b) => b.isFavorite).length})
-              </span>
+              <span>Starred ({starredBoardsCount})</span>
             </button>
           </div>
 
-          {/* Sort & Mobile Search Controls */}
-          <div className="flex items-center space-x-3">
-            <div className="md:hidden flex-1 relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          {/* Search & Sort Controls */}
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="relative flex-1 sm:w-56">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search..."
-                className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none"
+                placeholder="Filter boards..."
+                className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 transition"
               />
             </div>
 
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 shrink-0">
               <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               <select
                 value={sortBy}
                 onChange={(e) =>
                   setSortBy(e.target.value as "updated" | "tasks" | "title")
                 }
-                className="px-3 py-1.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-300 focus:outline-none focus:border-slate-700 transition"
+                className="px-3 py-1.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-300 focus:outline-none focus:border-slate-700 transition cursor-pointer"
               >
                 <option value="updated">Recently Updated</option>
                 <option value="tasks">Most Tasks</option>
@@ -362,61 +354,34 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* Board Cards Grid */}
-        {currentWorkspaceBoards.length > 0 && filteredBoards.length === 0 ? (
-          /* Search / Filter Empty State */
-          <div className="rounded-3xl border border-slate-800/80 bg-slate-900/30 p-12 text-center max-w-md mx-auto my-12 space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center mx-auto text-slate-400">
-              <Filter className="w-6 h-6" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Action Card: Create New Board */}
+          <button
+            onClick={() => setIsCreateBoardModalOpen(true)}
+            className="group rounded-2xl border-2 border-dashed border-slate-800 hover:border-indigo-500/60 bg-slate-900/20 hover:bg-slate-900/50 p-6 flex flex-col items-center justify-center text-center space-y-3 min-h-65 transition-all duration-200 cursor-pointer"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-indigo-600/10 group-hover:bg-indigo-600/20 border border-indigo-500/20 group-hover:border-indigo-500/40 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
+              <Plus className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-bold text-white">
-              No boards match your search
-            </h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              No boards match your current search query or active filter. Try
-              resetting your search or create a new board.
-            </p>
-            <div className="flex items-center justify-center space-x-3 pt-2">
-              <button
-                onClick={() => {
-                  setSearchQuery("");
-                  setActiveTab("all");
-                }}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition cursor-pointer"
-              >
-                Reset Filters
-              </button>
+            <div>
+              <h4 className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors">
+                Create New Board
+              </h4>
+              <p className="text-xs text-slate-400 mt-1 max-w-50">
+                Add a new sprint, feature roadmap, or team board
+              </p>
             </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Action Card: Create New Board */}
-            <button
-              onClick={() => setIsCreateBoardModalOpen(true)}
-              className="group rounded-2xl border-2 border-dashed border-slate-800 hover:border-indigo-500/60 bg-slate-900/20 hover:bg-slate-900/50 p-6 flex flex-col items-center justify-center text-center space-y-3 min-h-65 transition-all duration-200 cursor-pointer"
-            >
-              <div className="w-12 h-12 rounded-2xl bg-indigo-600/10 group-hover:bg-indigo-600/20 border border-indigo-500/20 group-hover:border-indigo-500/40 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
-                <Plus className="w-6 h-6" />
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors">
-                  Create New Board
-                </h4>
-                <p className="text-xs text-slate-400 mt-1 max-w-50">
-                  Add a new sprint, feature roadmap, or team board
-                </p>
-              </div>
-            </button>
+          </button>
 
-            {/* Render Board Cards */}
-            {filteredBoards.map((board) => (
-              <BoardCard
-                key={board.id}
-                board={board}
-                onToggleFavorite={handleToggleFavorite}
-              />
-            ))}
-          </div>
-        )}
+          {/* Render Board Cards */}
+          {filteredBoards.map((board) => (
+            <BoardCard
+              key={board.id}
+              board={board}
+              onToggleFavorite={handleToggleFavorite}
+            />
+          ))}
+        </div>
       </main>
 
       {/* Create Board Modal */}

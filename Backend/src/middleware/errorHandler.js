@@ -49,7 +49,11 @@ export function errorHandler(err, req, res, next) {
     fs.promises.appendFile(path.join(logsDir, 'error.log'), errorLogLine).catch(() => {});
   }
 
-  res.status(status).json({ error: errorObj });
+  res.status(status).json({
+    error: errorObj,
+    code: errorObj.code,
+    message: errorObj.message,
+  });
 }
 
 export function notFoundHandler(req, res, next) {

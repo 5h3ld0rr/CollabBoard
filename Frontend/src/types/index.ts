@@ -9,7 +9,7 @@ export interface User {
   initials: string;
   color: string;
   role?: 'Owner' | 'Admin' | 'Member';
-  boardRole?: 'Admin' | 'Editor' | 'Viewer';
+  boardRole?: 'Owner' | 'Admin' | 'Editor' | 'Viewer';
 }
 
 export interface TaskComment {
@@ -46,7 +46,9 @@ export interface Board {
   color: string;
   icon: string;
   isFavorite: boolean;
+  ownerId?: string;
   members: User[];
+  memberRoles?: Record<string, string>;
   tags: string[];
   stats: {
     totalTasks: number;
@@ -145,4 +147,49 @@ export interface AppNotification {
     boardId?: string;
     status?: TaskStatus;
   };
+export interface GlobalSearchResultWorkspace {
+  id: string;
+  name: string;
+  description: string;
+  color?: string;
+  boardCount?: number;
+}
+
+export interface GlobalSearchResultBoard {
+  id: string;
+  title: string;
+  description: string;
+  workspaceId: string;
+  workspaceName?: string;
+  tags?: string[];
+  isFavorite?: boolean;
+  stats?: {
+    totalTasks: number;
+    todoCount: number;
+    inProgressCount: number;
+    doneCount: number;
+  };
+  createdAt?: string;
+}
+
+export interface GlobalSearchResultTask {
+  id: string;
+  title: string;
+  description?: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  boardId: string;
+  boardTitle?: string;
+  workspaceId?: string;
+  workspaceName?: string;
+  tags?: string[];
+  dueDate?: string;
+  createdAt?: string;
+}
+
+export interface GlobalSearchResults {
+  workspaces: GlobalSearchResultWorkspace[];
+  boards: GlobalSearchResultBoard[];
+  tasks: GlobalSearchResultTask[];
+  total: number;
 }

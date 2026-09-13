@@ -78,7 +78,7 @@ function App() {
           <Route
             path="/boards/:id"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowGuestShareToken>
                 <BoardView />
               </ProtectedRoute>
             }

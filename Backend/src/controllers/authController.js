@@ -24,6 +24,7 @@ function getCookieOptions(rememberMe = false) {
 export async function register(req, res) {
   const result = await authService.register(req.body);
   res.status(201).json({
+    ...result,
     data: result,
   });
 }
@@ -32,6 +33,7 @@ export async function login(req, res) {
   const result = await authService.login(req.body);
   res.cookie('token', result.token, getCookieOptions(result.rememberMe));
   res.status(200).json({
+    ...result,
     data: result,
   });
 }

@@ -11,6 +11,9 @@ function formatBoard(doc) {
     workspaceId: String(obj.workspaceId),
     ownerId: String(obj.ownerId),
     members: Array.isArray(obj.members) ? obj.members.map(String) : [],
+    memberRoles: obj.memberRoles instanceof Map
+      ? Object.fromEntries(obj.memberRoles)
+      : (obj.memberRoles && typeof obj.memberRoles === 'object' ? { ...obj.memberRoles } : {}),
     stats: obj.stats || { totalTasks: 0, todoCount: 0, inProgressCount: 0, doneCount: 0 },
   };
 }
@@ -96,7 +99,25 @@ export const boardRepo = {
 
     const payload = { ...updates };
     if (updates.members) {
-      payload.members = Array.from(new Set([String(existing.ownerId), ...updates.members.map(String)]));
+      payload.members = Array.from(
+        new Set([
+          String(existing.ownerId),
+          ...updates.members.map((m) => String(typeof m === 'object' && m !== null ? m.id : m)),
+        ])
+      );
+      const newRoles = { ...(existing.memberRoles || {}) };
+      updates.members.forEach((m) => {
+        if (typeof m === 'object' && m !== null && m.id && (m.boardRole || m.role)) {
+          newRoles[String(m.id)] = m.boardRole || m.role;
+        }
+      });
+      payload.memberRoles = newRoles;
+    }
+    if (updates.memberRoles) {
+      payload.memberRoles = {
+        ...(existing.memberRoles || {}),
+        ...updates.memberRoles,
+      };
     }
 
     const doc = await Board.findByIdAndUpdate(boardId, payload, { new: true });

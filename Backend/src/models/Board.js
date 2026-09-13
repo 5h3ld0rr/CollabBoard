@@ -67,6 +67,11 @@ const boardSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    memberRoles: {
+      type: Map,
+      of: String,
+      default: {},
+    },
     columns: {
       type: [columnSchema],
       default: () => [
@@ -74,6 +79,16 @@ const boardSchema = new mongoose.Schema(
         { title: 'In Progress', position: 1 },
         { title: 'Done', position: 2 },
       ],
+    },
+    shareRevokedAt: {
+      type: Date,
+      default: null,
+    },
+    activeShareToken: {
+      token: { type: String },
+      expiresIn: { type: String },
+      expiresAt: { type: Date, default: null },
+      createdAt: { type: Date, default: Date.now },
     },
   },
   {

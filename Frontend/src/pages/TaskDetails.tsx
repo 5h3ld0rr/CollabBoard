@@ -425,8 +425,8 @@ export const TaskDetails: React.FC = () => {
     <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
       <AmbientBackground variant="minimal" />
 
-      {/* Top Navbar */}
-      <Navbar currentWorkspace={board?.workspaceName || 'CollabBoard'} hideSearch />
+      {/* Top Navbar with Global Search */}
+      <Navbar currentWorkspace={board?.workspaceName || 'CollabBoard'} />
 
       {/* Toast Notification */}
       {toastMessage && (
