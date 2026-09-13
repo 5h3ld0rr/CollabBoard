@@ -8,6 +8,8 @@ import {
   subscribeTaskCreated,
   subscribeTaskUpdated,
   subscribeTaskDeleted,
+  subscribeBoardUpdated,
+  subscribePresenceUpdate,
 } from '../socketClient';
 
 vi.mock('socket.io-client', () => {
@@ -49,17 +51,17 @@ describe('sync/socketClient', () => {
     expect(socket).toBe(mockSocket);
   });
 
-  it('emits join:board when joinBoardRoom is invoked', () => {
+  it('emits board:join when joinBoardRoom or emitBoardJoin is invoked', () => {
     getSocketClient();
     joinBoardRoom('board-123');
-    expect(mockSocket.emit).toHaveBeenCalledWith('join:board', 'board-123');
+    expect(mockSocket.emit).toHaveBeenCalledWith('board:join', 'board-123');
   });
 
-  it('emits leave:board when leaveBoardRoom is invoked', () => {
+  it('emits board:leave when leaveBoardRoom or emitBoardLeave is invoked', () => {
     getSocketClient();
     joinBoardRoom('board-123');
     leaveBoardRoom('board-123');
-    expect(mockSocket.emit).toHaveBeenCalledWith('leave:board', 'board-123');
+    expect(mockSocket.emit).toHaveBeenCalledWith('board:leave', 'board-123');
   });
 
   it('subscribes to and unregisters task:created events', () => {
@@ -80,13 +82,22 @@ describe('sync/socketClient', () => {
     expect(mockSocket.off).toHaveBeenCalledWith('task:updated', callback);
   });
 
-  it('subscribes to and unregisters task:deleted events', () => {
+  it('subscribes to and unregisters board:updated events', () => {
     const callback = vi.fn();
-    const unsub = subscribeTaskDeleted(callback);
+    const unsub = subscribeBoardUpdated(callback);
 
-    expect(mockSocket.on).toHaveBeenCalledWith('task:deleted', callback);
+    expect(mockSocket.on).toHaveBeenCalledWith('board:updated', callback);
     unsub();
-    expect(mockSocket.off).toHaveBeenCalledWith('task:deleted', callback);
+    expect(mockSocket.off).toHaveBeenCalledWith('board:updated', callback);
+  });
+
+  it('subscribes to and unregisters presence:update events', () => {
+    const callback = vi.fn();
+    const unsub = subscribePresenceUpdate(callback);
+
+    expect(mockSocket.on).toHaveBeenCalledWith('presence:update', callback);
+    unsub();
+    expect(mockSocket.off).toHaveBeenCalledWith('presence:update', callback);
   });
 
   it('re-joins active board room on reconnect', () => {
@@ -99,11 +110,11 @@ describe('sync/socketClient', () => {
 
     getSocketClient();
     joinBoardRoom('board-reconnect-1');
-    expect(mockSocket.emit).toHaveBeenCalledWith('join:board', 'board-reconnect-1');
+    expect(mockSocket.emit).toHaveBeenCalledWith('board:join', 'board-reconnect-1');
 
     mockSocket.emit.mockClear();
     // Simulate reconnect event
     connectCallback?.();
-    expect(mockSocket.emit).toHaveBeenCalledWith('join:board', 'board-reconnect-1');
+    expect(mockSocket.emit).toHaveBeenCalledWith('board:join', 'board-reconnect-1');
   });
 });
