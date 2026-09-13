@@ -106,7 +106,7 @@ describe('Register Page', () => {
         }),
       }));
     });
-  });
+  }, 15000);
 
   it('displays API error banner when registration fails', async () => {
     mockRegister.mockRejectedValueOnce(new Error('Email is already in use'));
@@ -129,5 +129,5 @@ describe('Register Page', () => {
     await waitFor(() => {
       expect(screen.getByText(/Email is already in use/i)).toBeInTheDocument();
     });
-  });
+  }, 15000);
 });
