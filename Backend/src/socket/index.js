@@ -40,18 +40,24 @@ export function socketAuthMiddleware(socket, next) {
       }
     }
 
+    // Session 5 - Slide 11: Return strict 'NO_TOKEN' error code
     if (!token) {
-      return next(new Error('Authentication error: No token provided'));
+      return next(new Error('NO_TOKEN'));
     }
 
-    const payload = jwt.verify(token, config.jwtSecret);
-    socket.user = {
-      id: payload.sub,
-      email: payload.email,
-    };
-    next();
+    // Session 5 - Slide 11: Validate JWT, return strict 'BAD_TOKEN' on failure
+    try {
+      const payload = jwt.verify(token, config.jwtSecret);
+      socket.user = {
+        id: payload.sub,
+        email: payload.email,
+      };
+      next();
+    } catch {
+      return next(new Error('BAD_TOKEN'));
+    }
   } catch (err) {
-    next(new Error(`Authentication error: ${err.message}`));
+    next(new Error('BAD_TOKEN'));
   }
 }
 
