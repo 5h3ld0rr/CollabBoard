@@ -35,40 +35,48 @@ describe('Navbar component', () => {
     } as any);
   });
 
-  it('renders search input and handles search query updates', async () => {
-    const handleSearch = vi.fn();
-    render(
-      <MemoryRouter>
-        <Navbar searchQuery="test" onSearchChange={handleSearch} />
-      </MemoryRouter>
-    );
-
-    const searchInput = screen.getByPlaceholderText(/search boards/i);
-    expect(searchInput).toHaveValue('test');
-
-    const user = userEvent.setup();
-    await user.type(searchInput, 's');
-    expect(handleSearch).toHaveBeenCalled();
-  });
-
-  it('handles keyboard shortcuts (Ctrl+K to focus, Escape to blur)', () => {
+  it('renders global search trigger and opens search overlay on click', async () => {
     render(
       <MemoryRouter>
         <Navbar />
       </MemoryRouter>
     );
 
-    const searchInput = screen.getByPlaceholderText(/search boards/i);
+    const searchTrigger = screen.getByText(/search workspaces, boards, tasks/i);
+    expect(searchTrigger).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(searchTrigger);
+
+    const searchInput = await screen.findByPlaceholderText(/search across all workspaces/i);
+    expect(searchInput).toBeInTheDocument();
+
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    await user.type(searchInput, 'test query');
+    expect(searchInput).toHaveValue('test query');
+  });
+
+  it('handles keyboard shortcuts (Ctrl+K to open, Escape to close)', async () => {
+    render(
+      <MemoryRouter>
+        <Navbar />
+      </MemoryRouter>
+    );
 
     act(() => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }));
     });
-    expect(document.activeElement).toBe(searchInput);
 
-    act(() => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    });
-    expect(document.activeElement).not.toBe(searchInput);
+    const searchInput = screen.getByPlaceholderText(/search across all workspaces/i);
+    expect(searchInput).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.type(searchInput, '{Escape}');
+
+    expect(
+      screen.queryByPlaceholderText(/search across all workspaces/i)
+    ).not.toBeInTheDocument();
   });
 
   it('updates online / offline badge state on window network events', () => {
@@ -119,6 +127,6 @@ describe('Navbar component', () => {
       </MemoryRouter>
     );
 
-    expect(screen.queryByPlaceholderText(/search boards/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/search workspaces, boards, tasks/i)).not.toBeInTheDocument();
   });
 });
