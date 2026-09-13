@@ -211,7 +211,7 @@ export async function deleteTask(taskId, userId) {
 
   await assertBoardAccess(task.boardId, userId);
   await taskRepo.delete(taskId);
-  return true;
+  return task;
 }
 
 /**
