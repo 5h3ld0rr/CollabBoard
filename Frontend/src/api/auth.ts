@@ -62,3 +62,19 @@ export async function logout(): Promise<void> {
     // Ignore errors on logout
   }
 }
+
+export interface UpdatePasswordInput {
+  currentPassword: string;
+  newPassword: string;
+}
+
+/**
+ * Update user password
+ */
+export async function updatePassword(input: UpdatePasswordInput): Promise<{ message: string }> {
+  const res = await request<{ message: string; data?: { message: string } }>('/api/auth/password', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+  return res.data || res;
+}

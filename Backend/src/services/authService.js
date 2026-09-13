@@ -74,3 +74,25 @@ export async function getMe(userId) {
   }
   return publicUser(user);
 }
+
+/**
+ * Update user password
+ */
+export async function updatePassword(userId, { currentPassword, newPassword }) {
+  const user = await userRepo.findById(userId);
+  if (!user) {
+    throw new NotFoundError('User');
+  }
+
+  const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!ok) {
+    throw new AppError('Current password is incorrect', 400, 'INVALID_CURRENT_PASSWORD');
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  await userRepo.updatePassword(userId, passwordHash);
+
+  return {
+    message: 'Password updated successfully',
+  };
+}

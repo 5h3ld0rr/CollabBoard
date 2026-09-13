@@ -35,6 +35,7 @@ import {
   getWorkspaces,
   updateWorkspace as apiUpdateWorkspace,
   deleteWorkspace as apiDeleteWorkspace,
+  updatePassword as apiUpdatePassword,
 } from "../api";
 import {
   DEFAULT_USER_PREFERENCES,
@@ -178,6 +179,7 @@ export const Profile: React.FC = () => {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   // Toast feedback state
   const [toastMessage, setToastMessage] = useState<{
@@ -253,7 +255,7 @@ export const Profile: React.FC = () => {
     });
   };
 
-  const handlePasswordUpdate = (e: React.FormEvent) => {
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentPassword) {
       showToast("Please enter your current password", "info");
@@ -267,10 +269,21 @@ export const Profile: React.FC = () => {
       showToast("Passwords do not match", "info");
       return;
     }
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    showToast("Password updated securely!");
+
+    try {
+      setIsUpdatingPassword(true);
+      await apiUpdatePassword({ currentPassword, newPassword });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      showToast("Password updated securely!");
+    } catch (err: any) {
+      const errorMsg =
+        err?.message || "Failed to update password. Please check your credentials.";
+      showToast(errorMsg, "info");
+    } finally {
+      setIsUpdatingPassword(false);
+    }
   };
 
   const toggleTaskStatus = (taskId: string) => {
@@ -1428,9 +1441,11 @@ export const Profile: React.FC = () => {
                   type="submit"
                   variant="primary"
                   size="sm"
+                  isLoading={isUpdatingPassword}
+                  disabled={isUpdatingPassword}
                   icon={<KeyRound className="w-3.5 h-3.5" />}
                 >
-                  Update Password
+                  {isUpdatingPassword ? "Updating..." : "Update Password"}
                 </Button>
               </div>
             </form>

@@ -62,4 +62,12 @@ export const userRepo = {
     const docs = await User.find();
     return docs.map(publicUser);
   },
+
+  async updatePassword(id, passwordHash) {
+    if (!id) return null;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      return await User.findByIdAndUpdate(id, { passwordHash }, { returnDocument: 'after' });
+    }
+    return await User.collection.updateOne({ _id: String(id) }, { $set: { passwordHash } });
+  },
 };
