@@ -126,26 +126,7 @@ export const BoardView: React.FC = () => {
     };
   }, [isAssigneeDropdownOpen, isStatusDropdownOpen]);
 
-  // Task Search Input Ref & Keyboard Shortcut
-  const taskSearchInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        taskSearchInputRef.current?.focus();
-        taskSearchInputRef.current?.select();
-      } else if (
-        e.key === "Escape" &&
-        document.activeElement === taskSearchInputRef.current
-      ) {
-        taskSearchInputRef.current?.blur();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
 
   const selectedUser = useMemo(
     () => boardMembers.find((u) => u.id === selectedAssignee),
@@ -441,8 +422,8 @@ export const BoardView: React.FC = () => {
     <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
       <AmbientBackground variant="minimal" />
 
-      {/* Top Navbar */}
-      <Navbar currentWorkspace={boardData?.workspaceName || "CollabBoard"} hideSearch />
+      {/* Top Navbar with Global Search */}
+      <Navbar currentWorkspace={boardData?.workspaceName || "CollabBoard"} />
 
       {/* Toast Notification */}
       {toastMessage && (
@@ -593,16 +574,15 @@ export const BoardView: React.FC = () => {
                   <div className="relative flex-1 min-w-45 max-w-xs">
                     <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
-                      ref={taskSearchInputRef}
                       type="text"
                       value={searchQuery}
                       onChange={(e) =>
                         updateFilters({ search: e.target.value })
                       }
                       placeholder="Search by task title..."
-                      className="w-full pl-8.5 pr-14 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition shadow-inner"
+                      className="w-full pl-8.5 pr-8 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition shadow-inner"
                     />
-                    {searchQuery ? (
+                    {searchQuery && (
                       <button
                         onClick={() => updateFilters({ search: "" })}
                         className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 p-0.5 transition cursor-pointer"
@@ -610,12 +590,6 @@ export const BoardView: React.FC = () => {
                       >
                         <X className="w-3 h-3" />
                       </button>
-                    ) : (
-                      <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <kbd className="px-1.5 py-0.5 text-[9px] font-mono font-semibold text-slate-500 bg-slate-900 rounded border border-slate-800">
-                          Ctrl K
-                        </kbd>
-                      </div>
                     )}
                   </div>
 
