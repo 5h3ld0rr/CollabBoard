@@ -26,6 +26,7 @@ import {
 import { Navbar, AmbientBackground } from "../components/common";
 import { Column, TaskModal, BoardSettingsModal, ConflictModal } from "../components/board";
 import { useBoard } from "../context";
+import { emitBoardJoin, emitBoardLeave, subscribePresenceUpdate } from "../sync";
 import * as tasksApi from "../api/tasks";
 import type { Board, Task, TaskStatus } from "../types";
 
@@ -49,10 +50,21 @@ export const BoardView: React.FC = () => {
 
   const shareToken = searchParams.get("shareToken") || undefined;
   const isGuestView = Boolean(shareToken);
+  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
 
   useEffect(() => {
     if (boardId) {
       loadBoard(boardId, false, shareToken);
+      emitBoardJoin(boardId);
+
+      const unsubPresence = subscribePresenceUpdate((users) => {
+        setOnlineUsers(users);
+      });
+
+      return () => {
+        emitBoardLeave(boardId);
+        unsubPresence();
+      };
     }
   }, [boardId, shareToken, loadBoard]);
 
@@ -565,7 +577,7 @@ export const BoardView: React.FC = () => {
             {/* Board Header Bar */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800/80 mb-6">
               <div className="space-y-1.5">
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3 flex-wrap gap-y-2">
                   <Link
                     to={isGuestView ? "/" : "/dashboard"}
                     className="p-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition flex items-center space-x-1"
@@ -575,6 +587,16 @@ export const BoardView: React.FC = () => {
                   </Link>
                   <span className="px-2.5 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">
                     {boardData.workspaceName}
+                  </span>
+                  <span
+                    data-testid="live-presence-indicator"
+                    className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
+                    title="Live connected collaborators in this room"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>
+                      Online: {onlineUsers.length > 0 ? (onlineUsers.length === 1 ? "just you" : `${onlineUsers.length} active`) : "just you"}
+                    </span>
                   </span>
                 </div>
 
