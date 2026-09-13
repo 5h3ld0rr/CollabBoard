@@ -15,8 +15,8 @@ vi.mock('../../api/tasks');
 vi.mock('../../db');
 vi.mock('../../context/AuthContext', () => ({
   useAuth: () => ({
-    user: { id: 'usr-ruwini', name: 'Ruwini Kanchana', email: 'ruwini@nsbm.lk' },
-    token: 'jwt-token-ruwini',
+    user: { id: 'usr-xenon', name: '32BitXenon', email: 'ruwinikanchana1976@gmail.com' },
+    token: 'jwt-token-xenon',
     isAuthenticated: true,
   }),
 }));
@@ -38,7 +38,7 @@ vi.mock('../../sync', async () => {
   };
 });
 
-describe('Member 2: Ruwini Kanchana - BoardView Socket Events & Live Presence Suite', () => {
+describe('Member 2: 32BitXenon - BoardView Socket Events & Live Presence Suite', () => {
   let presenceCallback: ((users: string[]) => void) | null = null;
   let boardUpdatedCallback: ((payload: any) => void) | null = null;
 
@@ -48,7 +48,7 @@ describe('Member 2: Ruwini Kanchana - BoardView Socket Events & Live Presence Su
     description: 'Real-time collaborative kanban',
     workspaceName: 'Engineering',
     workspaceId: 'ws-1',
-    members: [{ id: 'usr-ruwini', name: 'Ruwini Kanchana' }],
+    members: [{ id: 'usr-xenon', name: '32BitXenon' }],
     tags: ['sprint-15'],
     stats: { totalTasks: 1, todoCount: 1, inProgressCount: 0, doneCount: 0 },
   };
@@ -136,7 +136,7 @@ describe('Member 2: Ruwini Kanchana - BoardView Socket Events & Live Presence Su
 
     // Simulate presence update with 3 active collaborators
     act(() => {
-      presenceCallback?.(['usr-ruwini', 'usr-alex', 'usr-clara']);
+      presenceCallback?.(['usr-xenon', 'usr-alex', 'usr-clara']);
     });
 
     expect(screen.getByTestId('live-presence-indicator').textContent).toContain('Online: 3 active');

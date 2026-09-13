@@ -12,7 +12,7 @@ import { Workspace } from '../src/models/Workspace.js';
 import { User } from '../src/models/User.js';
 import { connectTestDb, clearTestDb, closeTestDb } from './setup/db.js';
 
-function createAuth(userId = new mongoose.Types.ObjectId().toString(), email = 'ruwini@nsbm.lk') {
+function createAuth(userId = new mongoose.Types.ObjectId().toString(), email = 'ruwinikanchana1976@gmail.com') {
   const token = jwt.sign({ sub: userId, email }, config.jwtSecret, { expiresIn: '1h' });
   return {
     userId,
@@ -21,7 +21,7 @@ function createAuth(userId = new mongoose.Types.ObjectId().toString(), email = '
   };
 }
 
-describe('Member 2: Ruwini Kanchana - Board Rooms, Live Presence & board:updated Suite', () => {
+describe('Member 2: 32BitXenon - Board Rooms, Live Presence & board:updated Suite', () => {
   let server;
   let serverPort;
   let socketUrl;
@@ -57,7 +57,7 @@ describe('Member 2: Ruwini Kanchana - Board Rooms, Live Presence & board:updated
   describe('Board Room Routing & Live Presence Updates', () => {
     it('emits presence:update when a user joins a board room via board:join', async () => {
       const user = createAuth();
-      await User.create({ _id: user.userId, name: 'Ruwini', email: 'ruwini@nsbm.lk', passwordHash: 'hash123' });
+      await User.create({ _id: user.userId, name: '32BitXenon', email: 'ruwinikanchana1976@gmail.com', passwordHash: 'hash123' });
       const ws = await Workspace.create({ name: 'Presence WS', ownerId: user.userId });
       const board = await Board.create({
         title: 'Presence Board',
@@ -136,7 +136,7 @@ describe('Member 2: Ruwini Kanchana - Board Rooms, Live Presence & board:updated
   describe('board:updated Event Broadcast on Metadata / Column Changes', () => {
     it('broadcasts board:updated with actorId, title, and columns when board is updated', async () => {
       const user = createAuth();
-      await User.create({ _id: user.userId, name: 'Ruwini', email: 'ruwini@nsbm.lk', passwordHash: 'hash123' });
+      await User.create({ _id: user.userId, name: '32BitXenon', email: 'ruwinikanchana1976@gmail.com', passwordHash: 'hash123' });
       const ws = await Workspace.create({ name: 'Board Update WS', ownerId: user.userId });
       const board = await Board.create({
         title: 'Original Board Title',

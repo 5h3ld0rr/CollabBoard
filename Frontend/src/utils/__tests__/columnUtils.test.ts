@@ -7,7 +7,7 @@ import {
 } from '../columnUtils';
 import type { Task } from '../../types';
 
-describe('Member 2: Ruwini Kanchana - columnUtils Suite', () => {
+describe('Member 2: 32BitXenon - columnUtils Suite', () => {
   const sampleTasks: Task[] = [
     {
       id: 't-1',

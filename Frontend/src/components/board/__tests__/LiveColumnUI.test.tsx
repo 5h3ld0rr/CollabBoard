@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { Column } from '../Column';
 import type { Task } from '../../../types';
 
-describe('Member 2: Ruwini Kanchana - Live Column UI & Header Counters Suite', () => {
+describe('Member 2: 32BitXenon - Live Column UI & Header Counters Suite', () => {
   const mockTasks: Task[] = [
     {
       id: 'task-1',
