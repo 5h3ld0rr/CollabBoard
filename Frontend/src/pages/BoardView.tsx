@@ -26,7 +26,8 @@ import {
 import { Navbar, AmbientBackground } from "../components/common";
 import { Column, TaskModal, BoardSettingsModal, ConflictModal } from "../components/board";
 import { useBoard } from "../context";
-import { emitBoardJoin, emitBoardLeave, subscribePresenceUpdate } from "../sync";
+import { emitBoardJoin, emitBoardLeave, subscribePresenceUpdate, onSocketAuthError } from "../sync";
+import { useReconnectionRecovery } from "../hooks/useReconnectionRecovery";
 import * as tasksApi from "../api/tasks";
 import type { Board, Task, TaskStatus } from "../types";
 
@@ -51,6 +52,29 @@ export const BoardView: React.FC = () => {
   const shareToken = searchParams.get("shareToken") || undefined;
   const isGuestView = Boolean(shareToken);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+
+  // Slide 18 & 17: Reconnection resilience hook - re-joins room, refetches board via REST, and flushes offline queue
+  useReconnectionRecovery({
+    boardId: boardId || null,
+    onRefetchBoard: async () => {
+      if (boardId) {
+        await loadBoard(boardId, false, shareToken);
+      }
+    },
+  });
+
+  // Slide 11 & 12: Redirect on socket handshake error (BAD_TOKEN / NO_TOKEN)
+  useEffect(() => {
+    const unsubAuthError = onSocketAuthError((reason) => {
+      if (reason === 'BAD_TOKEN' || reason === 'NO_TOKEN') {
+        navigate('/login');
+      }
+    });
+
+    return () => {
+      unsubAuthError();
+    };
+  }, [navigate]);
 
   useEffect(() => {
     if (boardId) {
