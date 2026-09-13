@@ -4,6 +4,20 @@ import { config } from '../config.js';
 
 let io = null;
 
+// In-Memory Presence Tracking: boardId -> Map(userId -> connectionCount) (Slide 19)
+const presence = new Map();
+
+/**
+ * Announces active presence (connected user IDs) to everyone in a board room
+ * @param {string} boardId
+ */
+export function announcePresence(boardId) {
+  if (!io || !boardId) return;
+  const boardPresence = presence.get(String(boardId));
+  const onlineUsers = boardPresence ? Array.from(boardPresence.keys()) : [];
+  io.to(`board:${boardId}`).emit('presence:update', onlineUsers);
+}
+
 /**
  * Socket.io authentication middleware
  * Validates JWT token passed in handshake auth, query, or headers.
@@ -71,25 +85,84 @@ export function initSocket(httpServer, options = {}) {
       socket.join(`user:${userId}`);
     }
 
-    // Handle joining a board room for real-time task updates
-    socket.on('join:board', (boardId) => {
-      if (boardId) {
-        const roomName = `board:${boardId}`;
-        socket.join(roomName);
-        socket.emit('joined:board', { boardId, room: roomName });
+    // Handle board room join (supports both 'board:join' and 'join:board')
+    const handleJoinBoard = (boardId) => {
+      if (!boardId || typeof boardId !== 'string' || !boardId.trim()) return;
+      const bId = String(boardId).trim();
+      const roomName = `board:${bId}`;
+      socket.join(roomName);
+
+      // Track presence
+      if (userId) {
+        let boardMap = presence.get(bId);
+        if (!boardMap) {
+          boardMap = new Map();
+          presence.set(bId, boardMap);
+        }
+        boardMap.set(userId, (boardMap.get(userId) || 0) + 1);
+        announcePresence(bId);
+      }
+
+      socket.emit('joined:board', { boardId: bId, room: roomName });
+    };
+
+    // Handle board room leave (supports both 'board:leave' and 'leave:board')
+    const handleLeaveBoard = (boardId) => {
+      if (!boardId) return;
+      const bId = String(boardId).trim();
+      const roomName = `board:${bId}`;
+      socket.leave(roomName);
+
+      // Remove from presence
+      if (userId) {
+        const boardMap = presence.get(bId);
+        if (boardMap) {
+          const count = (boardMap.get(userId) || 1) - 1;
+          if (count <= 0) {
+            boardMap.delete(userId);
+          } else {
+            boardMap.set(userId, count);
+          }
+          if (boardMap.size === 0) {
+            presence.delete(bId);
+          }
+          announcePresence(bId);
+        }
+      }
+
+      socket.emit('left:board', { boardId: bId, room: roomName });
+    };
+
+    socket.on('board:join', handleJoinBoard);
+    socket.on('join:board', handleJoinBoard);
+    socket.on('board:leave', handleLeaveBoard);
+    socket.on('leave:board', handleLeaveBoard);
+
+    // Clean up presence on socket disconnecting
+    socket.on('disconnecting', () => {
+      for (const room of socket.rooms) {
+        if (room.startsWith('board:')) {
+          const bId = room.slice('board:'.length);
+          if (userId) {
+            const boardMap = presence.get(bId);
+            if (boardMap) {
+              const count = (boardMap.get(userId) || 1) - 1;
+              if (count <= 0) {
+                boardMap.delete(userId);
+              } else {
+                boardMap.set(userId, count);
+              }
+              if (boardMap.size === 0) {
+                presence.delete(bId);
+              }
+              announcePresence(bId);
+            }
+          }
+        }
       }
     });
 
-    // Handle leaving a board room
-    socket.on('leave:board', (boardId) => {
-      if (boardId) {
-        const roomName = `board:${boardId}`;
-        socket.leave(roomName);
-        socket.emit('left:board', { boardId, room: roomName });
-      }
-    });
-
-    socket.on('disconnect', (reason) => {
+    socket.on('disconnect', (_reason) => {
       // Clean disconnect
     });
   });
@@ -106,13 +179,14 @@ export function getIO() {
 }
 
 /**
- * Closes the Socket.io server instance (useful for clean teardown and test suites)
+ * Closes the Socket.io server instance and clears presence (for tests & shutdown)
  */
 export async function closeSocket() {
   if (io) {
     await new Promise((resolve) => io.close(resolve));
     io = null;
   }
+  presence.clear();
 }
 
 /**
@@ -124,6 +198,23 @@ export async function closeSocket() {
 export function emitToBoard(boardId, event, payload) {
   if (!io || !boardId) return;
   io.to(`board:${boardId}`).emit(event, payload);
+}
+
+/**
+ * Emits board:updated event to board subscribers (Slide 15)
+ * @param {string} boardId
+ * @param {object} board
+ * @param {string} actorId
+ */
+export function emitBoardUpdated(boardId, board, actorId) {
+  emitToBoard(boardId, 'board:updated', {
+    board,
+    boardId: String(boardId),
+    actorId: String(actorId),
+    columns: board.columns || [],
+    title: board.title,
+    timestamp: new Date().toISOString(),
+  });
 }
 
 /**
