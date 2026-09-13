@@ -6,7 +6,7 @@ import { NotFoundError, ForbiddenError, ConflictError } from '../utils/AppError.
 /**
  * Lists tasks with filtering, sorting, pagination, and board ownership authorization
  */
-export async function listTasks(query = {}, userId) {
+export async function listTasks(query = {}, userId, shareToken = null) {
   const {
     status,
     assignee,
@@ -16,6 +16,48 @@ export async function listTasks(query = {}, userId) {
     page = 1,
     limit = 20,
   } = query;
+
+  // If shareToken is provided with boardId, verify and allow reading tasks for this board
+  const token = shareToken || query?.shareToken;
+  if (token && boardId) {
+    await assertBoardAccess(boardId, userId, token);
+    let allTasks = await taskRepo.findByBoardId(boardId);
+    let result = allTasks;
+
+    if (status) {
+      result = result.filter((t) => t.status === status);
+    }
+    if (assignee) {
+      const normAssignee = assignee.toLowerCase();
+      result = result.filter((t) => t.assignee && t.assignee.toLowerCase().includes(normAssignee));
+    }
+    if (priority) {
+      result = result.filter((t) => t.priority === priority);
+    }
+
+    const desc = sort.startsWith('-');
+    const field = desc ? sort.slice(1) : sort;
+    result = [...result].sort((a, b) => {
+      const valA = a[field] ?? '';
+      const valB = b[field] ?? '';
+      if (valA === valB) return 0;
+      return (valA > valB ? 1 : -1) * (desc ? -1 : 1);
+    });
+
+    const total = result.length;
+    const safePage = Math.max(1, Number(page) || 1);
+    const safeLimit = Math.min(100, Math.max(1, Number(limit) || 20));
+    const start = (safePage - 1) * safeLimit;
+
+    return {
+      data: result.slice(start, start + safeLimit),
+      meta: {
+        page: safePage,
+        limit: safeLimit,
+        total,
+      },
+    };
+  }
 
   // Retrieve all boards accessible to the user
   const userBoards = await boardRepo.listByUserId(userId);

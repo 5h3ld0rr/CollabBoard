@@ -45,7 +45,7 @@ describe('Column Component', () => {
     onDropTask: vi.fn(),
   };
 
-  const renderColumn = (props = defaultProps) => {
+  const renderColumn = (props: React.ComponentProps<typeof Column> = defaultProps) => {
     return render(
       <MemoryRouter>
         <Column {...props} />
@@ -113,4 +113,17 @@ describe('Column Component', () => {
     expect(onAddTask).toHaveBeenCalledTimes(1);
     expect(onAddTask).toHaveBeenCalledWith('todo');
   });
+
+  it('hides add task button and shows read-only empty state when readOnly is true', () => {
+    renderColumn({
+      ...defaultProps,
+      tasks: [],
+      readOnly: true,
+    });
+
+    expect(screen.queryByRole('button', { name: /add task/i })).not.toBeInTheDocument();
+    expect(screen.getByText('No tasks')).toBeInTheDocument();
+    expect(screen.queryByText('Drop card or click to add')).not.toBeInTheDocument();
+  });
 });
+

@@ -9,7 +9,7 @@ export interface User {
   initials: string;
   color: string;
   role?: 'Owner' | 'Admin' | 'Member';
-  boardRole?: 'Admin' | 'Editor' | 'Viewer';
+  boardRole?: 'Owner' | 'Admin' | 'Editor' | 'Viewer';
 }
 
 export interface TaskComment {
@@ -46,7 +46,9 @@ export interface Board {
   color: string;
   icon: string;
   isFavorite: boolean;
+  ownerId?: string;
   members: User[];
+  memberRoles?: Record<string, string>;
   tags: string[];
   stats: {
     totalTasks: number;

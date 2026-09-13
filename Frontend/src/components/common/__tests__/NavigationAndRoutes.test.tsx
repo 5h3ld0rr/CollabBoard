@@ -110,6 +110,58 @@ describe('common navigation and route components', () => {
 
       expect(screen.getByText('Protected Content')).toBeInTheDocument();
     });
+
+    it('allows unauthenticated access when allowGuestShareToken is true and shareToken is present', () => {
+      vi.spyOn(authContextModule, 'useAuth').mockReturnValue({
+        isAuthenticated: false,
+        isLoading: false,
+      } as any);
+
+      render(
+        <MemoryRouter initialEntries={['/boards/b1?shareToken=valid-guest-token']}>
+          <Routes>
+            <Route
+              path="/boards/:id"
+              element={
+                <ProtectedRoute allowGuestShareToken>
+                  <div>Guest Board View</div>
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/login" element={<div>Login Page</div>} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      expect(screen.getByText('Guest Board View')).toBeInTheDocument();
+      expect(screen.queryByText('Login Page')).not.toBeInTheDocument();
+    });
+
+    it('redirects to /login if allowGuestShareToken is true but shareToken is absent', () => {
+      vi.spyOn(authContextModule, 'useAuth').mockReturnValue({
+        isAuthenticated: false,
+        isLoading: false,
+      } as any);
+
+      render(
+        <MemoryRouter initialEntries={['/boards/b1']}>
+          <Routes>
+            <Route
+              path="/boards/:id"
+              element={
+                <ProtectedRoute allowGuestShareToken>
+                  <div>Guest Board View</div>
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/login" element={<div>Login Page</div>} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      expect(screen.queryByText('Guest Board View')).not.toBeInTheDocument();
+      expect(screen.getByText('Login Page')).toBeInTheDocument();
+    });
   });
 
   describe('PublicRoute', () => {

@@ -59,7 +59,12 @@ export async function request<T = any>(path: string, options: RequestInit = {}):
   });
 
   if (res.status === 401) {
-    window.dispatchEvent(new Event('auth:expired'));
+    const isShareTokenRequest =
+      path.includes('shareToken=') ||
+      (typeof options.headers === 'object' && options.headers !== null && 'x-share-token' in options.headers);
+    if (!isShareTokenRequest) {
+      window.dispatchEvent(new Event('auth:expired'));
+    }
   }
 
   if (!res.ok) {

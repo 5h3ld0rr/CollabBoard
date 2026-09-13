@@ -15,8 +15,8 @@ export class NotFoundError extends AppError {
 }
 
 export class ForbiddenError extends AppError {
-  constructor() {
-    super('You may not do that', 403, 'FORBIDDEN');
+  constructor(message = 'You may not do that') {
+    super(message, 403, 'FORBIDDEN');
   }
 }
 

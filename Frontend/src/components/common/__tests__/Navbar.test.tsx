@@ -129,4 +129,21 @@ describe('Navbar component', () => {
 
     expect(screen.queryByText(/search workspaces, boards, tasks/i)).not.toBeInTheDocument();
   });
+
+  it('renders "Log In" button and hides notifications and profile dropdown when user is unauthenticated', () => {
+    vi.spyOn(authContextModule, 'useAuth').mockReturnValue({
+      user: null,
+      logout: mockLogout,
+    } as any);
+
+    render(
+      <MemoryRouter>
+        <Navbar />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('link', { name: /log in/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /notifications/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /user profile menu/i })).not.toBeInTheDocument();
+  });
 });
