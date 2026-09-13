@@ -16,6 +16,7 @@ interface TaskCardProps {
   onDelete?: (taskId: string) => void;
   onMoveStatus?: (taskId: string, newStatus: TaskStatus) => void;
   onDragStart?: (e: React.DragEvent, taskId: string) => void;
+  readOnly?: boolean;
 }
 
 const PRIORITY_BADGES: Record<TaskPriority, { label: string; bg: string; text: string; border: string }> = {
@@ -54,6 +55,7 @@ const PRIORITY_BADGES: Record<TaskPriority, { label: string; bg: string; text: s
 export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   task,
   onDragStart,
+  readOnly = false,
 }) => {
   const priorityInfo = PRIORITY_BADGES[task.priority] || PRIORITY_BADGES.medium;
 
@@ -65,9 +67,11 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 
   return (
     <div
-      draggable
-      onDragStart={(e) => onDragStart?.(e, task.id)}
-      className={`group relative rounded-xl border p-4 transition-all duration-150 shadow-sm select-none cursor-grab active:cursor-grabbing ${
+      draggable={!readOnly}
+      onDragStart={(e) => !readOnly && onDragStart?.(e, task.id)}
+      className={`group relative rounded-xl border p-4 transition-all duration-150 shadow-sm select-none ${
+        readOnly ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
+      } ${
         isDone
           ? 'done bg-slate-800/50 hover:bg-slate-800/70 border-slate-700/40 hover:border-emerald-500/30 opacity-90'
           : isOverdue
@@ -78,7 +82,9 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       {/* Top Strip: Priority / Done Badge & View Details Link */}
       <div className="flex items-center justify-between gap-2 mb-2.5">
         <div className="flex items-center space-x-2">
-          <GripVertical className="w-3.5 h-3.5 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+          {!readOnly && (
+            <GripVertical className="w-3.5 h-3.5 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+          )}
           {isDone ? (
             <span className="px-2 py-0.5 rounded text-[10px] font-semibold border bg-emerald-500/15 text-emerald-300 border-emerald-500/30 flex items-center space-x-1">
               <CheckCircle2 className="w-3 h-3 text-emerald-400" />
@@ -98,14 +104,16 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         </div>
 
         {/* View Details Link */}
-        <Link
-          to={`/tasks/${task.id}`}
-          onClick={(e) => e.stopPropagation()}
-          className="p-1 rounded-lg hover:bg-slate-700/60 text-slate-400 hover:text-white transition cursor-pointer flex items-center"
-          title="View Details"
-        >
-          <ExternalLink className="w-3.5 h-3.5" />
-        </Link>
+        {!readOnly && (
+          <Link
+            to={`/tasks/${task.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="p-1 rounded-lg hover:bg-slate-700/60 text-slate-400 hover:text-white transition cursor-pointer flex items-center"
+            title="View Details"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </Link>
+        )}
       </div>
 
       {/* Task Title */}

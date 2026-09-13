@@ -7,7 +7,6 @@ import {
   Check,
   Trash2,
   UserPlus,
-  Copy,
   Kanban,
   Layers,
   ShieldCheck,
@@ -23,6 +22,7 @@ import {
 import type { Board, User } from '../../types';
 import { COLOR_OPTIONS } from '../../constants';
 import { useAuth } from '../../context/AuthContext';
+import { TemporaryLinkGenerator } from './TemporaryLinkGenerator';
 
 interface BoardSettingsModalProps {
   isOpen: boolean;
@@ -127,7 +127,6 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
   const [inviteEmail, setInviteEmail] = useState('');
   const [selectedWorkspaceUser, setSelectedWorkspaceUser] = useState<string>('');
   const [inviteRole, setInviteRole] = useState<'Admin' | 'Editor' | 'Viewer'>('Editor');
-  const [copiedLink, setCopiedLink] = useState(false);
 
   // Danger Zone States
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -198,12 +197,6 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
 
   // Member Actions
   const availableTeammates: User[] = [];
-
-  const handleCopyBoardLink = () => {
-    navigator.clipboard.writeText(window.location.href);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2000);
-  };
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -499,34 +492,8 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
         {/* TAB 2: MEMBERS */}
         {activeTab === 'members' && (
           <div className="space-y-5">
-            {/* Shareable Board Link */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Shareable Board Link
-              </label>
-              <div className="p-2.5 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-2">
-                <span className="text-xs text-slate-400 font-mono truncate">
-                  {window.location.href}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleCopyBoardLink}
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 hover:text-white font-medium transition flex items-center space-x-1.5 shrink-0"
-                >
-                  {copiedLink ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      <span className="text-emerald-400">Copied</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5 text-slate-400" />
-                      <span>Copy Link</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
+            {/* Temporary View-Only Share Link Generator */}
+            <TemporaryLinkGenerator boardId={board.id} />
 
             {/* Invite Form */}
             <div>

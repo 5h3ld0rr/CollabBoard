@@ -9,9 +9,30 @@ export async function list(req, res) {
 }
 
 export async function getOne(req, res) {
-  const board = await boardService.getBoard(req.params.id, req.user.id);
+  const board = await boardService.getBoard(req.params.id, req.user?.id, req.query?.shareToken);
   res.status(200).json({
     data: board,
+  });
+}
+
+export async function generateShareToken(req, res) {
+  const result = await boardService.generateBoardShareToken(
+    req.params.id,
+    req.body.expiresIn || '24h',
+    req.user.id
+  );
+  res.status(200).json({
+    data: result,
+  });
+}
+
+export async function getActiveShareToken(req, res) {
+  const result = await boardService.getActiveBoardShareToken(
+    req.params.id,
+    req.user.id
+  );
+  res.status(200).json({
+    data: result,
   });
 }
 
@@ -80,3 +101,13 @@ export async function getAnalytics(req, res) {
     data: analytics,
   });
 }
+
+export async function resetShareToken(req, res) {
+  await boardService.resetBoardShareToken(req.params.id, req.user.id);
+  res.status(200).json({
+    data: {
+      message: 'Board share link reset successfully. Previous links have been revoked.',
+    },
+  });
+}
+

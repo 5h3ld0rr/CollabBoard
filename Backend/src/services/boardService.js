@@ -1,3 +1,5 @@
+import jwt from 'jsonwebtoken';
+import { config } from '../config.js';
 import { boardRepo } from '../repos/boardRepo.js';
 import { taskRepo } from '../repos/taskRepo.js';
 import { userRepo } from '../repos/userRepo.js';
@@ -77,14 +79,48 @@ export async function enrichBoard(board) {
 }
 
 /**
- * Asserts that a board exists and that the requesting user is either the owner or a member.
+ * Verify a temporary view-only share token for a board
+ */
+export function verifyShareToken(token, expectedBoardId) {
+  if (!token) return null;
+  try {
+    const payload = jwt.verify(token, config.jwtSecret);
+    if (payload.type !== 'board_share_view') return null;
+    if (String(payload.boardId) !== String(expectedBoardId)) return null;
+    return payload;
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      throw new ForbiddenError('This temporary share link has expired');
+    }
+    throw new ForbiddenError('Invalid share link');
+  }
+}
+
+/**
+ * Asserts that a board exists and that the requesting user is either the owner or a member,
+ * or possesses a valid temporary view-only share token.
  * Throws NotFoundError (404) if board does not exist.
  * Throws ForbiddenError (403) if user lacks access.
  */
-export async function assertBoardAccess(boardId, userId) {
+export async function assertBoardAccess(boardId, userId, shareToken = null) {
   const board = await boardRepo.findById(boardId);
   if (!board) {
     throw new NotFoundError('Board');
+  }
+
+  // If a temporary share token was supplied, verify it
+  if (shareToken) {
+    const validShare = verifyShareToken(shareToken, boardId);
+    if (validShare) {
+      if (board.shareRevokedAt) {
+        const issuedAtMs = validShare.iatMs || (validShare.iat ? validShare.iat * 1000 : 0);
+        const revokedAtMs = new Date(board.shareRevokedAt).getTime();
+        if (issuedAtMs < revokedAtMs) {
+          throw new ForbiddenError('This temporary share link has been revoked or reset');
+        }
+      }
+      return enrichBoard(board);
+    }
   }
 
   const uid = String(userId);
@@ -109,8 +145,98 @@ export async function listBoards(userId) {
 /**
  * Get single board details after ownership/membership verification
  */
-export async function getBoard(boardId, userId) {
-  return assertBoardAccess(boardId, userId);
+export async function getBoard(boardId, userId, shareToken = null) {
+  return assertBoardAccess(boardId, userId, shareToken);
+}
+
+/**
+ * Generate a cryptographically signed, temporary view-only share token for a board
+ */
+export async function generateBoardShareToken(boardId, expiresIn = '24h', userId) {
+  const board = await assertBoardAccess(boardId, userId);
+
+  const isNever = expiresIn === 'never';
+  const allowedExp = { '1h': 3600, '24h': 86400, '7d': 604800 };
+  const durationSeconds = isNever ? null : (allowedExp[expiresIn] || 86400);
+  const expiresAt = isNever ? null : new Date(Date.now() + durationSeconds * 1000).toISOString();
+
+  const signOptions = isNever ? {} : { expiresIn };
+  const token = jwt.sign(
+    {
+      boardId: String(board.id),
+      type: 'board_share_view',
+      role: 'Viewer',
+      canView: true,
+      iatMs: Date.now(),
+    },
+    config.jwtSecret,
+    signOptions
+  );
+
+  // Persist active share token on the board document
+  await boardRepo.update(boardId, {
+    activeShareToken: {
+      token,
+      expiresIn,
+      expiresAt: expiresAt ? new Date(expiresAt) : null,
+      createdAt: new Date(),
+    },
+  });
+
+  return {
+    token,
+    expiresAt,
+    expiresIn,
+    boardId: board.id,
+  };
+}
+
+/**
+ * Get the currently active share token for a board if one exists and has not expired or been revoked
+ */
+export async function getActiveBoardShareToken(boardId, userId) {
+  const board = await assertBoardAccess(boardId, userId);
+  if (!board.activeShareToken || !board.activeShareToken.token) {
+    return null;
+  }
+
+  const { token, expiresIn, expiresAt } = board.activeShareToken;
+
+  // Check expiration if applicable
+  if (expiresAt && new Date(expiresAt).getTime() <= Date.now()) {
+    await boardRepo.update(boardId, { activeShareToken: null });
+    return null;
+  }
+
+  // Check if revoked
+  if (board.shareRevokedAt) {
+    const validShare = verifyShareToken(token, boardId);
+    const issuedAtMs = validShare?.iatMs || (validShare?.iat ? validShare.iat * 1000 : 0);
+    const revokedAtMs = new Date(board.shareRevokedAt).getTime();
+    if (issuedAtMs < revokedAtMs) {
+      await boardRepo.update(boardId, { activeShareToken: null });
+      return null;
+    }
+  }
+
+  return {
+    token,
+    expiresIn,
+    expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+    boardId: String(board.id),
+  };
+}
+
+/**
+ * Reset/revoke all existing share tokens for a board
+ */
+export async function resetBoardShareToken(boardId, userId) {
+  await assertBoardAccess(boardId, userId);
+  await boardRepo.update(boardId, {
+    shareRevokedAt: new Date(),
+    activeShareToken: null,
+  });
+  return true;
 }
 
 /**

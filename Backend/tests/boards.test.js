@@ -271,6 +271,242 @@ describe('Board API & Analytics', () => {
       expect(targetMember.boardRole).toBe('Admin');
     });
 
+    it('allows board owner/member to generate a temporary view share token', async () => {
+      const owner = authHeader();
+      const ws = await Workspace.create({ name: 'Share WS', ownerId: owner.userId });
+      const board = await Board.create({
+        title: 'Shareable Board',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [],
+      });
+
+      const res = await request(app)
+        .post(`/api/boards/${board._id}/share-token`)
+        .set(owner.header)
+        .send({ expiresIn: '24h' });
+
+      expect(res.status).toBe(200);
+      const data = res.body.data || res.body;
+      expect(data.token).toBeDefined();
+      expect(data.expiresAt).toBeDefined();
+      expect(data.expiresIn).toBe('24h');
+    });
+
+    it('allows unauthenticated guest to view board using a valid share token', async () => {
+      const owner = authHeader();
+      const ws = await Workspace.create({ name: 'Guest WS', ownerId: owner.userId });
+      const board = await Board.create({
+        title: 'Guest View Board',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [],
+      });
+
+      const tokenRes = await request(app)
+        .post(`/api/boards/${board._id}/share-token`)
+        .set(owner.header)
+        .send({ expiresIn: '1h' });
+
+      const shareToken = tokenRes.body.data.token;
+
+      // Unauthenticated request with ?shareToken
+      const res = await request(app)
+        .get(`/api/boards/${board._id}?shareToken=${shareToken}`);
+
+      expect(res.status).toBe(200);
+      const retrieved = res.body.data || res.body;
+      expect(retrieved.title).toBe('Guest View Board');
+    });
+
+    it('allows generating share token with never expire option', async () => {
+      const owner = authHeader();
+      const ws = await Workspace.create({ name: 'Never WS', ownerId: owner.userId });
+      const board = await Board.create({
+        title: 'Never Expiring Board',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [],
+      });
+
+      const tokenRes = await request(app)
+        .post(`/api/boards/${board._id}/share-token`)
+        .set(owner.header)
+        .send({ expiresIn: 'never' });
+
+      expect(tokenRes.status).toBe(200);
+      expect(tokenRes.body.data.expiresIn).toBe('never');
+      expect(tokenRes.body.data.expiresAt).toBeNull();
+      const token = tokenRes.body.data.token;
+
+      // Access board using never-expiring share token
+      const res = await request(app).get(`/api/boards/${board._id}?shareToken=${token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.title).toBe('Never Expiring Board');
+    });
+
+    it('rejects guest access when share token is expired', async () => {
+      const owner = authHeader();
+      const ws = await Workspace.create({ name: 'Expired WS', ownerId: owner.userId });
+      const board = await Board.create({
+        title: 'Expired Board',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [],
+      });
+
+      // Generate already expired token (-10s)
+      const expiredToken = jwt.sign(
+        {
+          boardId: String(board._id),
+          type: 'board_share_view',
+          role: 'Viewer',
+        },
+        config.jwtSecret,
+        { expiresIn: '-10s' }
+      );
+
+      const res = await request(app)
+        .get(`/api/boards/${board._id}?shareToken=${expiredToken}`);
+
+      expect(res.status).toBe(403);
+    });
+
+    it('rejects guest access when share token is invalid or belongs to another board', async () => {
+      const owner = authHeader();
+      const ws = await Workspace.create({ name: 'Tamper WS', ownerId: owner.userId });
+      const boardA = await Board.create({
+        title: 'Board A',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [],
+      });
+      const boardB = await Board.create({
+        title: 'Board B',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [],
+      });
+
+      const tokenRes = await request(app)
+        .post(`/api/boards/${boardA._id}/share-token`)
+        .set(owner.header)
+        .send({ expiresIn: '1h' });
+
+      const tokenA = tokenRes.body.data.token;
+
+      // Access boardB with token for boardA
+      const res = await request(app)
+        .get(`/api/boards/${boardB._id}?shareToken=${tokenA}`);
+
+      expect(res.status).toBe(403);
+    });
+
+    it('rejects share token generation for non-members', async () => {
+      const owner = authHeader();
+      const stranger = authHeader();
+      const ws = await Workspace.create({ name: 'Private WS', ownerId: owner.userId });
+      const board = await Board.create({
+        title: 'Confidential Board',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [],
+      });
+
+      const res = await request(app)
+        .post(`/api/boards/${board._id}/share-token`)
+        .set(stranger.header)
+        .send({ expiresIn: '24h' });
+
+      expect(res.status).toBe(403);
+    });
+
+    it('allows owner to reset share token and revokes previously generated links', async () => {
+      const owner = authHeader();
+      const ws = await Workspace.create({ name: 'Reset WS', ownerId: owner.userId });
+      const board = await Board.create({
+        title: 'Revokable Board',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [],
+      });
+
+      // 1. Generate token
+      const tokenRes1 = await request(app)
+        .post(`/api/boards/${board._id}/share-token`)
+        .set(owner.header)
+        .send({ expiresIn: '24h' });
+      const token1 = tokenRes1.body.data.token;
+
+      // 2. Token works initially
+      const access1 = await request(app).get(`/api/boards/${board._id}?shareToken=${token1}`);
+      expect(access1.status).toBe(200);
+
+      // 3. Reset share token
+      const resetRes = await request(app)
+        .post(`/api/boards/${board._id}/share-token/reset`)
+        .set(owner.header);
+      expect(resetRes.status).toBe(200);
+
+      // 4. Old token is now revoked and rejected with 403
+      const accessOld = await request(app).get(`/api/boards/${board._id}?shareToken=${token1}`);
+      expect(accessOld.status).toBe(403);
+
+      // 5. Newly generated token works
+      const tokenRes2 = await request(app)
+        .post(`/api/boards/${board._id}/share-token`)
+        .set(owner.header)
+        .send({ expiresIn: '24h' });
+      const token2 = tokenRes2.body.data.token;
+      const accessNew = await request(app).get(`/api/boards/${board._id}?shareToken=${token2}`);
+      expect(accessNew.status).toBe(200);
+    });
+
+    it('returns currently active share token via GET /api/boards/:id/share-token', async () => {
+      const owner = authHeader();
+      const ws = await Workspace.create({ name: 'Active Token WS', ownerId: owner.userId });
+      const board = await Board.create({
+        title: 'Board With Active Link',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [],
+      });
+
+      // Initially no active share token
+      const initialRes = await request(app)
+        .get(`/api/boards/${board._id}/share-token`)
+        .set(owner.header);
+      expect(initialRes.status).toBe(200);
+      expect(initialRes.body.data).toBeNull();
+
+      // Generate a share token
+      const genRes = await request(app)
+        .post(`/api/boards/${board._id}/share-token`)
+        .set(owner.header)
+        .send({ expiresIn: '7d' });
+      expect(genRes.status).toBe(200);
+      const generatedToken = genRes.body.data.token;
+
+      // GET /api/boards/:id/share-token returns the active token
+      const activeRes = await request(app)
+        .get(`/api/boards/${board._id}/share-token`)
+        .set(owner.header);
+      expect(activeRes.status).toBe(200);
+      expect(activeRes.body.data.token).toBe(generatedToken);
+      expect(activeRes.body.data.expiresIn).toBe('7d');
+
+      // Resetting revokes it and clears active token
+      await request(app)
+        .post(`/api/boards/${board._id}/share-token/reset`)
+        .set(owner.header);
+
+      const afterResetRes = await request(app)
+        .get(`/api/boards/${board._id}/share-token`)
+        .set(owner.header);
+      expect(afterResetRes.status).toBe(200);
+      expect(afterResetRes.body.data).toBeNull();
+    });
+
     it('rejects board deletion by non-owner with 403 Forbidden', async () => {
       const owner = authHeader();
       const stranger = authHeader();

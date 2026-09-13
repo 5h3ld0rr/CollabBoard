@@ -263,7 +263,7 @@ export interface BoardContextValue {
   state: BoardState;
   dispatch: React.Dispatch<BoardAction>;
   loadBoards: (forceRefresh?: boolean) => Promise<void>;
-  loadBoard: (boardId: string, forceRefresh?: boolean) => Promise<void>;
+  loadBoard: (boardId: string, forceRefresh?: boolean, shareToken?: string) => Promise<void>;
   setTasks: (tasks: Task[]) => void;
   addTask: (boardId: string, taskInput: Partial<Task> & { title: string }) => Promise<Task>;
   updateTask: (task: Task) => Promise<Task>;
@@ -323,14 +323,14 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, []);
 
-  const loadBoard = useCallback(async (boardId: string, forceRefresh = false) => {
-    // 1. Instant Cache Hydration from PouchDB (0ms delay)
+  const loadBoard = useCallback(async (boardId: string, forceRefresh = false, shareToken?: string) => {
+    // 1. Instant Cache Hydration from PouchDB (0ms delay) - skip if guest with shareToken
     const [cachedBoard, cachedTasks] = await Promise.all([
       getCachedBoard(boardId),
       getCachedTasks(boardId),
     ]);
 
-    if (cachedBoard) {
+    if (cachedBoard && !shareToken) {
       dispatch({
         type: 'SET_ACTIVE_BOARD',
         payload: { board: cachedBoard, tasks: cachedTasks || [] },
@@ -349,25 +349,27 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // 2. Background Revalidation from API
     try {
       const [serverBoard, serverTasks] = await Promise.all([
-        boardsApi.getBoardById(boardId),
-        tasksApi.getBoardTasks(boardId),
+        boardsApi.getBoardById(boardId, shareToken),
+        tasksApi.getBoardTasks(boardId, shareToken ? { shareToken } : undefined),
       ]);
 
       if (serverBoard) {
-        const boardChanged = forceRefresh || hasBoardChanged(cachedBoard, serverBoard);
-        const tasksChanged = forceRefresh || hasTasksChanged(cachedTasks, serverTasks);
+        const boardChanged = forceRefresh || Boolean(shareToken) || hasBoardChanged(cachedBoard, serverBoard);
+        const tasksChanged = forceRefresh || Boolean(shareToken) || hasTasksChanged(cachedTasks, serverTasks);
 
         if (boardChanged || tasksChanged) {
           dispatch({
             type: 'SET_ACTIVE_BOARD',
             payload: { board: serverBoard, tasks: serverTasks },
           });
-          await Promise.all([
-            saveBoardToCache(serverBoard),
-            saveTasksToCache(serverTasks, boardId),
-          ]);
+          if (!shareToken) {
+            await Promise.all([
+              saveBoardToCache(serverBoard),
+              saveTasksToCache(serverTasks, boardId),
+            ]);
+          }
         }
-      } else if (!cachedBoard) {
+      } else if (!cachedBoard || shareToken) {
         dispatch({
           type: 'SET_ACTIVE_BOARD',
           payload: { board: null, tasks: [] },

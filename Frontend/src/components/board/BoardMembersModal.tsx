@@ -4,7 +4,6 @@ import {
   Users,
   UserPlus,
   Trash2,
-  Copy,
   Check,
   Shield,
   Eye,
@@ -13,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { Board, User } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { TemporaryLinkGenerator } from './TemporaryLinkGenerator';
 
 interface BoardMembersModalProps {
   isOpen: boolean;
@@ -93,7 +93,6 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
   const [inviteEmail, setInviteEmail] = useState('');
   const [selectedWorkspaceUser, setSelectedWorkspaceUser] = useState<string>('');
   const [inviteRole, setInviteRole] = useState<'Admin' | 'Editor' | 'Viewer'>('Editor');
-  const [copiedLink, setCopiedLink] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -107,13 +106,6 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
 
   // Find workspace teammates who are not yet added to this board
   const availableTeammates: User[] = [];
-
-  const handleCopyBoardLink = () => {
-    const boardUrl = window.location.href;
-    navigator.clipboard.writeText(boardUrl);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2000);
-  };
 
   const handleAddMember = (e: React.FormEvent) => {
     e.preventDefault();
@@ -195,27 +187,9 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
           </div>
         </div>
 
-        {/* Shareable Board Link Strip */}
-        <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center justify-between gap-2 mb-6">
-          <div className="flex-1 truncate text-xs text-slate-400 font-mono">
-            {window.location.href}
-          </div>
-          <button
-            onClick={handleCopyBoardLink}
-            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 hover:text-white font-medium transition flex items-center space-x-1.5 shrink-0"
-          >
-            {copiedLink ? (
-              <>
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="text-emerald-400">Copied</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-3.5 h-3.5 text-slate-400" />
-                <span>Copy Link</span>
-              </>
-            )}
-          </button>
+        {/* Temporary View-Only Share Link Generator */}
+        <div className="mb-6">
+          <TemporaryLinkGenerator boardId={board.id} />
         </div>
 
         {/* Feedback Alert */}

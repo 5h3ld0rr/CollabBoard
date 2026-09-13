@@ -49,3 +49,12 @@ export const updateMemberRoleSchema = z.object({
     errorMap: () => ({ message: 'Invalid role. Role must be Admin, Editor, or Viewer' }),
   }),
 });
+
+/**
+ * Validation schema for Generating Temporary View Share Token
+ */
+export const createShareTokenSchema = z.object({
+  expiresIn: z.enum(['1h', '24h', '7d', 'never'], {
+    errorMap: () => ({ message: 'Invalid expiresIn. Allowed values: 1h, 24h, 7d, never' }),
+  }).optional().default('24h'),
+});

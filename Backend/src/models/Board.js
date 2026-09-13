@@ -80,6 +80,16 @@ const boardSchema = new mongoose.Schema(
         { title: 'Done', position: 2 },
       ],
     },
+    shareRevokedAt: {
+      type: Date,
+      default: null,
+    },
+    activeShareToken: {
+      token: { type: String },
+      expiresIn: { type: String },
+      expiresAt: { type: Date, default: null },
+      createdAt: { type: Date, default: Date.now },
+    },
   },
   {
     timestamps: true,

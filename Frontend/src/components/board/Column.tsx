@@ -14,6 +14,7 @@ interface ColumnProps {
   onDeleteTask: (taskId: string) => void;
   onMoveStatus: (taskId: string, newStatus: TaskStatus) => void;
   onDropTask: (taskId: string, targetStatus: TaskStatus) => void;
+  readOnly?: boolean;
 }
 
 export const Column: React.FC<ColumnProps> = ({
@@ -27,19 +28,23 @@ export const Column: React.FC<ColumnProps> = ({
   onDeleteTask,
   onMoveStatus,
   onDropTask,
+  readOnly = false,
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
 
   const handleDragOver = (e: React.DragEvent) => {
+    if (readOnly) return;
     e.preventDefault();
     setIsDragOver(true);
   };
 
   const handleDragLeave = () => {
+    if (readOnly) return;
     setIsDragOver(false);
   };
 
   const handleDrop = (e: React.DragEvent) => {
+    if (readOnly) return;
     e.preventDefault();
     setIsDragOver(false);
     const taskId = e.dataTransfer.getData('text/plain');
@@ -49,6 +54,7 @@ export const Column: React.FC<ColumnProps> = ({
   };
 
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
+    if (readOnly) return;
     e.dataTransfer.setData('text/plain', taskId);
   };
 
@@ -75,25 +81,33 @@ export const Column: React.FC<ColumnProps> = ({
           </span>
         </div>
 
-        <button
-          onClick={() => onAddTask(status)}
-          title={`Add task to ${title}`}
-          className="p-1 rounded-lg bg-slate-800/70 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-700/50 transition"
-        >
-          <Plus className="w-3.5 h-3.5" />
-        </button>
+        {!readOnly && (
+          <button
+            onClick={() => onAddTask(status)}
+            title={`Add task to ${title}`}
+            className="p-1 rounded-lg bg-slate-800/70 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-700/50 transition"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
 
       {/* Task Cards List */}
       <div className="flex-1 space-y-3 overflow-y-auto pr-0.5 min-h-37.5">
         {tasks.length === 0 ? (
-          <div
-            onClick={() => onAddTask(status)}
-            className="h-28 rounded-xl border-2 border-dashed border-slate-800/80 hover:border-indigo-500/40 hover:bg-slate-800/20 flex flex-col items-center justify-center text-slate-500 hover:text-slate-300 transition cursor-pointer text-xs space-y-1"
-          >
-            <Plus className="w-4 h-4 text-slate-500" />
-            <span>Drop card or click to add</span>
-          </div>
+          readOnly ? (
+            <div className="h-24 rounded-xl border border-slate-800/60 bg-slate-950/20 flex items-center justify-center text-slate-500 text-xs">
+              <span>No tasks</span>
+            </div>
+          ) : (
+            <div
+              onClick={() => onAddTask(status)}
+              className="h-28 rounded-xl border-2 border-dashed border-slate-800/80 hover:border-indigo-500/40 hover:bg-slate-800/20 flex flex-col items-center justify-center text-slate-500 hover:text-slate-300 transition cursor-pointer text-xs space-y-1"
+            >
+              <Plus className="w-4 h-4 text-slate-500" />
+              <span>Drop card or click to add</span>
+            </div>
+          )
         ) : (
           tasks.map((task) => (
             <TaskCard
@@ -103,6 +117,7 @@ export const Column: React.FC<ColumnProps> = ({
               onDelete={onDeleteTask}
               onMoveStatus={onMoveStatus}
               onDragStart={handleDragStart}
+              readOnly={readOnly}
             />
           ))
         )}

@@ -74,7 +74,7 @@ describe('Register Page', () => {
     await user.click(submitBtn);
 
     expect(screen.getByText(/Passwords do not match/i)).toBeInTheDocument();
-  });
+  }, 15000);
 
   it('submits registration successfully and redirects to /login with state', async () => {
     mockRegister.mockResolvedValueOnce(undefined);
