@@ -155,6 +155,39 @@ export function leaveBoardRoom(boardId: string): void {
 export const emitBoardLeave = leaveBoardRoom;
 
 /**
+ * Subscribes to connect and disconnect lifecycle events with automatic reconnection restart
+ * and clean teardown (Session 5 - Slide 18)
+ */
+export function subscribeSocketConnection(
+  onConnect: () => void,
+  onDisconnect?: (reason: string) => void
+): () => void {
+  const socket = socketInstance || getSocketClient();
+
+  const handleConnect = () => {
+    onConnect();
+  };
+
+  const handleDisconnect = (reason: string) => {
+    if (onDisconnect) {
+      onDisconnect(reason);
+    }
+    // Slide 18: If the server disconnected the socket forcefully, trigger manual restart
+    if (reason === 'io server disconnect') {
+      socket.connect();
+    }
+  };
+
+  socket.on('connect', handleConnect);
+  socket.on('disconnect', handleDisconnect);
+
+  return () => {
+    socket.off('connect', handleConnect);
+    socket.off('disconnect', handleDisconnect);
+  };
+}
+
+/**
  * Subscribes to real-time task:created events
  */
 export function subscribeTaskCreated(
