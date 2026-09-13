@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import app from './app.js';
 import { config } from './config.js';
 import { connectDb } from './db/connect.js';
+import { initSocket, closeSocket } from './socket/index.js';
 
 // Connect to MongoDB first, then start listening
 await connectDb();
@@ -10,9 +11,13 @@ const server = app.listen(config.port, () => {
   console.log(`🚀 CollabBoard API server listening on http://localhost:${config.port}`);
 });
 
+// Attach Socket.io server
+initSocket(server);
+
 // Graceful shutdown lifecycle management
 const gracefulShutdown = async (signal) => {
-  console.log(`\n🛑 Received ${signal}. Shutting down HTTP server gracefully...`);
+  console.log(`\n🛑 Received ${signal}. Shutting down HTTP and Socket servers gracefully...`);
+  await closeSocket();
   server.close(async () => {
     try {
       await mongoose.connection.close(false);
