@@ -1,11 +1,9 @@
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { config } from '../config.js';
+import { presenceTracker } from './presenceTracker.js';
 
 let io = null;
-
-// In-Memory Presence Tracking: boardId -> Map(userId -> connectionCount) (Slide 19)
-const presence = new Map();
 
 /**
  * Announces active presence (connected user IDs) to everyone in a board room
@@ -13,8 +11,7 @@ const presence = new Map();
  */
 export function announcePresence(boardId) {
   if (!io || !boardId) return;
-  const boardPresence = presence.get(String(boardId));
-  const onlineUsers = boardPresence ? Array.from(boardPresence.keys()) : [];
+  const onlineUsers = presenceTracker.getOnlineUserIds(boardId);
   io.to(`board:${boardId}`).emit('presence:update', onlineUsers);
 }
 
@@ -107,12 +104,7 @@ export function initSocket(httpServer, options = {}) {
 
       // Track presence
       if (userId) {
-        let boardMap = presence.get(bId);
-        if (!boardMap) {
-          boardMap = new Map();
-          presence.set(bId, boardMap);
-        }
-        boardMap.set(userId, (boardMap.get(userId) || 0) + 1);
+        presenceTracker.addConnection(bId, userId);
         announcePresence(bId);
       }
 
@@ -128,19 +120,8 @@ export function initSocket(httpServer, options = {}) {
 
       // Remove from presence
       if (userId) {
-        const boardMap = presence.get(bId);
-        if (boardMap) {
-          const count = (boardMap.get(userId) || 1) - 1;
-          if (count <= 0) {
-            boardMap.delete(userId);
-          } else {
-            boardMap.set(userId, count);
-          }
-          if (boardMap.size === 0) {
-            presence.delete(bId);
-          }
-          announcePresence(bId);
-        }
+        presenceTracker.removeConnection(bId, userId);
+        announcePresence(bId);
       }
 
       socket.emit('left:board', { boardId: bId, room: roomName });
@@ -157,19 +138,8 @@ export function initSocket(httpServer, options = {}) {
         if (room.startsWith('board:')) {
           const bId = room.slice('board:'.length);
           if (userId) {
-            const boardMap = presence.get(bId);
-            if (boardMap) {
-              const count = (boardMap.get(userId) || 1) - 1;
-              if (count <= 0) {
-                boardMap.delete(userId);
-              } else {
-                boardMap.set(userId, count);
-              }
-              if (boardMap.size === 0) {
-                presence.delete(bId);
-              }
-              announcePresence(bId);
-            }
+            presenceTracker.removeConnection(bId, userId);
+            announcePresence(bId);
           }
         }
       }
