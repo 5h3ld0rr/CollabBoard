@@ -1450,24 +1450,6 @@ export const Profile: React.FC = () => {
               </div>
             </form>
 
-            {/* Two Factor Authentication Card */}
-            <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-sm font-bold text-white">
-                    Two-Factor Authentication (2FA)
-                  </h2>
-                  <p className="text-xs text-slate-400">
-                    Protect your CollabBoard workspaces with hardware or
-                    app-based 2FA
-                  </p>
-                </div>
-                <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Active & Protected</span>
-                </span>
-              </div>
-            </div>
 
             {/* Active Sessions */}
             <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-4">
