@@ -1,21 +1,8 @@
 import { io, Socket } from 'socket.io-client';
-import type { Task } from '../types';
+import type { Task, RealtimeTaskPayload, RealtimeTaskDeletedPayload } from '../types';
 
-export interface TaskSocketEventPayload<T = Task> {
-  task: T;
-  boardId: string;
-  actorId: string;
-  version: number;
-  timestamp?: string;
-}
-
-export interface TaskDeletedSocketPayload {
-  taskId: string;
-  boardId: string;
-  actorId: string;
-  version: number;
-  timestamp?: string;
-}
+export type TaskSocketEventPayload<T = Task> = RealtimeTaskPayload<T>;
+export type TaskDeletedSocketPayload = RealtimeTaskDeletedPayload;
 
 let socketInstance: Socket | null = null;
 let currentJoinedBoard: string | null = null;
