@@ -24,8 +24,15 @@ import {
   Eye,
 } from "lucide-react";
 import { Navbar, AmbientBackground } from "../components/common";
-import { Column, TaskModal, BoardSettingsModal, ConflictModal } from "../components/board";
-import { useBoard } from "../context";
+import {
+  Column,
+  TaskModal,
+  BoardSettingsModal,
+  ConflictModal,
+  LivePresenceBadge,
+  LivePresenceAvatarStrip,
+} from "../components/board";
+import { useBoard, useAuth } from "../context";
 import { emitBoardJoin, emitBoardLeave, subscribePresenceUpdate, onSocketAuthError } from "../sync";
 import { useReconnectionRecovery } from "../hooks/useReconnectionRecovery";
 import * as tasksApi from "../api/tasks";
@@ -35,6 +42,7 @@ export const BoardView: React.FC = () => {
   const { id: boardId } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const {
     state: { activeBoard: boardData, tasks, boardMembers, isLoading },
@@ -612,16 +620,17 @@ export const BoardView: React.FC = () => {
                   <span className="px-2.5 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">
                     {boardData.workspaceName}
                   </span>
-                  <span
-                    data-testid="live-presence-indicator"
-                    className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
-                    title="Live connected collaborators in this room"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <span>
-                      Online: {onlineUsers.length > 0 ? (onlineUsers.length === 1 ? "just you" : `${onlineUsers.length} active`) : "just you"}
-                    </span>
-                  </span>
+                  <LivePresenceBadge
+                    onlineUsers={onlineUsers}
+                    currentUserId={user?.id}
+                  />
+                  {boardData.members && boardData.members.length > 0 && (
+                    <LivePresenceAvatarStrip
+                      members={boardData.members}
+                      onlineUserIds={onlineUsers}
+                      currentUserId={user?.id}
+                    />
+                  )}
                 </div>
 
                 <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">

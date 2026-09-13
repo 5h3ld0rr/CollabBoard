@@ -16,20 +16,12 @@ export function formatOnlinePresenceLabel(
   onlineUserIds: string[] = [],
   currentUserId?: string | null
 ): string {
-  if (!onlineUserIds || onlineUserIds.length === 0) {
-    return 'Offline';
+  // Session 5 - Slide 19: If empty or 1 user, display "Online: just you"
+  if (!onlineUserIds || onlineUserIds.length <= 1) {
+    return 'Online: just you';
   }
 
-  const count = onlineUserIds.length;
-
-  if (count === 1) {
-    if (currentUserId && onlineUserIds[0] === currentUserId) {
-      return 'Online: just you';
-    }
-    return 'Online: 1 active';
-  }
-
-  return `Online: ${count} active`;
+  return `Online: ${onlineUserIds.length} active`;
 }
 
 /**
