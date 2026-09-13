@@ -182,7 +182,7 @@ export const Login: React.FC = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Email Address */}
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
+                <label htmlFor="email" className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
                   Work Email
                 </label>
                 <div className="relative">
@@ -190,6 +190,7 @@ export const Login: React.FC = () => {
                     <Mail className="w-4 h-4" />
                   </div>
                   <input
+                    id="email"
                     type="email"
                     name="email"
                     value={formData.email}
@@ -204,7 +205,7 @@ export const Login: React.FC = () => {
               {/* Password */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  <label htmlFor="password" className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
                     Password
                   </label>
                   <a
@@ -225,6 +226,7 @@ export const Login: React.FC = () => {
                     <Lock className="w-4 h-4" />
                   </div>
                   <input
+                    id="password"
                     type={showPassword ? "text" : "password"}
                     name="password"
                     value={formData.password}

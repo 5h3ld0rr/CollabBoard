@@ -54,7 +54,7 @@ export const taskRepo = {
           ? taskData.order
           : 0,
       done: taskData.done ?? (taskData.status === 'done'),
-      version: 0,
+      version: 1,
     });
 
     return doc.toJSON();
@@ -75,6 +75,11 @@ export const taskRepo = {
     }
 
     const { id, _id, version, ...payload } = updates;
+    if (payload.status) {
+      if (payload.done === undefined) {
+        payload.done = payload.status === 'done';
+      }
+    }
     if (payload.order !== undefined && payload.position === undefined) {
       payload.position = payload.order;
     }
