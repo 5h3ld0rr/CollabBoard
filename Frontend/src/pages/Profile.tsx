@@ -39,12 +39,21 @@ import {
 } from "../api";
 import {
   DEFAULT_USER_PREFERENCES,
-  DEFAULT_ACTIVE_SESSIONS,
   SUBSCRIPTION_PLANS,
 } from "../constants";
 import { saveCachedProfileDetails, getCachedProfileDetails } from "../db";
 import type { Task, TaskStatus, Workspace, User } from "../types";
-import { getInitials as extractInitials } from "../utils";
+import { getInitials as extractInitials, detectCurrentDevice } from "../utils";
+
+interface ActiveSession {
+  id: string;
+  device: string;
+  ip: string;
+  location: string;
+  lastActive: string;
+  isCurrent: boolean;
+  iconType: "laptop" | "smartphone";
+}
 
 type ProfileTab =
   | "overview"
@@ -181,6 +190,73 @@ export const Profile: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
+  // Active device sessions state with dynamic device detection & localStorage persistence
+  const [activeSessions, setActiveSessions] = useState<ActiveSession[]>(() => {
+    const current = detectCurrentDevice();
+    const isLocal =
+      typeof window !== "undefined" &&
+      (window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1");
+
+    const currentSession: ActiveSession = {
+      id: "current-session",
+      device: current.device,
+      ip: isLocal ? "127.0.0.1" : "Client IP",
+      location: "Local Network",
+      lastActive: "Active Now",
+      isCurrent: true,
+      iconType: current.iconType,
+    };
+
+    if (typeof localStorage !== "undefined") {
+      const stored = localStorage.getItem("collabboard_active_sessions");
+      if (stored) {
+        try {
+          const parsed: ActiveSession[] = JSON.parse(stored);
+          const others = parsed.filter((s) => !s.isCurrent);
+          return [currentSession, ...others];
+        } catch {
+          // ignore corrupted data
+        }
+      }
+    }
+
+    // Realistic secondary sessions for interactive testing and management
+    return [
+      currentSession,
+      {
+        id: "sess-mobile-ios",
+        device: "iOS • Safari Mobile",
+        ip: "192.168.1.104",
+        location: "Mobile Device",
+        lastActive: "2 hours ago",
+        isCurrent: false,
+        iconType: "smartphone",
+      },
+      {
+        id: "sess-macos-chrome",
+        device: "macOS • Chrome",
+        ip: "192.168.1.145",
+        location: "Office Workstation",
+        lastActive: "Yesterday at 4:15 PM",
+        isCurrent: false,
+        iconType: "laptop",
+      },
+    ];
+  });
+
+  // Sync active sessions to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "collabboard_active_sessions",
+        JSON.stringify(activeSessions),
+      );
+    } catch {
+      // ignore
+    }
+  }, [activeSessions]);
+
   // Toast feedback state
   const [toastMessage, setToastMessage] = useState<{
     text: string;
@@ -284,6 +360,25 @@ export const Profile: React.FC = () => {
     } finally {
       setIsUpdatingPassword(false);
     }
+  };
+
+  const otherSessionsCount = activeSessions.filter((s) => !s.isCurrent).length;
+
+  const handleRevokeOtherSessions = () => {
+    if (otherSessionsCount === 0) {
+      showToast("No other active sessions to revoke", "info");
+      return;
+    }
+    setActiveSessions((prev) => prev.filter((s) => s.isCurrent));
+    showToast(
+      `Revoked ${otherSessionsCount} other session${otherSessionsCount > 1 ? "s" : ""} successfully!`,
+      "success",
+    );
+  };
+
+  const handleLogoutSession = (sessionId: string, deviceName: string) => {
+    setActiveSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    showToast(`${deviceName} session logged out successfully!`, "info");
   };
 
   const toggleTaskStatus = (taskId: string) => {
@@ -1453,7 +1548,7 @@ export const Profile: React.FC = () => {
 
             {/* Active Sessions */}
             <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
                 <div>
                   <h2 className="text-sm font-bold text-white">
                     Active Device Sessions
@@ -1465,19 +1560,21 @@ export const Profile: React.FC = () => {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() =>
-                    showToast("All other sessions revoked successfully")
-                  }
+                  disabled={otherSessionsCount === 0}
+                  onClick={handleRevokeOtherSessions}
+                  className={otherSessionsCount === 0 ? "opacity-50 cursor-not-allowed" : ""}
                 >
-                  Revoke Other Sessions
+                  {otherSessionsCount > 0
+                    ? `Revoke Other Sessions (${otherSessionsCount})`
+                    : "No Other Sessions"}
                 </Button>
               </div>
 
               <div className="space-y-3">
-                {DEFAULT_ACTIVE_SESSIONS.map((session) => (
+                {activeSessions.map((session) => (
                   <div
                     key={session.id}
-                    className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/70 flex items-center justify-between text-xs"
+                    className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/70 flex items-center justify-between text-xs transition-all hover:border-slate-700/80"
                   >
                     <div className="flex items-center space-x-3">
                       <div
@@ -1509,13 +1606,14 @@ export const Profile: React.FC = () => {
                       </div>
                     </div>
                     {session.isCurrent ? (
-                      <span className="text-[11px] font-medium text-emerald-400">
-                        Active Now
+                      <span className="text-[11px] font-medium text-emerald-400 inline-flex items-center space-x-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>Active Now</span>
                       </span>
                     ) : (
                       <button
-                        onClick={() => showToast("Device logged out")}
-                        className="text-xs text-rose-400 hover:text-rose-300 font-medium cursor-pointer"
+                        onClick={() => handleLogoutSession(session.id, session.device)}
+                        className="text-xs text-rose-400 hover:text-rose-300 font-medium px-2 py-1 rounded-lg hover:bg-rose-500/10 transition-colors cursor-pointer"
                       >
                         Log Out
                       </button>
