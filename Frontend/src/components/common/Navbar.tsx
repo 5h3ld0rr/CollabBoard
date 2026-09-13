@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  Search,
   Wifi,
   WifiOff,
   LogOut,
@@ -46,7 +45,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [showNotificationToast, setShowNotificationToast] = useState(false);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isOnline, setIsOnline] = useState<boolean>(
     typeof navigator !== "undefined" ? navigator.onLine : true,
@@ -182,8 +180,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           )}
 
-          {/* Notifications Dropdown */}
-          <NotificationDropdown />
+          {user ? (
+            <>
+              {/* Notifications Dropdown */}
+              <NotificationDropdown />
 
               {/* User Profile Menu */}
               <div className="relative" ref={profileRef}>

@@ -147,6 +147,8 @@ export interface AppNotification {
     boardId?: string;
     status?: TaskStatus;
   };
+}
+
 export interface GlobalSearchResultWorkspace {
   id: string;
   name: string;
