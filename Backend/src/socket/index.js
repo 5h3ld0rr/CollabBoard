@@ -76,6 +76,7 @@ export function initSocket(httpServer, options = {}) {
       if (boardId) {
         const roomName = `board:${boardId}`;
         socket.join(roomName);
+        socket.emit('joined:board', { boardId, room: roomName });
       }
     });
 
@@ -84,10 +85,11 @@ export function initSocket(httpServer, options = {}) {
       if (boardId) {
         const roomName = `board:${boardId}`;
         socket.leave(roomName);
+        socket.emit('left:board', { boardId, room: roomName });
       }
     });
 
-    socket.on('disconnect', (_reason) => {
+    socket.on('disconnect', (reason) => {
       // Clean disconnect
     });
   });
