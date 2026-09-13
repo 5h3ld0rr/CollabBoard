@@ -78,7 +78,41 @@ export function getSocketClient(tokenOrOptions?: string | null | SocketClientOpt
     }
   });
 
+  // Slide 11 & 12: Handle token errors during handshake and trigger auth expiration/logout
+  socketInstance.on('connect_error', (err: any) => {
+    const errorMsg = err?.message || '';
+    if (errorMsg === 'BAD_TOKEN' || errorMsg === 'NO_TOKEN') {
+      triggerAuthError(errorMsg);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('auth:expired', { detail: { reason: errorMsg } }));
+      }
+    }
+  });
+
   return socketInstance;
+}
+
+export type AuthErrorListener = (reason: string) => void;
+const authErrorListeners = new Set<AuthErrorListener>();
+
+/**
+ * Registers an observer for socket authentication errors (BAD_TOKEN / NO_TOKEN)
+ */
+export function onSocketAuthError(listener: AuthErrorListener): () => void {
+  authErrorListeners.add(listener);
+  return () => {
+    authErrorListeners.delete(listener);
+  };
+}
+
+function triggerAuthError(reason: string): void {
+  authErrorListeners.forEach((listener) => {
+    try {
+      listener(reason);
+    } catch (e) {
+      console.error('[SocketClient] Auth error listener failed:', e);
+    }
+  });
 }
 
 /**
