@@ -1,8 +1,17 @@
 import { io, Socket } from 'socket.io-client';
-import type { Task, RealtimeTaskPayload, RealtimeTaskDeletedPayload } from '../types';
+import type { Task, Board, RealtimeTaskPayload, RealtimeTaskDeletedPayload } from '../types';
 
 export type TaskSocketEventPayload<T = Task> = RealtimeTaskPayload<T>;
 export type TaskDeletedSocketPayload = RealtimeTaskDeletedPayload;
+
+export interface BoardUpdatedSocketPayload {
+  board: Board;
+  boardId: string;
+  actorId: string;
+  columns?: any[];
+  title?: string;
+  timestamp?: string;
+}
 
 let socketInstance: Socket | null = null;
 let currentJoinedBoard: string | null = null;
@@ -35,9 +44,9 @@ export function getSocketClient(token?: string | null): Socket {
   });
 
   socketInstance.on('connect', () => {
-    // If we had a previously active board before reconnect, re-join the room
+    // If we had a previously active board before reconnect, re-join the room (Slide 18)
     if (currentJoinedBoard && socketInstance) {
-      socketInstance.emit('join:board', currentJoinedBoard);
+      socketInstance.emit('board:join', currentJoinedBoard);
     }
   });
 
@@ -56,14 +65,17 @@ export function disconnectSocket(): void {
 }
 
 /**
- * Joins a specific board room for real-time task sync
+ * Joins a specific board room for real-time board & task sync (Slide 16)
  */
 export function joinBoardRoom(boardId: string): void {
   currentJoinedBoard = boardId;
-  if (socketInstance && socketInstance.connected) {
-    socketInstance.emit('join:board', boardId);
+  const socket = socketInstance || getSocketClient();
+  if (socket) {
+    socket.emit('board:join', boardId);
   }
 }
+
+export const emitBoardJoin = joinBoardRoom;
 
 /**
  * Leaves a specific board room
@@ -72,10 +84,13 @@ export function leaveBoardRoom(boardId: string): void {
   if (currentJoinedBoard === boardId) {
     currentJoinedBoard = null;
   }
-  if (socketInstance && socketInstance.connected) {
-    socketInstance.emit('leave:board', boardId);
+  const socket = socketInstance || getSocketClient();
+  if (socket) {
+    socket.emit('board:leave', boardId);
   }
 }
+
+export const emitBoardLeave = leaveBoardRoom;
 
 /**
  * Subscribes to real-time task:created events
@@ -113,5 +128,31 @@ export function subscribeTaskDeleted(
   socket.on('task:deleted', callback);
   return () => {
     socket.off('task:deleted', callback);
+  };
+}
+
+/**
+ * Subscribes to real-time board:updated events (Slide 15)
+ */
+export function subscribeBoardUpdated(
+  callback: (payload: BoardUpdatedSocketPayload) => void
+): () => void {
+  const socket = socketInstance || getSocketClient();
+  socket.on('board:updated', callback);
+  return () => {
+    socket.off('board:updated', callback);
+  };
+}
+
+/**
+ * Subscribes to real-time presence:update events (Slide 19)
+ */
+export function subscribePresenceUpdate(
+  callback: (onlineUserIds: string[]) => void
+): () => void {
+  const socket = socketInstance || getSocketClient();
+  socket.on('presence:update', callback);
+  return () => {
+    socket.off('presence:update', callback);
   };
 }
