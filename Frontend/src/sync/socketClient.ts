@@ -21,10 +21,38 @@ const SOCKET_SERVER_URL =
   (typeof window !== 'undefined' && (window as any).__SOCKET_URL__) ||
   'http://localhost:4000';
 
+export interface SocketClientOptions {
+  token?: string | null;
+  url?: string;
+  autoConnect?: boolean;
+}
+
+/**
+ * Checks if the singleton socket instance is currently connected
+ */
+export function isSocketConnected(): boolean {
+  return Boolean(socketInstance && socketInstance.connected);
+}
+
+/**
+ * Returns the active board room identifier currently tracked by the client
+ */
+export function getActiveJoinedBoard(): string | null {
+  return currentJoinedBoard;
+}
+
 /**
  * Initializes or returns the singleton Socket.io client
  */
-export function getSocketClient(token?: string | null): Socket {
+export function getSocketClient(tokenOrOptions?: string | null | SocketClientOptions): Socket {
+  const options: SocketClientOptions =
+    typeof tokenOrOptions === 'string'
+      ? { token: tokenOrOptions }
+      : (tokenOrOptions ?? {});
+
+  const token = options.token ?? (typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null);
+  const serverUrl = options.url || SOCKET_SERVER_URL;
+
   if (socketInstance && socketInstance.connected) {
     return socketInstance;
   }
@@ -33,10 +61,10 @@ export function getSocketClient(token?: string | null): Socket {
     socketInstance.disconnect();
   }
 
-  socketInstance = io(SOCKET_SERVER_URL, {
+  socketInstance = io(serverUrl, {
     withCredentials: true,
     transports: ['websocket', 'polling'],
-    autoConnect: true,
+    autoConnect: options.autoConnect ?? true,
     reconnection: true,
     reconnectionAttempts: 10,
     reconnectionDelay: 1000,
