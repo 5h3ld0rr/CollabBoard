@@ -3,7 +3,7 @@ import { authenticate } from '../middleware/authenticate.js';
 import { validate } from '../middleware/validate.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { idParamSchema } from '../schemas/commonSchema.js';
-import { createBoardSchema, updateBoardSchema, addMemberSchema } from '../schemas/boardSchema.js';
+import { createBoardSchema, updateBoardSchema, addMemberSchema, updateMemberRoleSchema } from '../schemas/boardSchema.js';
 import { taskQuerySchema } from '../schemas/taskSchema.js';
 import * as controller from '../controllers/boardController.js';
 import * as taskController from '../controllers/taskController.js';
@@ -36,6 +36,11 @@ router.post(
 router.delete(
   '/:id/members/:memberId',
   asyncHandler(controller.removeMember)
+);
+router.patch(
+  '/:id/members/:memberId',
+  validate(updateMemberRoleSchema, 'body'),
+  asyncHandler(controller.updateMemberRole)
 );
 router.patch(
   '/:id',

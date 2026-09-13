@@ -192,6 +192,85 @@ describe('Board API & Analytics', () => {
       expect(memberIds).not.toContain(collaboratorId);
     });
 
+    it('rejects self role change with 403 Forbidden', async () => {
+      const owner = authHeader();
+      const ws = await Workspace.create({ name: 'Role WS', ownerId: owner.userId });
+      const board = await Board.create({
+        title: 'Role Test Board',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [owner.userId],
+      });
+
+      const res = await request(app)
+        .patch(`/api/boards/${board._id}/members/${owner.userId}`)
+        .set(owner.header)
+        .send({ role: 'Editor' });
+
+      expect(res.status).toBe(403);
+      expect(res.body.code || res.body.error?.code).toBe('FORBIDDEN');
+    });
+
+    it('rejects changing board owner role with 403 Forbidden', async () => {
+      const owner = authHeader();
+      const collaborator = authHeader();
+      const ws = await Workspace.create({ name: 'Owner Role WS', ownerId: owner.userId });
+      const board = await Board.create({
+        title: 'Owner Guard Board',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [collaborator.userId],
+      });
+
+      const res = await request(app)
+        .patch(`/api/boards/${board._id}/members/${owner.userId}`)
+        .set(collaborator.header)
+        .send({ role: 'Viewer' });
+
+      expect(res.status).toBe(403);
+      expect(res.body.code || res.body.error?.code).toBe('FORBIDDEN');
+    });
+
+    it('rejects removing the board owner with 403 Forbidden', async () => {
+      const owner = authHeader();
+      const ws = await Workspace.create({ name: 'Owner Removal WS', ownerId: owner.userId });
+      const board = await Board.create({
+        title: 'Protected Board 1',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [owner.userId],
+      });
+
+      const res = await request(app)
+        .delete(`/api/boards/${board._id}/members/${owner.userId}`)
+        .set(owner.header);
+
+      expect(res.status).toBe(403);
+      expect(res.body.code || res.body.error?.code).toBe('FORBIDDEN');
+    });
+
+    it('allows board owner to update another member role', async () => {
+      const owner = authHeader();
+      const collaborator = authHeader();
+      const ws = await Workspace.create({ name: 'Update Collab WS', ownerId: owner.userId });
+      const board = await Board.create({
+        title: 'Collaborator Role Board',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [collaborator.userId],
+      });
+
+      const res = await request(app)
+        .patch(`/api/boards/${board._id}/members/${collaborator.userId}`)
+        .set(owner.header)
+        .send({ role: 'Admin' });
+
+      expect(res.status).toBe(200);
+      const updated = res.body.data || res.body;
+      const targetMember = updated.members.find((m) => String(m.id) === collaborator.userId);
+      expect(targetMember.boardRole).toBe('Admin');
+    });
+
     it('rejects board deletion by non-owner with 403 Forbidden', async () => {
       const owner = authHeader();
       const stranger = authHeader();

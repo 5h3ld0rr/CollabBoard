@@ -48,6 +48,18 @@ export async function removeMember(req, res) {
   });
 }
 
+export async function updateMemberRole(req, res) {
+  const board = await boardService.updateMemberRole(
+    req.params.id,
+    req.params.memberId,
+    req.body.role,
+    req.user.id
+  );
+  res.status(200).json({
+    data: board,
+  });
+}
+
 /**
  * GET /api/boards/:id/analytics
  *

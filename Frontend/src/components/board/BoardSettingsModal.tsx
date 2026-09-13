@@ -18,9 +18,11 @@ import {
   Edit3,
   Eye,
   RotateCcw,
+  Crown,
 } from 'lucide-react';
 import type { Board, User } from '../../types';
 import { COLOR_OPTIONS } from '../../constants';
+import { useAuth } from '../../context/AuthContext';
 
 interface BoardSettingsModalProps {
   isOpen: boolean;
@@ -41,11 +43,16 @@ const ICON_OPTIONS = [
   { name: 'Sparkles', icon: Sparkles, label: 'Sprint' },
 ];
 
-const ROLE_BADGES = {
+const ROLE_BADGES: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
+  Owner: {
+    label: 'Owner',
+    icon: <Crown className="w-3 h-3 text-amber-400" />,
+    color: 'bg-amber-500/10 text-amber-300 border-amber-500/20',
+  },
   Admin: {
     label: 'Admin',
-    icon: <Shield className="w-3 h-3 text-amber-400" />,
-    color: 'bg-amber-500/10 text-amber-300 border-amber-500/20',
+    icon: <Shield className="w-3 h-3 text-sky-400" />,
+    color: 'bg-sky-500/10 text-sky-300 border-sky-500/20',
   },
   Editor: {
     label: 'Editor',
@@ -59,14 +66,18 @@ const ROLE_BADGES = {
   },
 };
 
-const normalizeMember = (m: any, idx: number): User => {
+const normalizeMember = (m: any, idx: number, ownerId?: string): User => {
+  const memberId = typeof m === 'object' && m !== null ? String(m.id) : String(m);
+  const isOwner = Boolean(ownerId ? memberId === String(ownerId) : idx === 0);
+
   if (typeof m === 'object' && m !== null && m.name) {
     return {
       ...m,
-      boardRole: m.boardRole || (idx === 0 ? 'Admin' : 'Editor'),
+      id: memberId,
+      boardRole: isOwner ? 'Owner' : (m.boardRole || 'Editor'),
     };
   }
-  const id = typeof m === 'object' && m !== null ? m.id : String(m);
+  const id = memberId;
   const name =
     id === '1' ? 'Alex Chen' :
     id === '2' ? 'Clara Tanaka' :
@@ -86,7 +97,7 @@ const normalizeMember = (m: any, idx: number): User => {
     email,
     initials,
     color,
-    boardRole: idx === 0 ? 'Admin' : 'Editor',
+    boardRole: isOwner ? 'Owner' : (idx === 0 ? 'Admin' : 'Editor'),
   };
 };
 
@@ -99,6 +110,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
   onClearTasks,
   initialTab = 'general',
 }) => {
+  const { user: currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'general' | 'members' | 'danger'>(initialTab);
   
   // General Tab States
@@ -110,7 +122,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
 
   // Members Tab States
   const [members, setMembers] = useState<User[]>(() => {
-    return (board.members || []).map(normalizeMember);
+    return (board.members || []).map((m, i) => normalizeMember(m, i, board.ownerId));
   });
   const [inviteEmail, setInviteEmail] = useState('');
   const [selectedWorkspaceUser, setSelectedWorkspaceUser] = useState<string>('');
@@ -134,7 +146,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
       setColor(board.color || COLOR_OPTIONS[0].value);
       setIcon(board.icon || 'Kanban');
       setTagsInput(Array.isArray(board.tags) ? board.tags.join(', ') : '');
-      setMembers((board.members || []).map(normalizeMember));
+      setMembers((board.members || []).map((m, i) => normalizeMember(m, i, board.ownerId)));
       setConfirmDelete(false);
       setConfirmClear(false);
       setSuccessMessage(null);
@@ -228,6 +240,15 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
   };
 
   const handleChangeRole = async (userId: string, newRole: 'Admin' | 'Editor' | 'Viewer') => {
+    if (board.ownerId && userId === String(board.ownerId)) {
+      showError('Cannot change the role of the board owner');
+      return;
+    }
+    if (currentUser && (userId === currentUser.id || userId === String(currentUser.id))) {
+      showError('You cannot change your own role');
+      return;
+    }
+
     const updatedMembers = members.map((m) =>
       m.id === userId ? { ...m, boardRole: newRole } : m
     );
@@ -245,6 +266,15 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
 
   const handleRemoveMember = async (userId: string) => {
     if (members.length <= 1) return;
+    if (board.ownerId && userId === String(board.ownerId)) {
+      showError('The board owner cannot be removed from the board');
+      return;
+    }
+    if (currentUser && (userId === currentUser.id || userId === String(currentUser.id))) {
+      showError('You cannot remove yourself from the board settings');
+      return;
+    }
+
     const target = members.find((m) => m.id === userId);
     const updatedMembers = members.filter((m) => m.id !== userId);
     setMembers(updatedMembers);
@@ -573,8 +603,22 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
 
               <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                 {members.map((member) => {
-                  const currentRole = member.boardRole || 'Editor';
+                  const isOwner = Boolean(
+                    (board.ownerId && member.id === String(board.ownerId)) ||
+                    member.boardRole === 'Owner'
+                  );
+                  const isSelf = Boolean(
+                    currentUser &&
+                    (member.id === currentUser.id ||
+                     member.id === String(currentUser.id) ||
+                     (member.email && currentUser.email && member.email.toLowerCase() === currentUser.email.toLowerCase()))
+                  );
+                  const currentRole = isOwner ? 'Owner' : (member.boardRole || 'Editor');
                   const badge = ROLE_BADGES[currentRole] || ROLE_BADGES.Editor;
+
+                  // Guard against self role change and owner role change
+                  const canChangeRole = !isOwner && !isSelf;
+                  const canRemove = !isOwner && !isSelf && members.length > 1;
 
                   return (
                     <div
@@ -593,30 +637,47 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
                           <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-slate-950" />
                         </div>
                         <div className="truncate">
-                          <p className="text-xs font-semibold text-white truncate leading-tight">
-                            {member.name}
-                          </p>
+                          <div className="flex items-center space-x-1.5">
+                            <p className="text-xs font-semibold text-white truncate leading-tight">
+                              {member.name}
+                            </p>
+                            {isSelf && (
+                              <span className="text-[10px] font-medium text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.2 rounded-md">
+                                You
+                              </span>
+                            )}
+                          </div>
                           <p className="text-[10px] text-slate-400 truncate">{member.email}</p>
                         </div>
                       </div>
 
                       <div className="flex items-center space-x-2 shrink-0">
-                        <select
-                          value={currentRole}
-                          onChange={(e) =>
-                            handleChangeRole(
-                              member.id,
-                              e.target.value as 'Admin' | 'Editor' | 'Viewer'
-                            )
-                          }
-                          className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${badge.color} bg-slate-900 cursor-pointer focus:outline-none`}
-                        >
-                          <option value="Admin">Admin</option>
-                          <option value="Editor">Editor</option>
-                          <option value="Viewer">Viewer</option>
-                        </select>
+                        {canChangeRole ? (
+                          <select
+                            value={currentRole}
+                            onChange={(e) =>
+                              handleChangeRole(
+                                member.id,
+                                e.target.value as 'Admin' | 'Editor' | 'Viewer'
+                              )
+                            }
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${badge.color} bg-slate-900 cursor-pointer focus:outline-none`}
+                          >
+                            <option value="Admin">Admin</option>
+                            <option value="Editor">Editor</option>
+                            <option value="Viewer">Viewer</option>
+                          </select>
+                        ) : (
+                          <span
+                            className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${badge.color} bg-slate-900 select-none`}
+                            title={isOwner ? 'Board Owner (Role is fixed)' : 'You cannot change your own role'}
+                          >
+                            {badge.icon}
+                            <span>{badge.label}</span>
+                          </span>
+                        )}
 
-                        {members.length > 1 && (
+                        {canRemove && (
                           <button
                             type="button"
                             onClick={() => handleRemoveMember(member.id)}

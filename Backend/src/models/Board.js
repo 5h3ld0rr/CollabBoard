@@ -67,6 +67,11 @@ const boardSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    memberRoles: {
+      type: Map,
+      of: String,
+      default: {},
+    },
     columns: {
       type: [columnSchema],
       default: () => [

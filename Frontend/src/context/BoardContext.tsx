@@ -599,7 +599,9 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
     if (board.members && Array.isArray(board.members)) {
       payload.members = board.members.map((m: any) =>
-        typeof m === 'object' && m !== null ? m.id : String(m)
+        typeof m === 'object' && m !== null
+          ? { id: String(m.id), boardRole: m.boardRole || m.role }
+          : String(m)
       ) as any;
     }
 

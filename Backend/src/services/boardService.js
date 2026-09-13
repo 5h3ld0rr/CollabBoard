@@ -2,7 +2,7 @@ import { boardRepo } from '../repos/boardRepo.js';
 import { taskRepo } from '../repos/taskRepo.js';
 import { userRepo } from '../repos/userRepo.js';
 import { workspaceRepo } from '../repos/workspaceRepo.js';
-import { NotFoundError, ForbiddenError } from '../utils/AppError.js';
+import { NotFoundError, ForbiddenError, ValidationError } from '../utils/AppError.js';
 
 /**
  * Enriches a board with dynamic, live computed task statistics and populated member profiles
@@ -32,7 +32,8 @@ export async function enrichBoard(board) {
       const memberId = String(m);
       const user = await userRepo.findById(memberId);
       const isOwner = String(board.ownerId) === memberId;
-      const boardRole = isOwner ? 'Admin' : (idx === 0 ? 'Admin' : 'Editor');
+      const storedRole = board.memberRoles?.[memberId] || (typeof m === 'object' && m !== null ? m.boardRole : null);
+      const boardRole = isOwner ? 'Owner' : (storedRole || (idx === 0 ? 'Admin' : 'Editor'));
 
       if (user) {
         const parts = (user.name || 'User').trim().split(/\s+/).filter(Boolean);
@@ -135,6 +136,45 @@ export async function createBoard(boardData, userId) {
  */
 export async function updateBoard(boardId, updates, userId) {
   const board = await assertBoardAccess(boardId, userId);
+  const uid = String(userId);
+  const isOwner = String(board.ownerId) === uid;
+
+  // Validate any role updates submitted in memberRoles or members array
+  if (updates.memberRoles || updates.members) {
+    const rolesMap = { ...(updates.memberRoles || {}) };
+    if (Array.isArray(updates.members)) {
+      updates.members.forEach((m) => {
+        if (typeof m === 'object' && m !== null && m.id && (m.boardRole || m.role)) {
+          rolesMap[String(m.id)] = m.boardRole || m.role;
+        }
+      });
+    }
+
+    for (const [targetId, newRole] of Object.entries(rolesMap)) {
+      const currentRole = String(targetId) === String(board.ownerId)
+        ? 'Owner'
+        : (board.memberRoles?.[targetId] || 'Editor');
+
+      // 1. Prevent self role change!
+      if (String(targetId) === uid && newRole !== currentRole) {
+        throw new ForbiddenError('You cannot change your own role on this board');
+      }
+
+      // 2. Prevent changing the board owner's role!
+      if (String(targetId) === String(board.ownerId) && newRole !== 'Owner') {
+        throw new ForbiddenError('Cannot change the role of the board owner');
+      }
+
+      // 3. Only board owner or admin can change member roles
+      if (newRole !== currentRole) {
+        const requesterRole = isOwner ? 'Owner' : (board.memberRoles?.[uid] || 'Editor');
+        if (requesterRole !== 'Owner' && requesterRole !== 'Admin') {
+          throw new ForbiddenError('Only board owners and admins can modify member roles');
+        }
+      }
+    }
+  }
+
   const updated = await boardRepo.update(board.id, updates);
   return enrichBoard(updated);
 }
@@ -173,11 +213,56 @@ export async function addBoardMember(boardId, targetUserId, userId) {
 export async function removeBoardMember(boardId, targetUserId, userId) {
   const board = await boardRepo.findById(boardId);
   if (!board) throw new NotFoundError('Board');
+  const targetId = String(targetUserId);
+
+  if (String(board.ownerId) === targetId) {
+    throw new ForbiddenError('The board owner cannot be removed from the board');
+  }
+
   if (String(board.ownerId) !== String(userId)) {
     throw new ForbiddenError('Only the board owner can remove members');
   }
   const currentMembers = board.members || [];
-  const updatedMembers = currentMembers.filter((m) => String(m) !== String(targetUserId));
+  const updatedMembers = currentMembers.filter((m) => String(m) !== targetId);
   const updated = await boardRepo.update(board.id, { members: updatedMembers });
+  return enrichBoard(updated);
+}
+
+/**
+ * Update a specific member's role on a board
+ */
+export async function updateMemberRole(boardId, targetUserId, newRole, userId) {
+  const board = await assertBoardAccess(boardId, userId);
+  const uid = String(userId);
+  const targetId = String(targetUserId);
+
+  // 1. Prevent self role change
+  if (targetId === uid) {
+    throw new ForbiddenError('You cannot change your own role on this board');
+  }
+
+  // 2. Prevent changing board owner's role
+  if (targetId === String(board.ownerId)) {
+    throw new ForbiddenError('Cannot change the role of the board owner');
+  }
+
+  // 3. Only Owner or Admin can change member roles
+  const requesterIsOwner = String(board.ownerId) === uid;
+  const requesterRole = requesterIsOwner ? 'Owner' : (board.memberRoles?.[uid] || 'Editor');
+  if (!requesterIsOwner && requesterRole !== 'Admin') {
+    throw new ForbiddenError('Only board owners and admins can modify member roles');
+  }
+
+  // 4. Validate role
+  if (!['Admin', 'Editor', 'Viewer'].includes(newRole)) {
+    throw new ValidationError({ field: 'role', message: 'Invalid role. Role must be Admin, Editor, or Viewer' });
+  }
+
+  const updatedRoles = {
+    ...(board.memberRoles || {}),
+    [targetId]: newRole,
+  };
+
+  const updated = await boardRepo.update(board.id, { memberRoles: updatedRoles });
   return enrichBoard(updated);
 }
