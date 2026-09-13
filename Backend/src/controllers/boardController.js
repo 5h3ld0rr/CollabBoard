@@ -1,5 +1,6 @@
 import * as boardService from '../services/boardService.js';
 import { getBoardAnalytics } from '../services/taskService.js';
+import { emitBoardUpdated } from '../socket/index.js';
 
 export async function list(req, res) {
   const boards = await boardService.listBoards(req.user.id);
@@ -45,6 +46,7 @@ export async function create(req, res) {
 
 export async function update(req, res) {
   const board = await boardService.updateBoard(req.params.id, req.body, req.user.id);
+  emitBoardUpdated(board.id, board, req.user.id);
   res.status(200).json({
     data: board,
   });
@@ -57,6 +59,7 @@ export async function remove(req, res) {
 
 export async function addMember(req, res) {
   const board = await boardService.addBoardMember(req.params.id, req.body.userId, req.user.id);
+  emitBoardUpdated(board.id, board, req.user.id);
   res.status(200).json({
     data: board,
   });
@@ -64,6 +67,7 @@ export async function addMember(req, res) {
 
 export async function removeMember(req, res) {
   const board = await boardService.removeBoardMember(req.params.id, req.params.memberId, req.user.id);
+  emitBoardUpdated(board.id, board, req.user.id);
   res.status(200).json({
     data: board,
   });
@@ -76,6 +80,7 @@ export async function updateMemberRole(req, res) {
     req.body.role,
     req.user.id
   );
+  emitBoardUpdated(board.id, board, req.user.id);
   res.status(200).json({
     data: board,
   });
