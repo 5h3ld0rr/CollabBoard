@@ -15,7 +15,15 @@ import {
   clearCachedBoardTasks,
   enqueueMutation,
 } from '../db';
-import { flushSyncQueue } from '../sync';
+import {
+  flushSyncQueue,
+  getSocketClient,
+  joinBoardRoom,
+  leaveBoardRoom,
+  subscribeTaskCreated,
+  subscribeTaskUpdated,
+  subscribeTaskDeleted,
+} from '../sync';
 import type { Board, Task, TaskStatus, User } from '../types';
 import { hasBoardsChanged, hasBoardChanged, hasTasksChanged } from '../utils';
 
@@ -99,11 +107,19 @@ export const boardReducer = (state: BoardState, action: BoardAction): BoardState
         tasks: action.payload,
       };
 
-    case 'ADD_TASK':
+    case 'ADD_TASK': {
+      const exists = state.tasks.some((t) => t.id === action.payload.id);
+      if (exists) {
+        return {
+          ...state,
+          tasks: state.tasks.map((t) => (t.id === action.payload.id ? action.payload : t)),
+        };
+      }
       return {
         ...state,
         tasks: [action.payload, ...state.tasks],
       };
+    }
 
     case 'UPDATE_TASK':
       return {
@@ -708,6 +724,74 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       window.removeEventListener('offline', handleOffline);
     };
   }, [loadBoards, loadBoard, state.activeBoard]);
+
+  // Socket.io Room Lifecycle (Join / Leave board room)
+  useEffect(() => {
+    if (!token) return;
+
+    getSocketClient(token);
+
+    if (state.activeBoard?.id) {
+      joinBoardRoom(state.activeBoard.id);
+    }
+
+    return () => {
+      if (state.activeBoard?.id) {
+        leaveBoardRoom(state.activeBoard.id);
+      }
+    };
+  }, [token, state.activeBoard?.id]);
+
+  // Real-Time Task Event Subscriptions with OCC Version Guard
+  useEffect(() => {
+    if (!state.activeBoard?.id) return;
+
+    const activeBoardId = state.activeBoard.id;
+
+    // Handle incoming task:created
+    const unsubCreated = subscribeTaskCreated(async (payload) => {
+      if (payload.boardId !== activeBoardId) return;
+
+      const incoming = payload.task;
+      const exists = state.tasks.some((t) => t.id === incoming.id);
+      if (!exists) {
+        dispatch({ type: 'ADD_TASK', payload: incoming });
+        await updateCachedTask(incoming);
+      }
+    });
+
+    // Handle incoming task:updated with OCC Version Guard
+    const unsubUpdated = subscribeTaskUpdated(async (payload) => {
+      if (payload.boardId !== activeBoardId) return;
+
+      const incoming = payload.task;
+      const current = state.tasks.find((t) => t.id === incoming.id);
+
+      // OCC Version Guard: (if (incoming.version > current.version))
+      if (!current || Number(incoming.version || 1) > Number(current.version || 0)) {
+        dispatch({ type: 'UPDATE_TASK', payload: incoming });
+        await updateCachedTask(incoming);
+      } else {
+        console.warn(
+          `[OCC Guard] Dropped stale/out-of-order task:updated event for task ${incoming.id}: incoming v${incoming.version} <= current v${current.version}`
+        );
+      }
+    });
+
+    // Handle incoming task:deleted for instant column item removal
+    const unsubDeleted = subscribeTaskDeleted(async (payload) => {
+      if (payload.boardId !== activeBoardId) return;
+
+      dispatch({ type: 'DELETE_TASK', payload: { taskId: payload.taskId } });
+      await deleteCachedTask(payload.taskId);
+    });
+
+    return () => {
+      unsubCreated();
+      unsubUpdated();
+      unsubDeleted();
+    };
+  }, [state.activeBoard?.id, state.tasks]);
 
   return (
     <BoardContext.Provider
