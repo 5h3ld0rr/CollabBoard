@@ -71,12 +71,12 @@ export async function deleteBoard(boardId: string): Promise<boolean> {
 }
 
 /**
- * Add a member to a board by email
+ * Add a member to a board by user ID
  */
-export async function addBoardMember(boardId: string, email: string): Promise<Board> {
+export async function addBoardMember(boardId: string, userId: string): Promise<Board> {
   const res = await request<BoardResponse>(`/api/boards/${boardId}/members`, {
     method: 'POST',
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ userId }),
   });
   return res.data;
 }

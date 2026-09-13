@@ -56,7 +56,7 @@ export type BoardAction =
    useReducer Implementation for Task & Board Management
    ========================================================================== */
 
-const boardReducer = (state: BoardState, action: BoardAction): BoardState => {
+export const boardReducer = (state: BoardState, action: BoardAction): BoardState => {
   switch (action.type) {
     case 'SET_LOADING':
       return {

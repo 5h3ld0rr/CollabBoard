@@ -69,7 +69,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       onDragStart={(e) => onDragStart?.(e, task.id)}
       className={`group relative rounded-xl border p-4 transition-all duration-150 shadow-sm select-none cursor-grab active:cursor-grabbing ${
         isDone
-          ? 'bg-slate-800/50 hover:bg-slate-800/70 border-slate-700/40 hover:border-emerald-500/30 opacity-90'
+          ? 'done bg-slate-800/50 hover:bg-slate-800/70 border-slate-700/40 hover:border-emerald-500/30 opacity-90'
           : isOverdue
           ? 'bg-slate-800/90 hover:bg-slate-800 border-rose-500/40 hover:border-rose-500/70 hover:shadow-lg hover:shadow-rose-950/30'
           : 'bg-slate-800/80 hover:bg-slate-800 border-slate-700/60 hover:border-indigo-500/40 hover:shadow-lg hover:shadow-indigo-950/30'
