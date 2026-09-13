@@ -419,9 +419,14 @@ export const BoardView: React.FC = () => {
     showToast("Merged version saved successfully");
   };
 
-  const handleUpdateBoard = (updatedBoard: Board) => {
-    updateBoard(updatedBoard);
-    showToast("Board updated successfully");
+  const handleUpdateBoard = async (updatedBoard: Board) => {
+    try {
+      await updateBoard(updatedBoard);
+      showToast("Board updated successfully");
+    } catch (err: any) {
+      showToast(err?.message || "Failed to update board");
+      throw err;
+    }
   };
 
   const handleDeleteBoard = (deletedBoardId: string) => {

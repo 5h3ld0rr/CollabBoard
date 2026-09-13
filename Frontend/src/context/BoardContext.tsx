@@ -587,7 +587,23 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return board;
     }
 
-    const updated = await boardsApi.updateBoard(board.id, board);
+    const payload: Partial<Board> = {
+      title: board.title,
+      description: board.description,
+      color: board.color,
+      icon: board.icon,
+      tags: board.tags,
+      isFavorite: board.isFavorite,
+      workspaceId: board.workspaceId,
+      workspaceName: board.workspaceName,
+    };
+    if (board.members && Array.isArray(board.members)) {
+      payload.members = board.members.map((m: any) =>
+        typeof m === 'object' && m !== null ? m.id : String(m)
+      ) as any;
+    }
+
+    const updated = await boardsApi.updateBoard(board.id, payload);
     dispatch({ type: 'UPDATE_BOARD', payload: updated });
     await saveBoardToCache(updated);
     return updated;

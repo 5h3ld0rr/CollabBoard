@@ -96,7 +96,12 @@ export const boardRepo = {
 
     const payload = { ...updates };
     if (updates.members) {
-      payload.members = Array.from(new Set([String(existing.ownerId), ...updates.members.map(String)]));
+      payload.members = Array.from(
+        new Set([
+          String(existing.ownerId),
+          ...updates.members.map((m) => String(typeof m === 'object' && m !== null ? m.id : m)),
+        ])
+      );
     }
 
     const doc = await Board.findByIdAndUpdate(boardId, payload, { new: true });

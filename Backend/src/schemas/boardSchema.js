@@ -6,7 +6,7 @@ import { z } from 'zod';
 export const createBoardSchema = z.object({
   title: z.string().trim().min(3, 'Board title must be at least 3 characters'),
   description: z.string().trim().optional().default(''),
-  members: z.array(z.string()).optional().default([]),
+  members: z.array(z.union([z.string(), z.object({ id: z.string() }).passthrough()])).optional().default([]),
   color: z.string().optional(),
   icon: z.string().optional(),
   tags: z.array(z.string()).optional(),
@@ -21,7 +21,7 @@ export const createBoardSchema = z.object({
 export const updateBoardSchema = z.object({
   title: z.string().trim().min(3, 'Board title must be at least 3 characters').optional(),
   description: z.string().trim().optional(),
-  members: z.array(z.string()).optional(),
+  members: z.array(z.union([z.string(), z.object({ id: z.string() }).passthrough()])).optional(),
   color: z.string().optional(),
   icon: z.string().optional(),
   tags: z.array(z.string()).optional(),

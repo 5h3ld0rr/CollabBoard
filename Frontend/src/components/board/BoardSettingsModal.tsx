@@ -26,7 +26,7 @@ interface BoardSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   board: Board;
-  onUpdateBoard: (updatedBoard: Board) => void;
+  onUpdateBoard: (updatedBoard: Board) => void | Promise<void>;
   onDeleteBoard?: (boardId: string) => void;
   onClearTasks?: () => void;
   initialTab?: 'general' | 'members' | 'danger';
@@ -106,7 +106,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
   const [description, setDescription] = useState(board.description);
   const [color, setColor] = useState(board.color || COLOR_OPTIONS[0].value);
   const [icon, setIcon] = useState(board.icon || 'Kanban');
-  const [tagsInput, setTagsInput] = useState(board.tags.join(', '));
+  const [tagsInput, setTagsInput] = useState(Array.isArray(board.tags) ? board.tags.join(', ') : '');
 
   // Members Tab States
   const [members, setMembers] = useState<User[]>(() => {
@@ -123,6 +123,8 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
 
   // Notifications
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -131,11 +133,13 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
       setDescription(board.description);
       setColor(board.color || COLOR_OPTIONS[0].value);
       setIcon(board.icon || 'Kanban');
-      setTagsInput(board.tags.join(', '));
+      setTagsInput(Array.isArray(board.tags) ? board.tags.join(', ') : '');
       setMembers((board.members || []).map(normalizeMember));
       setConfirmDelete(false);
       setConfirmClear(false);
       setSuccessMessage(null);
+      setErrorMessage(null);
+      setIsSaving(false);
     }
   }, [isOpen, board, initialTab]);
 
@@ -146,8 +150,13 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
     setTimeout(() => setSuccessMessage(null), 2500);
   };
 
+  const showError = (msg: string) => {
+    setErrorMessage(msg);
+    setTimeout(() => setErrorMessage(null), 3000);
+  };
+
   // General Tab Save
-  const handleSaveGeneral = (e: React.FormEvent) => {
+  const handleSaveGeneral = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanTags = tagsInput
       .split(',')
@@ -160,12 +169,19 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
       description: description.trim(),
       color,
       icon,
-      tags: cleanTags.length > 0 ? cleanTags : board.tags,
+      tags: cleanTags.length > 0 ? cleanTags : (Array.isArray(board.tags) ? board.tags : []),
       updatedAt: 'Just now',
     };
 
-    onUpdateBoard(updated);
-    showSuccess('Board general settings updated!');
+    setIsSaving(true);
+    try {
+      await onUpdateBoard(updated);
+      showSuccess('Board general settings updated!');
+    } catch (err: any) {
+      showError(err?.message || 'Failed to update board settings');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Member Actions
@@ -177,7 +193,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
-  const handleAddMember = (e: React.FormEvent) => {
+  const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
     let userToAdd: User | null = null;
 
@@ -197,39 +213,51 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
     if (userToAdd) {
       const updatedMembers = [...members, userToAdd];
       setMembers(updatedMembers);
-      onUpdateBoard({
-        ...board,
-        members: updatedMembers,
-      });
-      setInviteEmail('');
-      setSelectedWorkspaceUser('');
-      showSuccess(`Added ${userToAdd.name} as ${inviteRole}!`);
+      try {
+        await onUpdateBoard({
+          ...board,
+          members: updatedMembers,
+        });
+        setInviteEmail('');
+        setSelectedWorkspaceUser('');
+        showSuccess(`Added ${userToAdd.name} as ${inviteRole}!`);
+      } catch (err: any) {
+        showError(err?.message || 'Failed to add member');
+      }
     }
   };
 
-  const handleChangeRole = (userId: string, newRole: 'Admin' | 'Editor' | 'Viewer') => {
+  const handleChangeRole = async (userId: string, newRole: 'Admin' | 'Editor' | 'Viewer') => {
     const updatedMembers = members.map((m) =>
       m.id === userId ? { ...m, boardRole: newRole } : m
     );
     setMembers(updatedMembers);
-    onUpdateBoard({
-      ...board,
-      members: updatedMembers,
-    });
-    showSuccess(`Updated member role to ${newRole}`);
+    try {
+      await onUpdateBoard({
+        ...board,
+        members: updatedMembers,
+      });
+      showSuccess(`Updated member role to ${newRole}`);
+    } catch (err: any) {
+      showError(err?.message || 'Failed to update member role');
+    }
   };
 
-  const handleRemoveMember = (userId: string) => {
+  const handleRemoveMember = async (userId: string) => {
     if (members.length <= 1) return;
     const target = members.find((m) => m.id === userId);
     const updatedMembers = members.filter((m) => m.id !== userId);
     setMembers(updatedMembers);
-    onUpdateBoard({
-      ...board,
-      members: updatedMembers,
-    });
-    if (target) {
-      showSuccess(`Removed ${target.name} from board`);
+    try {
+      await onUpdateBoard({
+        ...board,
+        members: updatedMembers,
+      });
+      if (target) {
+        showSuccess(`Removed ${target.name} from board`);
+      }
+    } catch (err: any) {
+      showError(err?.message || 'Failed to remove member');
     }
   };
 
@@ -316,6 +344,14 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
           <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium flex items-center space-x-2 animate-fade-in">
             <Check className="w-4 h-4 shrink-0" />
             <span>{successMessage}</span>
+          </div>
+        )}
+
+        {/* Error Alert */}
+        {errorMessage && (
+          <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-medium flex items-center space-x-2 animate-fade-in">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>{errorMessage}</span>
           </div>
         )}
 
@@ -420,10 +456,11 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
               </button>
               <button
                 type="submit"
-                className="inline-flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 transition-all active:scale-95"
+                disabled={isSaving}
+                className="inline-flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 transition-all active:scale-95 cursor-pointer"
               >
                 <Check className="w-4 h-4" />
-                <span>Save Changes</span>
+                <span>{isSaving ? 'Saving...' : 'Save Changes'}</span>
               </button>
             </div>
           </form>
