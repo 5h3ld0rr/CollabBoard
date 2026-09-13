@@ -169,7 +169,7 @@ export async function closeSocket() {
     await new Promise((resolve) => io.close(resolve));
     io = null;
   }
-  presence.clear();
+  presenceTracker.clear();
 }
 
 /**
