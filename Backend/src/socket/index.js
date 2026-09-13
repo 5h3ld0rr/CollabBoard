@@ -24,7 +24,14 @@ export function announcePresence(boardId) {
  */
 export function socketAuthMiddleware(socket, next) {
   try {
-    let token = socket.handshake.auth?.token || socket.handshake.query?.token;
+    // Slide 11: Prefer auth payload to avoid query string leakage in server/proxy logs
+    let token = socket.handshake.auth?.token;
+
+    if (!token && socket.handshake.query?.token) {
+      token = socket.handshake.query.token;
+      // Sanitize query parameter to prevent token exposure in access logs
+      delete socket.handshake.query.token;
+    }
 
     if (!token && socket.handshake.headers?.authorization) {
       const parts = socket.handshake.headers.authorization.split(' ');
