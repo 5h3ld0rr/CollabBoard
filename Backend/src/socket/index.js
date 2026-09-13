@@ -248,3 +248,21 @@ export function emitTaskDeleted(boardId, taskId, actorId, version = 1) {
     timestamp: new Date().toISOString(),
   });
 }
+
+/**
+ * Retrieves presence diagnostic statistics for a given board or entire server
+ * (Aligns with Session 2 health checks and monitoring)
+ * @param {string} [boardId]
+ */
+export function getPresenceStats(boardId) {
+  if (boardId) {
+    return presenceTracker.getBoardStats(boardId);
+  }
+  return {
+    totalTrackedBoards: presenceTracker.presence.size,
+    totalOnlineUsers: Array.from(presenceTracker.presence.values()).reduce(
+      (sum, map) => sum + map.size,
+      0
+    ),
+  };
+}
