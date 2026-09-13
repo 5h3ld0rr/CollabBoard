@@ -94,18 +94,30 @@ describe('Real-Time Task Sync & Socket.io Event Broadcast Suite', () => {
       });
     });
 
-    it('successfully connects socket with valid JWT in auth payload', (done) => {
+    it('receives joined:board and left:board acknowledgments', async () => {
       const user = createAuth();
       const clientSocket = Client(socketUrl, {
         auth: { token: user.token },
         transports: ['websocket'],
       });
 
-      clientSocket.on('connect', () => {
-        expect(clientSocket.connected).toBe(true);
-        clientSocket.close();
-        done();
+      await new Promise((resolve) => clientSocket.on('connect', resolve));
+
+      const joinedPromise = new Promise((resolve) => {
+        clientSocket.on('joined:board', (data) => resolve(data));
       });
+      clientSocket.emit('join:board', 'board-ack-1');
+      const joinedData = await joinedPromise;
+      expect(joinedData).toEqual({ boardId: 'board-ack-1', room: 'board:board-ack-1' });
+
+      const leftPromise = new Promise((resolve) => {
+        clientSocket.on('left:board', (data) => resolve(data));
+      });
+      clientSocket.emit('leave:board', 'board-ack-1');
+      const leftData = await leftPromise;
+      expect(leftData).toEqual({ boardId: 'board-ack-1', room: 'board:board-ack-1' });
+
+      clientSocket.close();
     });
   });
 
@@ -113,6 +125,53 @@ describe('Real-Time Task Sync & Socket.io Event Broadcast Suite', () => {
   // 2. Real-Time Task CRUD Events & OCC Payloads
   // ==========================================
   describe('Task Real-Time Broadcasts (task:created, task:updated, task:deleted)', () => {
+    it('concurrently broadcasts events to multiple active clients in the same board room', async () => {
+      const userA = createAuth();
+      const userB = createAuth(new mongoose.Types.ObjectId().toString(), 'collab@nsbm.lk');
+
+      await User.create({ _id: userA.userId, name: 'User A', email: 'userA@nsbm.lk', passwordHash: 'hash123' });
+      await User.create({ _id: userB.userId, name: 'User B', email: 'userB@nsbm.lk', passwordHash: 'hash123' });
+
+      const ws = await Workspace.create({ name: 'Multi-Client WS', ownerId: userA.userId });
+      const board = await Board.create({
+        title: 'Multi-Client Board',
+        workspaceId: ws._id.toString(),
+        ownerId: userA.userId,
+        members: [userA.userId, userB.userId],
+      });
+
+      const clientA = Client(socketUrl, { auth: { token: userA.token }, transports: ['websocket'] });
+      const clientB = Client(socketUrl, { auth: { token: userB.token }, transports: ['websocket'] });
+
+      await Promise.all([
+        new Promise((resolve) => clientA.on('connect', resolve)),
+        new Promise((resolve) => clientB.on('connect', resolve)),
+      ]);
+
+      clientA.emit('join:board', board.id);
+      clientB.emit('join:board', board.id);
+
+      const promiseA = new Promise((resolve) => clientA.on('task:created', resolve));
+      const promiseB = new Promise((resolve) => clientB.on('task:created', resolve));
+
+      await request(app)
+        .post('/api/tasks')
+        .set(userA.header)
+        .send({
+          title: 'Broadcasted to multiple clients',
+          boardId: board.id,
+        });
+
+      const [resA, resB] = await Promise.all([promiseA, promiseB]);
+
+      expect(resA.task.title).toBe('Broadcasted to multiple clients');
+      expect(resB.task.title).toBe('Broadcasted to multiple clients');
+      expect(resA.actorId).toBe(userA.userId);
+      expect(resB.actorId).toBe(userA.userId);
+
+      clientA.close();
+      clientB.close();
+    });
     it('broadcasts task:created with actorId and version: 1 when task is created', async () => {
       const user = createAuth();
       await User.create({ _id: user.userId, name: 'Nishitha', email: 'nishitha@nsbm.lk', passwordHash: 'hash123' });
