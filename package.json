@@ -3,8 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "npm --prefix Backend run dev",
     "dev:backend": "npm --prefix Backend run dev",
-    "dev:frontend": "npm --prefix Frontend run dev"
+    "dev:frontend": "npm --prefix Frontend run dev",
+    "test:frontend": "npm --prefix Frontend test",
+    "test:backend": "npm --prefix Backend test",
+    "test": "npm run test:backend && npm run test:frontend",
+    "build:frontend": "npm --prefix Frontend run build",
+    "lint:frontend": "npm --prefix Frontend run lint"
   }
 }
