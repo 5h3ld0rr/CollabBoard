@@ -6,4 +6,5 @@ export * from "./Navbar";
 export * from "./ProtectedRoute";
 export * from "./PublicRoute";
 export * from "./OfflineIndicator";
+export * from "./NotificationDropdown";
 export * from "./GlobalSearch";

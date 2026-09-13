@@ -9,14 +9,16 @@ import TaskDetails from './pages/TaskDetails';
 import NotFound from './pages/NotFound';
 import { ProtectedRoute, PublicRoute, OfflineIndicator } from './components/common';
 import { WorkspaceRedirect } from './components/workspace';
-import { BoardProvider, AuthProvider } from './context';
+import { BoardProvider, AuthProvider, NotificationProvider } from './context';
 
 /** Wraps all routes that need authentication context */
 function AuthLayout() {
   return (
     <AuthProvider>
       <BoardProvider>
-        <Outlet />
+        <NotificationProvider>
+          <Outlet />
+        </NotificationProvider>
       </BoardProvider>
     </AuthProvider>
   );
