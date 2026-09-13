@@ -88,4 +88,22 @@ describe('sync/socketClient', () => {
     unsub();
     expect(mockSocket.off).toHaveBeenCalledWith('task:deleted', callback);
   });
+
+  it('re-joins active board room on reconnect', () => {
+    let connectCallback: (() => void) | null = null;
+    mockSocket.on.mockImplementation((event: string, cb: any) => {
+      if (event === 'connect') {
+        connectCallback = cb;
+      }
+    });
+
+    getSocketClient();
+    joinBoardRoom('board-reconnect-1');
+    expect(mockSocket.emit).toHaveBeenCalledWith('join:board', 'board-reconnect-1');
+
+    mockSocket.emit.mockClear();
+    // Simulate reconnect event
+    connectCallback?.();
+    expect(mockSocket.emit).toHaveBeenCalledWith('join:board', 'board-reconnect-1');
+  });
 });
