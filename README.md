@@ -296,10 +296,36 @@ CollabBoard/
 - **Node.js** >= v18.0.0 (Node.js v20+ recommended)
 - **npm** >= v9.0.0
 - **MongoDB** running locally or a MongoDB Atlas connection URI
+- *(Optional)* **Docker & Docker Compose** for containerized execution
 
 ---
 
-### 2. Quick Start from Root
+### 2. Docker Compose Quick Start (Recommended)
+
+Run the complete multi-container stack (`mongo:8`, backend API on `4000`, and frontend SPA + Nginx on `9090`) with a single command:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/5h3ld0rr/CollabBoard.git
+cd CollabBoard
+
+# 2. Setup environment variables from template
+cp .env.example .env
+
+# 3. Build and launch all containers
+docker compose up --build
+```
+
+- **Frontend Application (Nginx SPA + WebSocket Proxy)**: [http://localhost:9090](http://localhost:9090)
+- **Backend API (via reverse proxy)**: [http://localhost:9090/api](http://localhost:9090/api)
+- **API Health Check**: [http://localhost:9090/api/health](http://localhost:9090/api/health)
+- **Swagger Documentation**: [http://localhost:9090/api/docs](http://localhost:9090/api/docs)
+
+For detailed container specifications, architecture diagrams, and production deployment checklists, see [docs/devops-docker.md](docs/devops-docker.md).
+
+---
+
+### 3. Quick Start from Root (Local Node.js)
 
 You can run both backend and frontend directly using the root `package.json` convenience scripts:
 
