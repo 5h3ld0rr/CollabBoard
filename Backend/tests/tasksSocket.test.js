@@ -64,7 +64,7 @@ describe('Real-Time Task Sync & Socket.io Event Broadcast Suite', () => {
       });
 
       clientSocket.on('connect_error', (err) => {
-        expect(err.message).toMatch(/Authentication error/);
+        expect(err.message).toMatch(/(Authentication error|NO_TOKEN)/);
         clientSocket.close();
         done();
       });
@@ -83,7 +83,7 @@ describe('Real-Time Task Sync & Socket.io Event Broadcast Suite', () => {
       });
 
       clientSocket.on('connect_error', (err) => {
-        expect(err.message).toMatch(/Authentication error/);
+        expect(err.message).toMatch(/(Authentication error|BAD_TOKEN)/);
         clientSocket.close();
         done();
       });

@@ -11,7 +11,6 @@ import {
   leaveBoardRoom,
   subscribeTaskCreated,
   subscribeTaskUpdated,
-  subscribeTaskDeleted,
   subscribeBoardUpdated,
   subscribePresenceUpdate,
 } from '../socketClient';

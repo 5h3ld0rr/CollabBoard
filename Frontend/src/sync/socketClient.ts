@@ -17,8 +17,9 @@ let socketInstance: Socket | null = null;
 let currentJoinedBoard: string | null = null;
 
 const SOCKET_SERVER_URL =
-  (typeof process !== 'undefined' && process.env?.VITE_SOCKET_URL) ||
   (typeof window !== 'undefined' && (window as any).__SOCKET_URL__) ||
+  (import.meta.env && (import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_API_URL)) ||
+  ((globalThis as any).process?.env?.VITE_SOCKET_URL) ||
   'http://localhost:4000';
 
 export interface SocketClientOptions {

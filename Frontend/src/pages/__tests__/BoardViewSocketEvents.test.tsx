@@ -40,7 +40,7 @@ vi.mock('../../sync', async () => {
 
 describe('Member 2: 32BitXenon - BoardView Socket Events & Live Presence Suite', () => {
   let presenceCallback: ((users: string[]) => void) | null = null;
-  let boardUpdatedCallback: ((payload: any) => void) | null = null;
+  let _boardUpdatedCallback: ((payload: any) => void) | null = null;
 
   const mockBoard = {
     id: 'b-live-1',
@@ -84,9 +84,9 @@ describe('Member 2: 32BitXenon - BoardView Socket Events & Live Presence Suite',
     });
 
     (syncModule.subscribeBoardUpdated as any).mockImplementation((cb: any) => {
-      boardUpdatedCallback = cb;
+      _boardUpdatedCallback = cb;
       return () => {
-        boardUpdatedCallback = null;
+        _boardUpdatedCallback = null;
       };
     });
 

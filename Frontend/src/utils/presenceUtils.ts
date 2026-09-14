@@ -14,7 +14,7 @@ import type { BoardMember } from '../types';
  */
 export function formatOnlinePresenceLabel(
   onlineUserIds: string[] = [],
-  currentUserId?: string | null
+  _currentUserId?: string | null
 ): string {
   // Session 5 - Slide 19: If empty or 1 user, display "Online: just you"
   if (!onlineUserIds || onlineUserIds.length <= 1) {

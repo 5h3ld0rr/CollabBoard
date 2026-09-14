@@ -12,6 +12,8 @@ export interface User {
   boardRole?: 'Owner' | 'Admin' | 'Editor' | 'Viewer';
 }
 
+export type BoardMember = User;
+
 export interface TaskComment {
   id: string;
   taskId: string;
