@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+/* oxlint-disable react/only-export-components */
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import * as authApi from '../api/auth';
 import { getCachedUser, saveCachedUser, clearCachedUser } from '../db';
 import { getInitials } from '../utils';
@@ -24,9 +25,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Sync auth state on mount using HTTP-only cookie + PouchDB cache
   useEffect(() => {
-    // One-time cleanup of any legacy web storage keys
+    // One-time cleanup of legacy web storage keys (preserving active token)
     try {
-      localStorage.removeItem('token');
       localStorage.removeItem('user');
       localStorage.removeItem('remember_me');
       sessionStorage.removeItem('token');
@@ -45,13 +45,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             initials: cachedUser.initials || getInitials(cachedUser.name),
           };
           setUser(userWithInitials);
-          setToken('cookie-session');
+          let storedToken: string | null = null;
+          try {
+            storedToken = localStorage.getItem('token');
+          } catch {
+            // Ignore
+          }
+          setToken(storedToken || 'cookie-session');
         }
       } catch {
         // Fallback to network
       }
 
-      // 2. Validate current session against backend via HTTP-only cookie
+      // 2. Validate current session against backend via HTTP-only cookie / Bearer token
       try {
         const currentUser = await authApi.getMe();
         const userWithInitials: User = {
@@ -59,12 +65,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           initials: currentUser.initials || getInitials(currentUser.name),
         };
         setUser(userWithInitials);
-        setToken('cookie-session');
+        let storedToken: string | null = null;
+        try {
+          storedToken = localStorage.getItem('token');
+        } catch {
+          // Ignore
+        }
+        setToken(storedToken || 'cookie-session');
         await saveCachedUser(userWithInitials);
-      } catch {
-        setUser(null);
-        setToken(null);
-        await clearCachedUser();
+      } catch (err: any) {
+        const isAuthError =
+          err?.status === 401 ||
+          err?.code === 'NO_TOKEN' ||
+          err?.code === 'TOKEN_EXPIRED' ||
+          err?.code === 'BAD_TOKEN' ||
+          err?.message?.includes('expired') ||
+          err?.message?.includes('Unauthorized');
+
+        if (isAuthError || !(await getCachedUser())) {
+          setUser(null);
+          setToken(null);
+          try {
+            localStorage.removeItem('token');
+          } catch {
+            // Ignore
+          }
+          await clearCachedUser();
+        }
       } finally {
         setIsLoading(false);
       }
@@ -72,10 +99,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     initAuth();
 
-    // Central listener for 401 token expiration from client.ts
+    // Central listener for 401 token expiration from client.ts or socketClient.ts
     const handleExpired = () => {
       setUser(null);
       setToken(null);
+      try {
+        localStorage.removeItem('token');
+      } catch {
+        // Ignore
+      }
       clearCachedUser();
     };
 
@@ -90,7 +122,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       initials: result.user.initials || getInitials(result.user.name),
     };
     setUser(userWithInitials);
-    setToken(result.token || 'cookie-session');
+    const tokenVal = result.token || 'cookie-session';
+    setToken(tokenVal);
+    if (result.token) {
+      try {
+        localStorage.setItem('token', result.token);
+      } catch {
+        // Ignore storage errors
+      }
+    }
     await saveCachedUser(userWithInitials);
   };
 
@@ -105,6 +145,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } finally {
       setUser(null);
       setToken(null);
+      try {
+        localStorage.removeItem('token');
+      } catch {
+        // Ignore
+      }
       await clearCachedUser();
     }
   };

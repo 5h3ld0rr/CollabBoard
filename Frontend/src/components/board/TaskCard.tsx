@@ -1,4 +1,4 @@
-import React from 'react';
+import { memo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   GripVertical,
@@ -52,7 +52,7 @@ const PRIORITY_BADGES: Record<TaskPriority, { label: string; bg: string; text: s
   },
 };
 
-export const TaskCard: React.FC<TaskCardProps> = React.memo(({
+export const TaskCard: React.FC<TaskCardProps> = memo(({
   task,
   onDragStart,
   readOnly = false,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   X,
   Users,
@@ -18,7 +18,8 @@ interface BoardMembersModalProps {
   isOpen: boolean;
   onClose: () => void;
   board: Board;
-  onUpdateMembers: (newMembers: User[]) => void;
+  onUpdateMembers: (newMembers: User[]) => void | Promise<void>;
+  workspaceMembers?: User[];
 }
 
 const ROLE_BADGES: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
@@ -84,6 +85,7 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
   onClose,
   board,
   onUpdateMembers,
+  workspaceMembers = [],
 }) => {
   const { user: currentUser } = useAuth();
   const [members, setMembers] = useState<User[]>(() => {
@@ -105,14 +107,30 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
   if (!isOpen) return null;
 
   // Find workspace teammates who are not yet added to this board
-  const availableTeammates: User[] = [];
+  const memberIdSet = new Set(members.map((m) => String(m.id)));
+  const memberEmailSet = new Set(
+    members.map((m) => m.email?.toLowerCase()).filter(Boolean)
+  );
+  const availableTeammates: User[] = (workspaceMembers || []).filter(
+    (wm) =>
+      !memberIdSet.has(String(wm.id)) &&
+      (!wm.email || !memberEmailSet.has(wm.email.toLowerCase()))
+  );
 
-  const handleAddMember = (e: React.FormEvent) => {
+  const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
 
     let userToAdd: User | null = null;
 
-    if (inviteEmail.trim()) {
+    if (selectedWorkspaceUser) {
+      const selected = availableTeammates.find((u) => u.id === selectedWorkspaceUser);
+      if (selected) {
+        userToAdd = {
+          ...selected,
+          boardRole: inviteRole,
+        };
+      }
+    } else if (inviteEmail.trim()) {
       const email = inviteEmail.trim();
       const initials = email.slice(0, 2).toUpperCase();
       userToAdd = {
@@ -128,15 +146,19 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
     if (userToAdd) {
       const updatedMembers = [...members, userToAdd];
       setMembers(updatedMembers);
-      onUpdateMembers(updatedMembers);
-      setInviteEmail('');
-      setSelectedWorkspaceUser('');
-      setSuccessMessage(`Added ${userToAdd.name} to the board as ${inviteRole}!`);
-      setTimeout(() => setSuccessMessage(null), 2500);
+      try {
+        await onUpdateMembers(updatedMembers);
+        setInviteEmail('');
+        setSelectedWorkspaceUser('');
+        setSuccessMessage(`Added ${userToAdd.name} to the board as ${inviteRole}!`);
+        setTimeout(() => setSuccessMessage(null), 2500);
+      } catch {
+        setSuccessMessage(null);
+      }
     }
   };
 
-  const handleChangeRole = (userId: string, newRole: 'Admin' | 'Editor' | 'Viewer') => {
+  const handleChangeRole = async (userId: string, newRole: 'Admin' | 'Editor' | 'Viewer') => {
     if (board.ownerId && userId === String(board.ownerId)) return;
     if (currentUser && (userId === currentUser.id || userId === String(currentUser.id))) return;
 
@@ -144,10 +166,10 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
       m.id === userId ? { ...m, boardRole: newRole } : m
     );
     setMembers(updatedMembers);
-    onUpdateMembers(updatedMembers);
+    await onUpdateMembers(updatedMembers);
   };
 
-  const handleRemoveMember = (userId: string) => {
+  const handleRemoveMember = async (userId: string) => {
     if (members.length <= 1) return;
     if (board.ownerId && userId === String(board.ownerId)) return;
     if (currentUser && (userId === currentUser.id || userId === String(currentUser.id))) return;
@@ -155,7 +177,7 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
     const target = members.find((m) => m.id === userId);
     const updatedMembers = members.filter((m) => m.id !== userId);
     setMembers(updatedMembers);
-    onUpdateMembers(updatedMembers);
+    await onUpdateMembers(updatedMembers);
     if (target) {
       setSuccessMessage(`Removed ${target.name} from board.`);
       setTimeout(() => setSuccessMessage(null), 2500);
@@ -210,6 +232,7 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
             {availableTeammates.length > 0 ? (
               <div className="flex-1 flex gap-2">
                 <select
+                  aria-label="Select teammate to invite"
                   value={selectedWorkspaceUser}
                   onChange={(e) => {
                     setSelectedWorkspaceUser(e.target.value);
@@ -237,6 +260,7 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
 
             <div className="flex items-center gap-2">
               <select
+                aria-label="Invite role"
                 value={inviteRole}
                 onChange={(e) => setInviteRole(e.target.value as 'Admin' | 'Editor' | 'Viewer')}
                 className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 focus:outline-none"
@@ -334,6 +358,7 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
                     {canChangeRole ? (
                       <div className="relative">
                         <select
+                          aria-label={`Role for ${member.name}`}
                           value={currentRole}
                           onChange={(e) =>
                             handleChangeRole(

@@ -1,11 +1,11 @@
-import React from "react";
+import { memo } from "react";
 
 export interface AmbientBackgroundProps {
   variant?: "default" | "auth" | "minimal";
   className?: string;
 }
 
-export const AmbientBackground: React.FC<AmbientBackgroundProps> = React.memo(({
+export const AmbientBackground: React.FC<AmbientBackgroundProps> = memo(({
   variant = "default",
   className = "",
 }) => {

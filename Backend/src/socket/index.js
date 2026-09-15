@@ -23,6 +23,9 @@ export function socketAuthMiddleware(socket, next) {
   try {
     // Slide 11: Prefer auth payload to avoid query string leakage in server/proxy logs
     let token = socket.handshake.auth?.token;
+    if (token === 'cookie-session') {
+      token = null;
+    }
 
     if (!token && socket.handshake.query?.token) {
       token = socket.handshake.query.token;

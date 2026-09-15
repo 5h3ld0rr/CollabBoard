@@ -51,7 +51,15 @@ export function getSocketClient(tokenOrOptions?: string | null | SocketClientOpt
       ? { token: tokenOrOptions }
       : (tokenOrOptions ?? {});
 
-  const token = options.token ?? (typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null);
+  let rawToken = options.token;
+  if (!rawToken || rawToken === 'cookie-session') {
+    try {
+      rawToken = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null;
+    } catch {
+      // Ignore storage errors
+    }
+  }
+  const token = rawToken && rawToken !== 'cookie-session' ? rawToken : null;
   const serverUrl = options.url || SOCKET_SERVER_URL;
 
   if (socketInstance && socketInstance.connected) {

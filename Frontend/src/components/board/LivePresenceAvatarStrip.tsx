@@ -1,4 +1,3 @@
-import React from 'react';
 import type { User } from '../../types';
 
 export interface LivePresenceAvatarStripProps {
@@ -7,6 +6,7 @@ export interface LivePresenceAvatarStripProps {
   currentUserId?: string | null;
   maxVisible?: number;
   className?: string;
+  onlyShowOnline?: boolean;
 }
 
 /**
@@ -19,11 +19,16 @@ export const LivePresenceAvatarStrip: React.FC<LivePresenceAvatarStripProps> = (
   currentUserId,
   maxVisible = 5,
   className = '',
+  onlyShowOnline = false,
 }) => {
   const onlineSet = new Set(onlineUserIds);
 
+  const filteredMembers = onlyShowOnline
+    ? members.filter((m) => onlineSet.has(m.id))
+    : members;
+
   // Sort members: online members first, current user first among them
-  const sortedMembers = [...members].sort((a, b) => {
+  const sortedMembers = [...filteredMembers].sort((a, b) => {
     const aOnline = onlineSet.has(a.id);
     const bOnline = onlineSet.has(b.id);
     if (aOnline && !bOnline) return -1;
@@ -45,6 +50,10 @@ export const LivePresenceAvatarStrip: React.FC<LivePresenceAvatarStripProps> = (
     }
     return name.slice(0, 2).toUpperCase();
   };
+
+  if (visibleMembers.length === 0) {
+    return null;
+  }
 
   return (
     <div

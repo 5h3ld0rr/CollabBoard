@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -174,14 +174,17 @@ export const TaskDetails: React.FC = () => {
           ]);
           if (!isMounted) return;
 
-          const boardHasChanged = !board || hasBoardChanged(board, foundBoard);
-          if (boardHasChanged) {
-            setBoard(foundBoard);
-            if (foundBoard) {
-              setBoardMembers(foundBoard.members || []);
-              await saveBoardToCache(foundBoard);
+          setBoard((prevBoard) => {
+            const boardHasChanged = !prevBoard || hasBoardChanged(prevBoard, foundBoard);
+            if (boardHasChanged) {
+              if (foundBoard) {
+                setBoardMembers(foundBoard.members || []);
+                void saveBoardToCache(foundBoard);
+              }
+              return foundBoard;
             }
-          }
+            return prevBoard;
+          });
           setComments(taskComments);
         } else if (!cachedTask) {
           setTask(null);

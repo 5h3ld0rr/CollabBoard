@@ -1,4 +1,4 @@
-import React from 'react';
+import { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Star,
@@ -16,7 +16,7 @@ interface BoardCardProps {
   onToggleFavorite: (id: string) => void;
 }
 
-export const BoardCard: React.FC<BoardCardProps> = React.memo(({
+export const BoardCard: React.FC<BoardCardProps> = memo(({
   board,
   onToggleFavorite,
 }) => {

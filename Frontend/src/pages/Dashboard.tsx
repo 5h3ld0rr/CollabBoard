@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import {
   Plus,
   ArrowUpDown,
@@ -29,16 +29,17 @@ import type { Board, Workspace } from "../types";
 export const Dashboard: React.FC = () => {
   const { workspaceId } = useParams<{ workspaceId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const preloadedWorkspaces = (location.state as any)?.workspaces as Workspace[] | undefined;
 
   const {
     state: { boards },
-    loadBoards,
     addBoard,
     toggleFavoriteBoard,
   } = useBoard();
 
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(true);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>(preloadedWorkspaces || []);
+  const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(!preloadedWorkspaces || preloadedWorkspaces.length === 0);
   const [managingWorkspace, setManagingWorkspace] = useState<Workspace | null>(
     null
   );
@@ -77,11 +78,13 @@ export const Dashboard: React.FC = () => {
       : workspaces[0];
   }, [workspaces, workspaceId]);
 
-  // Load workspaces and boards from live API once on mount
+  // Load workspaces once on mount (skips if preloaded from WorkspaceRedirect)
   useEffect(() => {
     let isMounted = true;
     async function load() {
-      loadBoards();
+      if (preloadedWorkspaces && preloadedWorkspaces.length > 0) {
+        return;
+      }
       try {
         const list = await getWorkspaces();
         if (isMounted) {
@@ -99,7 +102,7 @@ export const Dashboard: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [loadBoards]);
+  }, [preloadedWorkspaces]);
 
   // If workspaceId in the URL is invalid/not found, navigate to the correct primary workspace
   useEffect(() => {

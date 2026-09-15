@@ -67,6 +67,9 @@ jobs:
       - name: Run linter
         run: npm run lint
 
+      - name: Run client build
+        run: npm run build
+
       - name: Run frontend test suite & coverage
         run: npm run test:coverage --if-present
 

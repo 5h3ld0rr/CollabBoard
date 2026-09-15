@@ -9,6 +9,9 @@ RUN npm ci --omit=dev
 # Copy application source code
 COPY src ./src
 
+# Create logs directory and ensure node user has ownership
+RUN mkdir -p logs && chown -R node:node /app
+
 ENV NODE_ENV=production
 EXPOSE 4000
 

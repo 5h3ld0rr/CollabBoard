@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   useParams,
   useSearchParams,
@@ -22,21 +22,23 @@ import {
   Trash2,
   FileQuestion,
   Eye,
+  Share2,
 } from "lucide-react";
 import { Navbar, AmbientBackground } from "../components/common";
 import {
   Column,
   TaskModal,
   BoardSettingsModal,
+  BoardMembersModal,
   ConflictModal,
-  LivePresenceBadge,
   LivePresenceAvatarStrip,
 } from "../components/board";
 import { useBoard, useAuth } from "../context";
 import { emitBoardJoin, emitBoardLeave, subscribePresenceUpdate, onSocketAuthError } from "../sync";
 import { useReconnectionRecovery } from "../hooks/useReconnectionRecovery";
 import * as tasksApi from "../api/tasks";
-import type { Board, Task, TaskStatus } from "../types";
+import { getWorkspaceById } from "../api/workspaces";
+import type { Board, Task, TaskStatus, User } from "../types";
 
 export const BoardView: React.FC = () => {
   const { id: boardId } = useParams<{ id: string }>();
@@ -110,11 +112,76 @@ export const BoardView: React.FC = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
+  const [workspaceMembers, setWorkspaceMembers] = useState<User[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [modalDefaultStatus, setModalDefaultStatus] =
     useState<TaskStatus>("todo");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+
+  // Fetch workspace members to populate collaborator invite candidates
+  useEffect(() => {
+    if (!boardData?.workspaceId) return;
+    let isMounted = true;
+    getWorkspaceById(boardData.workspaceId)
+      .then((ws) => {
+        if (isMounted && ws?.members) {
+          setWorkspaceMembers(ws.members);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [boardData?.workspaceId]);
+
+  // Real-time active online users list (Session 5 - Slide 15 & 19)
+  const effectiveOnlineUsers = useMemo(() => {
+    if (onlineUsers.length > 0) return onlineUsers;
+    return user?.id ? [user.id] : [];
+  }, [onlineUsers, user?.id]);
+
+  const onlineMembersList = useMemo(() => {
+    const knownMembersMap = new Map<
+      string,
+      { id: string; name: string; email?: string; avatar?: string; initials?: string; color?: string }
+    >();
+
+    boardData?.members?.forEach((m) => {
+      knownMembersMap.set(m.id, m);
+    });
+
+    workspaceMembers?.forEach((m) => {
+      if (!knownMembersMap.has(m.id)) {
+        knownMembersMap.set(m.id, m);
+      }
+    });
+
+    if (user && !knownMembersMap.has(user.id)) {
+      knownMembersMap.set(user.id, {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar,
+        initials: user.initials,
+        color: user.color,
+      });
+    }
+
+    return effectiveOnlineUsers.map((uid) => {
+      if (knownMembersMap.has(uid)) {
+        return knownMembersMap.get(uid)!;
+      }
+      const fallbackName = uid === user?.id ? (user?.name || 'You') : 'Collaborator';
+      return {
+        id: uid,
+        name: fallbackName,
+        initials: fallbackName.slice(0, 2).toUpperCase(),
+        color: 'bg-indigo-600',
+      };
+    });
+  }, [boardData?.members, workspaceMembers, user, effectiveOnlineUsers]);
 
   // 409 OCC Conflict Resolution State
   const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
@@ -620,16 +687,20 @@ export const BoardView: React.FC = () => {
                   <span className="px-2.5 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">
                     {boardData.workspaceName}
                   </span>
-                  <LivePresenceBadge
-                    onlineUsers={onlineUsers}
-                    currentUserId={user?.id}
-                  />
-                  {boardData.members && boardData.members.length > 0 && (
-                    <LivePresenceAvatarStrip
-                      members={boardData.members}
-                      onlineUserIds={onlineUsers}
-                      currentUserId={user?.id}
-                    />
+                  {onlineMembersList.length > 0 && (
+                    <div
+                      data-testid="live-presence-indicator"
+                      onClick={() => !isGuestView && setIsMembersModalOpen(true)}
+                      className={!isGuestView ? "cursor-pointer transition-opacity hover:opacity-85" : ""}
+                      title={!isGuestView ? "Online collaborators (click to manage)" : "Online collaborators"}
+                    >
+                      <LivePresenceAvatarStrip
+                        members={onlineMembersList}
+                        onlineUserIds={effectiveOnlineUsers}
+                        currentUserId={user?.id}
+                        onlyShowOnline
+                      />
+                    </div>
                   )}
                 </div>
 
@@ -644,6 +715,16 @@ export const BoardView: React.FC = () => {
               {/* Right Action Tools */}
               {!isGuestView && (
                 <div className="flex items-center space-x-3">
+                  {/* Share & Collaborators Action Button */}
+                  <button
+                    onClick={() => setIsMembersModalOpen(true)}
+                    className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition cursor-pointer shadow-sm"
+                    title="Share board & manage collaborators"
+                  >
+                    <Share2 className="w-3.5 h-3.5 text-indigo-400" />
+                    <span className="hidden sm:inline">Share</span>
+                  </button>
+
                   {/* Board Settings Action Button */}
                   <button
                     onClick={() => setIsSettingsModalOpen(true)}
@@ -1101,12 +1182,29 @@ export const BoardView: React.FC = () => {
         />
       )}
 
+      {/* Board Members & Share Modal */}
+      {boardData && (
+        <BoardMembersModal
+          isOpen={isMembersModalOpen}
+          onClose={() => setIsMembersModalOpen(false)}
+          board={boardData}
+          workspaceMembers={workspaceMembers}
+          onUpdateMembers={async (newMembers) => {
+            await handleUpdateBoard({
+              ...boardData,
+              members: newMembers,
+            });
+          }}
+        />
+      )}
+
       {/* Board Settings Modal (General, Members, Danger Zone) */}
       {boardData && (
         <BoardSettingsModal
           isOpen={isSettingsModalOpen}
           onClose={() => setIsSettingsModalOpen(false)}
           board={boardData}
+          workspaceMembers={workspaceMembers}
           onUpdateBoard={handleUpdateBoard}
           onDeleteBoard={handleDeleteBoard}
           onClearTasks={handleClearTasks}

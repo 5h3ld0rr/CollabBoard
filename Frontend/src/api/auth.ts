@@ -42,12 +42,24 @@ export async function login(input: LoginInput): Promise<AuthResponse['data']> {
   return res.data;
 }
 
+let inFlightMePromise: Promise<User> | null = null;
+
 /**
  * Fetch current authenticated user from token
  */
 export async function getMe(): Promise<User> {
-  const res = await request<{ data: { user: User } }>('/api/auth/me');
-  return res.data.user;
+  if (inFlightMePromise) {
+    return inFlightMePromise;
+  }
+  inFlightMePromise = (async () => {
+    try {
+      const res = await request<{ data: { user: User } }>('/api/auth/me');
+      return res.data.user;
+    } finally {
+      inFlightMePromise = null;
+    }
+  })();
+  return inFlightMePromise;
 }
 
 /**

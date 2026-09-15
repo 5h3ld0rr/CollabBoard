@@ -135,7 +135,7 @@ All private endpoints require an `Authorization: Bearer <token>` header.
 | **PATCH** | `/api/workspaces/:id` | Update workspace details or members | `{ name?, description?, color?, admins?, members? }` | `200 OK` |
 | **DELETE**| `/api/workspaces/:id` | Delete workspace *(Owner only)* | *None* | `204 No Content` |
 
-### 3. Boards & Analytics
+### 3. Boards, Members & Sharing
 | Method | Endpoint | Description | Request Body | Response |
 | :--- | :--- | :--- | :--- | :--- |
 | **GET** | `/api/boards` | List accessible sprint boards | *None* | `200 OK` |
@@ -145,7 +145,11 @@ All private endpoints require an `Authorization: Bearer <token>` header.
 | **PATCH** | `/api/boards/:id` | Update board title, tags, or favorite status | `{ title?, description?, isFavorite?, tags? }` | `200 OK` |
 | **DELETE**| `/api/boards/:id` | Delete a board *(Owner only)* | *None* | `204 No Content` |
 | **POST** | `/api/boards/:id/members` | Add a collaborator to board | `{ userId, role? }` | `200 OK` |
+| **PATCH** | `/api/boards/:id/members/:memberId` | Update collaborator role (`Admin`, `Editor`, `Viewer`) | `{ role }` | `200 OK` |
 | **DELETE**| `/api/boards/:id/members/:memberId` | Remove board collaborator | *None* | `200 OK` |
+| **GET** | `/api/boards/:id/share-token` | Get active guest view share link | *None* | `200 OK` |
+| **POST** | `/api/boards/:id/share-token` | Generate temporary guest share link | `{ expiresIn? }` | `200 OK` |
+| **POST** | `/api/boards/:id/share-token/reset` | Revoke/reset active share link | *None* | `200 OK` |
 
 ### 4. Tasks, Lifecycle & Comments
 | Method | Endpoint | Description | Request Body / Query | Response |
@@ -161,7 +165,12 @@ All private endpoints require an `Authorization: Bearer <token>` header.
 | **POST** | `/api/tasks/:id/comments` | Post a comment to task thread | `{ content }` | `201 Created` |
 | **DELETE**| `/api/tasks/:id/comments/:commentId` | Delete a comment | *None* | `204 No Content` |
 
-### 5. System Health & Documentation
+### 5. Global Search
+| Method | Endpoint | Description | Query Parameters | Response |
+| :--- | :--- | :--- | :--- | :--- |
+| **GET** | `/api/search` | Cross-resource search (workspaces, boards, tasks) | `?q=&type=all\|workspaces\|boards\|tasks&limit=` | `200 OK` |
+
+### 6. System Health & Documentation
 | Method | Endpoint | Description | Response |
 | :--- | :--- | :--- | :--- |
 | **GET** | `/api/health` | Service health, DB readyState & uptime | `200 OK` |
