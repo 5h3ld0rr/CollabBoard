@@ -14,7 +14,7 @@ function getInitials(name) {
 
 function formatAuthor(user, authorId) {
   const name = user?.name || `User ${authorId}`;
-  const email = user?.email || `user${authorId}@nsbm.lk`;
+  const email = user?.email || '';
   const initials = user?.initials || getInitials(name);
 
   return {
@@ -22,7 +22,7 @@ function formatAuthor(user, authorId) {
     name,
     email,
     initials,
-    color: 'bg-indigo-600',
+    color: user?.color || 'from-indigo-600 to-violet-600',
   };
 }
 
