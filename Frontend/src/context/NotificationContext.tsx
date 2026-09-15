@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+/* oxlint-disable react/only-export-components */
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { AppNotification } from '../types';
 import {
   getCachedNotifications,

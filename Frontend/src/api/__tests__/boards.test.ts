@@ -86,5 +86,19 @@ describe('api/boards', () => {
     expect(clientModule.request).toHaveBeenCalledWith('/api/boards/b1/members/u2', {
       method: 'DELETE',
     });
+
+    const addWithRoleRes = await boardsApi.addBoardMember('b1', 'u4', 'Admin');
+    expect(addWithRoleRes).toEqual(mockBoard);
+    expect(clientModule.request).toHaveBeenCalledWith('/api/boards/b1/members', {
+      method: 'POST',
+      body: JSON.stringify({ userId: 'u4', role: 'Admin' }),
+    });
+
+    const updateRoleRes = await boardsApi.updateBoardMemberRole('b1', 'u3', 'Viewer');
+    expect(updateRoleRes).toEqual(mockBoard);
+    expect(clientModule.request).toHaveBeenCalledWith('/api/boards/b1/members/u3', {
+      method: 'PATCH',
+      body: JSON.stringify({ role: 'Viewer' }),
+    });
   });
 });

@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
+/* oxlint-disable react/only-export-components */
+import { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import * as tasksApi from '../api/tasks';
 import * as boardsApi from '../api/boards';

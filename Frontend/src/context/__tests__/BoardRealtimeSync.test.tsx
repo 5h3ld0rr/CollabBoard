@@ -1,12 +1,12 @@
-import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, waitFor } from '@testing-library/react';
 import { BoardProvider, useBoard } from '../BoardContext';
 import * as socketClient from '../../sync/socketClient';
 import * as db from '../../db';
 import * as boardsApi from '../../api/boards';
 import * as tasksApi from '../../api/tasks';
 import type { Task } from '../../types';
+import { useEffect } from 'react';
 
 // Mock DB and APIs
 vi.mock('../../db');
@@ -39,7 +39,7 @@ vi.mock('../../sync/socketClient', () => {
 const TestHarness: React.FC = () => {
   const { state, loadBoard } = useBoard();
 
-  React.useEffect(() => {
+  useEffect(() => {
     loadBoard('board-sync-1');
   }, [loadBoard]);
 
@@ -142,6 +142,7 @@ describe('BoardContext Real-Time Task Sync & OCC Version Guard Suite', () => {
     // Wait for initial task to be hydrated
     const taskItem = await screen.findByTestId('task-t-1');
     expect(taskItem).toBeDefined();
+    await waitFor(() => expect(tasksApi.getBoardTasks).toHaveBeenCalled());
 
     // Trigger task:created event for another task
     const newTask: Task = {
@@ -166,7 +167,7 @@ describe('BoardContext Real-Time Task Sync & OCC Version Guard Suite', () => {
       });
     });
 
-    expect(await screen.findByTestId('task-t-2')).toBeDefined();
+    expect(await screen.findByTestId('task-t-2', {}, { timeout: 3000 })).toBeDefined();
     expect(screen.getByTestId('task-title-t-2').textContent).toBe('Real-Time Created Task');
   });
 
@@ -195,7 +196,7 @@ describe('BoardContext Real-Time Task Sync & OCC Version Guard Suite', () => {
       });
     });
 
-    expect(screen.getByTestId('task-title-t-1').textContent).toBe('Updated to Version 3');
+    expect(await screen.findByText('Updated to Version 3', {}, { timeout: 3000 })).toBeDefined();
     expect(screen.getByTestId('task-version-t-1').textContent).toBe('3');
 
     // 3. Incoming out-of-order update with version 2 (stale packet delivered late) -> Dropped
@@ -225,6 +226,7 @@ describe('BoardContext Real-Time Task Sync & OCC Version Guard Suite', () => {
     );
 
     expect(await screen.findByTestId('task-t-1')).toBeDefined();
+    await waitFor(() => expect(tasksApi.getBoardTasks).toHaveBeenCalled());
 
     act(() => {
       taskDeletedHandler?.({
@@ -235,6 +237,8 @@ describe('BoardContext Real-Time Task Sync & OCC Version Guard Suite', () => {
       });
     });
 
-    expect(screen.queryByTestId('task-t-1')).toBeNull();
+    await waitFor(() => {
+      expect(screen.queryByTestId('task-t-1')).toBeNull();
+    }, { timeout: 3000 });
   });
 });

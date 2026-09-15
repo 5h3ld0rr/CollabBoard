@@ -9,16 +9,26 @@ export interface WorkspaceResponse {
   data: Workspace;
 }
 
+let inFlightWorkspacesPromise: Promise<Workspace[]> | null = null;
+
 /**
  * Fetch all accessible workspaces for the current authenticated user
  */
 export async function getWorkspaces(): Promise<Workspace[]> {
-  try {
-    const res = await request<WorkspaceListResponse>('/api/workspaces');
-    return res.data || [];
-  } catch {
-    return [];
+  if (inFlightWorkspacesPromise) {
+    return inFlightWorkspacesPromise;
   }
+  inFlightWorkspacesPromise = (async () => {
+    try {
+      const res = await request<WorkspaceListResponse>('/api/workspaces');
+      return res.data || [];
+    } catch {
+      return [];
+    } finally {
+      inFlightWorkspacesPromise = null;
+    }
+  })();
+  return inFlightWorkspacesPromise;
 }
 
 /**
