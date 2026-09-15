@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   useParams,
   useSearchParams,
@@ -22,21 +22,24 @@ import {
   Trash2,
   FileQuestion,
   Eye,
+  Share2,
 } from "lucide-react";
 import { Navbar, AmbientBackground } from "../components/common";
+import { getProfileGradient } from "../utils";
 import {
   Column,
   TaskModal,
   BoardSettingsModal,
+  BoardMembersModal,
   ConflictModal,
-  LivePresenceBadge,
   LivePresenceAvatarStrip,
 } from "../components/board";
 import { useBoard, useAuth } from "../context";
 import { emitBoardJoin, emitBoardLeave, subscribePresenceUpdate, onSocketAuthError } from "../sync";
 import { useReconnectionRecovery } from "../hooks/useReconnectionRecovery";
 import * as tasksApi from "../api/tasks";
-import type { Board, Task, TaskStatus } from "../types";
+import { getWorkspaceById } from "../api/workspaces";
+import type { Board, Task, TaskStatus, User } from "../types";
 
 export const BoardView: React.FC = () => {
   const { id: boardId } = useParams<{ id: string }>();
@@ -110,11 +113,79 @@ export const BoardView: React.FC = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
+  const [workspaceMembers, setWorkspaceMembers] = useState<User[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [modalDefaultStatus, setModalDefaultStatus] =
     useState<TaskStatus>("todo");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+
+  // Fetch workspace members to populate collaborator invite candidates
+  useEffect(() => {
+    if (!boardData?.workspaceId) return;
+    let isMounted = true;
+    getWorkspaceById(boardData.workspaceId)
+      .then((ws) => {
+        if (isMounted && ws?.members) {
+          setWorkspaceMembers(ws.members);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [boardData?.workspaceId]);
+
+  // Real-time active online users list (Session 5 - Slide 15 & 19)
+  const effectiveOnlineUsers = useMemo(() => {
+    if (onlineUsers.length > 0) return onlineUsers;
+    return user?.id ? [user.id] : [];
+  }, [onlineUsers, user?.id]);
+
+  const onlineMembersList = useMemo(() => {
+    const knownMembersMap = new Map<
+      string,
+      { id: string; name: string; email?: string; avatar?: string; initials?: string; color?: string }
+    >();
+
+    boardData?.members?.forEach((m) => {
+      knownMembersMap.set(m.id, m);
+    });
+
+    workspaceMembers?.forEach((m) => {
+      if (!knownMembersMap.has(m.id)) {
+        knownMembersMap.set(m.id, m);
+      }
+    });
+
+    if (user) {
+      const existing = knownMembersMap.get(user.id);
+      knownMembersMap.set(user.id, {
+        id: user.id,
+        email: user.email || existing?.email,
+        avatar: user.avatar || existing?.avatar,
+        initials: user.initials || existing?.initials,
+        ...existing,
+        color: user.color || existing?.color || 'from-indigo-600 to-violet-600',
+        name: user.name || existing?.name || 'You',
+      });
+    }
+
+    return effectiveOnlineUsers.map((uid) => {
+      if (knownMembersMap.has(uid)) {
+        return knownMembersMap.get(uid)!;
+      }
+      const isSelf = uid === user?.id;
+      const fallbackName = isSelf ? (user?.name || 'You') : 'Collaborator';
+      return {
+        id: uid,
+        name: fallbackName,
+        initials: fallbackName.slice(0, 2).toUpperCase(),
+        color: isSelf ? (user?.color || 'from-indigo-600 to-violet-600') : 'from-indigo-600 to-violet-600',
+      };
+    });
+  }, [boardData?.members, workspaceMembers, user, effectiveOnlineUsers]);
 
   // 409 OCC Conflict Resolution State
   const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
@@ -607,62 +678,96 @@ export const BoardView: React.FC = () => {
             )}
 
             {/* Board Header Bar */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800/80 mb-6">
-              <div className="space-y-1.5">
-                <div className="flex items-center space-x-3 flex-wrap gap-y-2">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-6 border-b border-slate-800/80 mb-6">
+              <div className="space-y-2">
+                {/* Modernized Breadcrumb Navigation */}
+                <div className="flex items-center space-x-2 text-xs text-slate-400">
                   <Link
                     to={isGuestView ? "/" : "/dashboard"}
-                    className="p-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition flex items-center space-x-1"
+                    className="inline-flex items-center space-x-1.5 px-2 py-1 -ml-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition group"
                     title={isGuestView ? "Back to Home" : "Back to Dashboard"}
                   >
-                    <ArrowLeft className="w-4 h-4" />
+                    <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" />
+                    <span>{isGuestView ? "Home" : "Boards"}</span>
                   </Link>
+                  <span className="text-slate-600">/</span>
                   <span className="px-2.5 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">
                     {boardData.workspaceName}
                   </span>
-                  <LivePresenceBadge
-                    onlineUsers={onlineUsers}
-                    currentUserId={user?.id}
-                  />
-                  {boardData.members && boardData.members.length > 0 && (
-                    <LivePresenceAvatarStrip
-                      members={boardData.members}
-                      onlineUserIds={onlineUsers}
-                      currentUserId={user?.id}
-                    />
-                  )}
                 </div>
 
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-                  {boardData.title}
-                </h1>
-                <p className="text-xs sm:text-sm text-slate-400 max-w-2xl">
-                  {boardData.description}
-                </p>
+                {/* Board Title & Optional Description */}
+                <div>
+                  <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                    {boardData.title}
+                  </h1>
+                  {boardData.description &&
+                    boardData.description.trim() !== "" &&
+                    boardData.description !== "No description provided." && (
+                      <p className="text-xs sm:text-sm text-slate-400 max-w-2xl mt-1 leading-relaxed">
+                        {boardData.description}
+                      </p>
+                    )}
+                </div>
               </div>
 
-              {/* Right Action Tools */}
-              {!isGuestView && (
-                <div className="flex items-center space-x-3">
-                  {/* Board Settings Action Button */}
-                  <button
-                    onClick={() => setIsSettingsModalOpen(true)}
-                    className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition cursor-pointer"
-                    title="Board Settings (General, Members, Danger Zone)"
+              {/* Right Action Tools & Real-Time Collaborators */}
+              <div className="flex items-center space-x-3 flex-wrap gap-y-2">
+                {/* Live Online Collaborators Avatar Strip (Linear / Figma style clean stack) */}
+                {onlineMembersList.length > 0 && (
+                  <div
+                    data-testid="live-presence-indicator"
+                    onClick={() => !isGuestView && setIsMembersModalOpen(true)}
+                    className={`flex items-center transition-transform active:scale-95 ${
+                      !isGuestView ? "cursor-pointer" : ""
+                    }`}
+                    title={!isGuestView ? "Active collaborators (click to manage)" : "Active collaborators"}
                   >
-                    <Settings className="w-4 h-4" />
-                  </button>
+                    <LivePresenceAvatarStrip
+                      members={onlineMembersList}
+                      onlineUserIds={effectiveOnlineUsers}
+                      currentUserId={user?.id}
+                      onlyShowOnline
+                    />
+                  </div>
+                )}
 
-                  {/* Create Task Button */}
-                  <button
-                    onClick={() => handleOpenCreateTask("todo")}
-                    className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 hover:shadow-indigo-500/20 transition-all active:scale-95 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Add Task</span>
-                  </button>
-                </div>
-              )}
+                {!isGuestView && (
+                  <>
+                    {onlineMembersList.length > 0 && (
+                      <div className="hidden sm:block h-5 w-px bg-slate-800/80" />
+                    )}
+
+                    {/* Share & Collaborators Action Button */}
+                    <button
+                      onClick={() => setIsMembersModalOpen(true)}
+                      className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800/80 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-semibold shadow-xs transition-all active:scale-95 cursor-pointer"
+                      title="Share board & manage collaborators"
+                    >
+                      <Share2 className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Share</span>
+                    </button>
+
+                    {/* Board Settings Action Button */}
+                    <button
+                      onClick={() => setIsSettingsModalOpen(true)}
+                      className="p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800/80 hover:border-slate-700 text-slate-400 hover:text-white shadow-xs transition-all active:scale-95 cursor-pointer"
+                      title="Board Settings (General, Danger Zone)"
+                    >
+                      <Settings className="w-4 h-4" />
+                    </button>
+
+                    {/* Create Task Button */}
+                    <button
+                      onClick={() => handleOpenCreateTask("todo")}
+                      className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-linear-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-xs font-semibold shadow-md shadow-indigo-950/40 hover:shadow-indigo-900/50 transition-all active:scale-95 cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Add Task</span>
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Board Search & Filter Controls Strip */}
@@ -712,7 +817,12 @@ export const BoardView: React.FC = () => {
                       {selectedUser ? (
                         <>
                           <div
-                            className={`w-4 h-4 rounded-full ${selectedUser.color} text-white font-bold text-[8px] flex items-center justify-center`}
+                            className={`w-4 h-4 rounded-full ${getProfileGradient(
+                              selectedUser.id === user?.id
+                                ? user?.color || selectedUser.color
+                                : selectedUser.color,
+                              selectedUser.name
+                            )} text-white font-bold text-[8px] flex items-center justify-center`}
                           >
                             {selectedUser.initials}
                           </div>
@@ -825,40 +935,49 @@ export const BoardView: React.FC = () => {
                               No members found
                             </p>
                           ) : (
-                            filteredMembersForDropdown.map((user) => (
-                              <button
-                                key={user.id}
-                                type="button"
-                                onClick={() => {
-                                  updateFilters({ assignee: user.id });
-                                  setIsAssigneeDropdownOpen(false);
-                                }}
-                                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition cursor-pointer ${
-                                  selectedAssignee === user.id
-                                    ? "bg-indigo-600 text-white font-semibold"
-                                    : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
-                                }`}
-                              >
-                                <div className="flex items-center space-x-2 min-w-0">
-                                  <div
-                                    className={`w-5 h-5 rounded-full ${user.color} text-white font-bold text-[9px] flex items-center justify-center shrink-0`}
-                                  >
-                                    {user.initials}
+                            filteredMembersForDropdown.map((member) => {
+                              const memberColor =
+                                member.id === user?.id
+                                  ? user?.color || member.color
+                                  : member.color;
+                              return (
+                                <button
+                                  key={member.id}
+                                  type="button"
+                                  onClick={() => {
+                                    updateFilters({ assignee: member.id });
+                                    setIsAssigneeDropdownOpen(false);
+                                  }}
+                                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition cursor-pointer ${
+                                    selectedAssignee === member.id
+                                      ? "bg-indigo-600 text-white font-semibold"
+                                      : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
+                                  }`}
+                                >
+                                  <div className="flex items-center space-x-2 min-w-0">
+                                    <div
+                                      className={`w-5 h-5 rounded-full ${getProfileGradient(
+                                        memberColor,
+                                        member.name
+                                      )} text-white font-bold text-[9px] flex items-center justify-center shrink-0`}
+                                    >
+                                      {member.initials}
+                                    </div>
+                                    <div className="text-left min-w-0">
+                                      <p className="truncate text-xs">
+                                        {member.name}
+                                      </p>
+                                      <p className="truncate text-[10px] text-slate-400">
+                                        {member.email}
+                                      </p>
+                                    </div>
                                   </div>
-                                  <div className="text-left min-w-0">
-                                    <p className="truncate text-xs">
-                                      {user.name}
-                                    </p>
-                                    <p className="truncate text-[10px] text-slate-400">
-                                      {user.email}
-                                    </p>
-                                  </div>
-                                </div>
-                                {selectedAssignee === user.id && (
-                                  <Check className="w-3.5 h-3.5 shrink-0 ml-1" />
-                                )}
-                              </button>
-                            ))
+                                  {selectedAssignee === member.id && (
+                                    <Check className="w-3.5 h-3.5 shrink-0 ml-1" />
+                                  )}
+                                </button>
+                              );
+                            })
                           )}
                         </div>
                       </div>
@@ -1101,12 +1220,29 @@ export const BoardView: React.FC = () => {
         />
       )}
 
+      {/* Board Members & Share Modal */}
+      {boardData && (
+        <BoardMembersModal
+          isOpen={isMembersModalOpen}
+          onClose={() => setIsMembersModalOpen(false)}
+          board={boardData}
+          workspaceMembers={workspaceMembers}
+          onUpdateMembers={async (newMembers) => {
+            await handleUpdateBoard({
+              ...boardData,
+              members: newMembers,
+            });
+          }}
+        />
+      )}
+
       {/* Board Settings Modal (General, Members, Danger Zone) */}
       {boardData && (
         <BoardSettingsModal
           isOpen={isSettingsModalOpen}
           onClose={() => setIsSettingsModalOpen(false)}
           board={boardData}
+          workspaceMembers={workspaceMembers}
           onUpdateBoard={handleUpdateBoard}
           onDeleteBoard={handleDeleteBoard}
           onClearTasks={handleClearTasks}

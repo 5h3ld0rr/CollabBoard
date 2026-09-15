@@ -15,12 +15,19 @@ import { BoardProvider, AuthProvider, NotificationProvider } from './context';
 function AuthLayout() {
   return (
     <AuthProvider>
-      <BoardProvider>
-        <NotificationProvider>
-          <Outlet />
-        </NotificationProvider>
-      </BoardProvider>
+      <Outlet />
     </AuthProvider>
+  );
+}
+
+/** Wraps protected workspace/board routes that require Board and Notification state */
+function ProtectedAppLayout() {
+  return (
+    <BoardProvider>
+      <NotificationProvider>
+        <Outlet />
+      </NotificationProvider>
+    </BoardProvider>
   );
 }
 
@@ -51,54 +58,58 @@ function App() {
               </PublicRoute>
             }
           />
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <WorkspaceRedirect />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/workspaces"
-            element={
-              <ProtectedRoute>
-                <WorkspaceRedirect />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/workspaces/:workspaceId"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/boards/:id"
-            element={
-              <ProtectedRoute allowGuestShareToken>
-                <BoardView />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/tasks/:id"
-            element={
-              <ProtectedRoute>
-                <TaskDetails />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                <Profile />
-              </ProtectedRoute>
-            }
-          />
+
+          {/* Protected routes — BoardProvider & NotificationProvider mount only here */}
+          <Route element={<ProtectedAppLayout />}>
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <WorkspaceRedirect />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/workspaces"
+              element={
+                <ProtectedRoute>
+                  <WorkspaceRedirect />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/workspaces/:workspaceId"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/boards/:id"
+              element={
+                <ProtectedRoute allowGuestShareToken>
+                  <BoardView />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/tasks/:id"
+              element={
+                <ProtectedRoute>
+                  <TaskDetails />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <Profile />
+                </ProtectedRoute>
+              }
+            />
+          </Route>
         </Route>
       </Routes>
     </Router>

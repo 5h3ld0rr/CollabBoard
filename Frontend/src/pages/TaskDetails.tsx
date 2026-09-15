@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -42,7 +42,7 @@ import {
 import { flushSyncQueue } from '../sync';
 import { useAuth } from '../context/AuthContext';
 import type { Task, Board, TaskStatus, TaskPriority, User, TaskComment } from '../types';
-import { formatRelativeTime, getInitials, hasTaskChanged, hasBoardChanged } from '../utils';
+import { formatRelativeTime, getInitials, getProfileGradient, hasTaskChanged, hasBoardChanged } from '../utils';
 
 const PRIORITY_CONFIG: Record<
   TaskPriority,
@@ -174,14 +174,17 @@ export const TaskDetails: React.FC = () => {
           ]);
           if (!isMounted) return;
 
-          const boardHasChanged = !board || hasBoardChanged(board, foundBoard);
-          if (boardHasChanged) {
-            setBoard(foundBoard);
-            if (foundBoard) {
-              setBoardMembers(foundBoard.members || []);
-              await saveBoardToCache(foundBoard);
+          setBoard((prevBoard) => {
+            const boardHasChanged = !prevBoard || hasBoardChanged(prevBoard, foundBoard);
+            if (boardHasChanged) {
+              if (foundBoard) {
+                setBoardMembers(foundBoard.members || []);
+                void saveBoardToCache(foundBoard);
+              }
+              return foundBoard;
             }
-          }
+            return prevBoard;
+          });
           setComments(taskComments);
         } else if (!cachedTask) {
           setTask(null);
@@ -668,7 +671,7 @@ export const TaskDetails: React.FC = () => {
                   <form onSubmit={handleAddComment} className="space-y-3">
                     <div className="flex items-start space-x-3">
                       <div
-                        className={`w-8 h-8 rounded-xl ${authUser?.color || 'bg-indigo-600'} text-white font-bold text-xs flex items-center justify-center shrink-0 mt-1 shadow`}
+                        className={`w-8 h-8 rounded-xl ${getProfileGradient(authUser?.color, authUser?.name)} text-white font-bold text-xs flex items-center justify-center shrink-0 mt-1 shadow`}
                         title={authUser?.name || 'User'}
                       >
                         {getInitials(authUser?.initials || authUser?.name)}
@@ -714,7 +717,14 @@ export const TaskDetails: React.FC = () => {
                       </div>
                     ) : (
                       comments.map((comment) => {
-                        const isAuthor = comment.author.id === authUser?.id || comment.author.email === authUser?.email;
+                        const isAuthor = Boolean(
+                          authUser && (
+                            comment.author.id === authUser.id ||
+                            (comment.author.email && authUser.email && comment.author.email.toLowerCase() === authUser.email.toLowerCase()) ||
+                            (comment.author.name && authUser.name && comment.author.name.toLowerCase() === authUser.name.toLowerCase())
+                          )
+                        );
+                        const commentAuthorColor = isAuthor && authUser?.color ? authUser.color : comment.author.color;
                         const isEditingThis = editingCommentId === comment.id;
 
                         return (
@@ -725,7 +735,7 @@ export const TaskDetails: React.FC = () => {
                             <div className="flex items-center justify-between">
                               <div className="flex items-center space-x-2.5">
                                 <div
-                                  className={`w-6 h-6 rounded-lg ${comment.author.color} text-white font-bold text-[10px] flex items-center justify-center shadow-sm`}
+                                  className={`w-6 h-6 rounded-lg ${getProfileGradient(commentAuthorColor, comment.author.name)} text-white font-bold text-[10px] flex items-center justify-center shadow-sm`}
                                 >
                                   {getInitials(comment.author.initials || comment.author.name)}
                                 </div>
@@ -813,18 +823,16 @@ export const TaskDetails: React.FC = () => {
                   {task.assignee ? (
                     (() => {
                       const name = typeof task.assignee === 'object' && task.assignee !== null ? task.assignee.name : String(task.assignee);
-                      const color = typeof task.assignee === 'object' && task.assignee?.color ? task.assignee.color : 'bg-indigo-600';
-                      const initials = getInitials(
-                        typeof task.assignee === 'object' && task.assignee?.initials
-                          ? task.assignee.initials
-                          : name
-                      );
-                      const email = typeof task.assignee === 'object' && task.assignee?.email ? task.assignee.email : '';
+                      const color = typeof task.assignee === 'object' && task.assignee !== null ? task.assignee.color : undefined;
+                      const initials = (typeof task.assignee === 'object' && task.assignee !== null && task.assignee.initials)
+                        ? task.assignee.initials
+                        : getInitials(name);
+                      const email = typeof task.assignee === 'object' && task.assignee !== null && task.assignee.email ? task.assignee.email : '';
 
                       return (
                         <div className="flex items-center space-x-3 p-3 rounded-2xl bg-slate-950 border border-slate-800">
                           <div
-                            className={`w-10 h-10 rounded-2xl ${color} text-white font-bold text-sm flex items-center justify-center shadow-md`}
+                            className={`w-10 h-10 rounded-2xl ${getProfileGradient(color, name)} text-white font-bold text-sm flex items-center justify-center shadow-md`}
                           >
                             {initials}
                           </div>

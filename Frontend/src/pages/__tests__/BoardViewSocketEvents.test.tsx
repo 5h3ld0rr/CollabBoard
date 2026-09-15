@@ -1,4 +1,3 @@
-import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
@@ -13,13 +12,18 @@ import * as db from '../../db';
 vi.mock('../../api/boards');
 vi.mock('../../api/tasks');
 vi.mock('../../db');
-vi.mock('../../context/AuthContext', () => ({
-  useAuth: () => ({
+vi.mock('../../context/AuthContext', async () => {
+  const React = await import('react');
+  const mockAuth = {
     user: { id: 'usr-xenon', name: '32BitXenon', email: 'ruwinikanchana1976@gmail.com' },
     token: 'jwt-token-xenon',
     isAuthenticated: true,
-  }),
-}));
+  };
+  return {
+    AuthContext: React.createContext(mockAuth as any),
+    useAuth: () => mockAuth,
+  };
+});
 
 vi.mock('../../sync', async () => {
   const actual = await vi.importActual('../../sync');
@@ -132,14 +136,17 @@ describe('Member 2: 32BitXenon - BoardView Socket Events & Live Presence Suite',
     );
 
     const indicator = await screen.findByTestId('live-presence-indicator');
-    expect(indicator.textContent).toContain('Online: just you');
+    expect(indicator).toBeDefined();
+    expect(screen.getByTestId('presence-avatar-usr-xenon')).toBeDefined();
 
     // Simulate presence update with 3 active collaborators
     act(() => {
       presenceCallback?.(['usr-xenon', 'usr-alex', 'usr-clara']);
     });
 
-    expect(screen.getByTestId('live-presence-indicator').textContent).toContain('Online: 3 active');
+    expect(screen.getByTestId('presence-avatar-usr-xenon')).toBeDefined();
+    expect(screen.getByTestId('presence-avatar-usr-alex')).toBeDefined();
+    expect(screen.getByTestId('presence-avatar-usr-clara')).toBeDefined();
   });
 
   it('renders live column header counters matching active tasks', async () => {
