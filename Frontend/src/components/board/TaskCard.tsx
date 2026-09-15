@@ -1,4 +1,4 @@
-import React from 'react';
+import { memo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   GripVertical,
@@ -8,7 +8,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import type { Task, TaskPriority, TaskStatus } from '../../types';
-import { getInitials } from '../../utils';
+import { getInitials, getProfileGradient } from '../../utils';
 
 interface TaskCardProps {
   task: Task;
@@ -52,7 +52,7 @@ const PRIORITY_BADGES: Record<TaskPriority, { label: string; bg: string; text: s
   },
 };
 
-export const TaskCard: React.FC<TaskCardProps> = React.memo(({
+export const TaskCard: React.FC<TaskCardProps> = memo(({
   task,
   onDragStart,
   readOnly = false,
@@ -159,15 +159,17 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           {task.assignee ? (
             (() => {
               const name = typeof task.assignee === 'object' && task.assignee !== null ? task.assignee.name : String(task.assignee);
-              const initials = getInitials(typeof task.assignee === 'object' && task.assignee?.initials ? task.assignee.initials : name);
-              const color = typeof task.assignee === 'object' && task.assignee?.color ? task.assignee.color : 'bg-indigo-600';
+              const color = typeof task.assignee === 'object' && task.assignee !== null ? task.assignee.color : undefined;
+              const initials = (typeof task.assignee === 'object' && task.assignee !== null && task.assignee.initials)
+                ? task.assignee.initials
+                : getInitials(name);
               const firstName = name.split(' ')[0] || name;
 
               return (
                 <>
                   <div
                     title={name}
-                    className={`w-5 h-5 rounded-full ${color} text-white font-bold text-[9px] flex items-center justify-center ring-1 ring-slate-800`}
+                    className={`w-5 h-5 rounded-full ${getProfileGradient(color, name)} text-white font-bold text-[9px] flex items-center justify-center ring-1 ring-slate-800`}
                   >
                     {initials}
                   </div>

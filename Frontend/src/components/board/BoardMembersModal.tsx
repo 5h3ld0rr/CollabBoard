@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   X,
   Users,
@@ -12,13 +12,15 @@ import {
 } from 'lucide-react';
 import type { Board, User } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { getProfileGradient } from '../../utils';
 import { TemporaryLinkGenerator } from './TemporaryLinkGenerator';
 
 interface BoardMembersModalProps {
   isOpen: boolean;
   onClose: () => void;
   board: Board;
-  onUpdateMembers: (newMembers: User[]) => void;
+  onUpdateMembers: (newMembers: User[]) => void | Promise<void>;
+  workspaceMembers?: User[];
 }
 
 const ROLE_BADGES: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
@@ -44,38 +46,34 @@ const ROLE_BADGES: Record<string, { label: string; icon: React.ReactNode; color:
   },
 };
 
-const normalizeMember = (m: any, idx: number, ownerId?: string): User => {
+const normalizeMember = (m: any, idx: number, ownerId?: string, currentUser?: User | null): User => {
   const memberId = typeof m === 'object' && m !== null ? String(m.id) : String(m);
   const isOwner = Boolean(ownerId ? memberId === String(ownerId) : idx === 0);
+  const isSelf = Boolean(
+    currentUser &&
+      (memberId === String(currentUser.id) ||
+        (m?.email && currentUser.email && m.email.toLowerCase() === currentUser.email.toLowerCase()))
+  );
 
-  if (typeof m === 'object' && m !== null && m.name) {
+  if (typeof m === 'object' && m !== null) {
     return {
       ...m,
       id: memberId,
+      name: m.name || '',
+      email: m.email || '',
+      initials: m.initials || (m.name ? m.name.slice(0, 2).toUpperCase() : ''),
+      color: isSelf && currentUser?.color ? currentUser.color : m.color,
       boardRole: isOwner ? 'Owner' : (m.boardRole || 'Editor'),
     };
   }
-  const id = memberId;
-  const name =
-    id === '1' ? 'Alex Chen' :
-    id === '2' ? 'Clara Tanaka' :
-    id === '3' ? 'Elena Rostova' :
-    id === '4' ? 'Marcus Vance' : `User ${id}`;
-  const email =
-    id === '1' ? 'user1@nsbm.lk' :
-    id === '2' ? 'user2@nsbm.lk' :
-    id === '3' ? 'user3@nsbm.lk' :
-    id === '4' ? 'user4@nsbm.lk' : `user${id}@nsbm.lk`;
-  const initials = name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
-  const color = id === '1' ? 'bg-indigo-600' : id === '2' ? 'bg-emerald-600' : 'bg-fuchsia-600';
 
   return {
-    id: String(id),
-    name,
-    email,
-    initials,
-    color,
-    boardRole: isOwner ? 'Owner' : (idx === 0 ? 'Admin' : 'Editor'),
+    id: memberId,
+    name: '',
+    email: '',
+    initials: '',
+    color: '',
+    boardRole: isOwner ? 'Owner' : 'Editor',
   };
 };
 
@@ -84,10 +82,11 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
   onClose,
   board,
   onUpdateMembers,
+  workspaceMembers = [],
 }) => {
   const { user: currentUser } = useAuth();
   const [members, setMembers] = useState<User[]>(() => {
-    return (board.members || []).map((m, i) => normalizeMember(m, i, board.ownerId));
+    return (board.members || []).map((m, i) => normalizeMember(m, i, board.ownerId, currentUser));
   });
 
   const [inviteEmail, setInviteEmail] = useState('');
@@ -97,22 +96,38 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      setMembers((board.members || []).map((m, i) => normalizeMember(m, i, board.ownerId)));
+      setMembers((board.members || []).map((m, i) => normalizeMember(m, i, board.ownerId, currentUser)));
       setSuccessMessage(null);
     }
-  }, [isOpen, board]);
+  }, [isOpen, board, currentUser]);
 
   if (!isOpen) return null;
 
   // Find workspace teammates who are not yet added to this board
-  const availableTeammates: User[] = [];
+  const memberIdSet = new Set(members.map((m) => String(m.id)));
+  const memberEmailSet = new Set(
+    members.map((m) => m.email?.toLowerCase()).filter(Boolean)
+  );
+  const availableTeammates: User[] = (workspaceMembers || []).filter(
+    (wm) =>
+      !memberIdSet.has(String(wm.id)) &&
+      (!wm.email || !memberEmailSet.has(wm.email.toLowerCase()))
+  );
 
-  const handleAddMember = (e: React.FormEvent) => {
+  const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
 
     let userToAdd: User | null = null;
 
-    if (inviteEmail.trim()) {
+    if (selectedWorkspaceUser) {
+      const selected = availableTeammates.find((u) => u.id === selectedWorkspaceUser);
+      if (selected) {
+        userToAdd = {
+          ...selected,
+          boardRole: inviteRole,
+        };
+      }
+    } else if (inviteEmail.trim()) {
       const email = inviteEmail.trim();
       const initials = email.slice(0, 2).toUpperCase();
       userToAdd = {
@@ -128,15 +143,19 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
     if (userToAdd) {
       const updatedMembers = [...members, userToAdd];
       setMembers(updatedMembers);
-      onUpdateMembers(updatedMembers);
-      setInviteEmail('');
-      setSelectedWorkspaceUser('');
-      setSuccessMessage(`Added ${userToAdd.name} to the board as ${inviteRole}!`);
-      setTimeout(() => setSuccessMessage(null), 2500);
+      try {
+        await onUpdateMembers(updatedMembers);
+        setInviteEmail('');
+        setSelectedWorkspaceUser('');
+        setSuccessMessage(`Added ${userToAdd.name} to the board as ${inviteRole}!`);
+        setTimeout(() => setSuccessMessage(null), 2500);
+      } catch {
+        setSuccessMessage(null);
+      }
     }
   };
 
-  const handleChangeRole = (userId: string, newRole: 'Admin' | 'Editor' | 'Viewer') => {
+  const handleChangeRole = async (userId: string, newRole: 'Admin' | 'Editor' | 'Viewer') => {
     if (board.ownerId && userId === String(board.ownerId)) return;
     if (currentUser && (userId === currentUser.id || userId === String(currentUser.id))) return;
 
@@ -144,10 +163,10 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
       m.id === userId ? { ...m, boardRole: newRole } : m
     );
     setMembers(updatedMembers);
-    onUpdateMembers(updatedMembers);
+    await onUpdateMembers(updatedMembers);
   };
 
-  const handleRemoveMember = (userId: string) => {
+  const handleRemoveMember = async (userId: string) => {
     if (members.length <= 1) return;
     if (board.ownerId && userId === String(board.ownerId)) return;
     if (currentUser && (userId === currentUser.id || userId === String(currentUser.id))) return;
@@ -155,7 +174,7 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
     const target = members.find((m) => m.id === userId);
     const updatedMembers = members.filter((m) => m.id !== userId);
     setMembers(updatedMembers);
-    onUpdateMembers(updatedMembers);
+    await onUpdateMembers(updatedMembers);
     if (target) {
       setSuccessMessage(`Removed ${target.name} from board.`);
       setTimeout(() => setSuccessMessage(null), 2500);
@@ -210,6 +229,7 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
             {availableTeammates.length > 0 ? (
               <div className="flex-1 flex gap-2">
                 <select
+                  aria-label="Select teammate to invite"
                   value={selectedWorkspaceUser}
                   onChange={(e) => {
                     setSelectedWorkspaceUser(e.target.value);
@@ -237,6 +257,7 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
 
             <div className="flex items-center gap-2">
               <select
+                aria-label="Invite role"
                 value={inviteRole}
                 onChange={(e) => setInviteRole(e.target.value as 'Admin' | 'Editor' | 'Viewer')}
                 className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 focus:outline-none"
@@ -305,9 +326,10 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
                   <div className="flex items-center space-x-3 truncate">
                     <div className="relative">
                       <div
-                        className={`w-8 h-8 rounded-xl ${
-                          member.color || 'bg-indigo-600'
-                        } text-white font-bold text-xs flex items-center justify-center shadow-xs`}
+                        className={`w-8 h-8 rounded-xl ${getProfileGradient(
+                          member.color,
+                          member.name
+                        )} text-white font-bold text-xs flex items-center justify-center shadow-xs`}
                       >
                         {member.initials}
                       </div>
@@ -334,6 +356,7 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
                     {canChangeRole ? (
                       <div className="relative">
                         <select
+                          aria-label={`Role for ${member.name}`}
                           value={currentRole}
                           onChange={(e) =>
                             handleChangeRole(

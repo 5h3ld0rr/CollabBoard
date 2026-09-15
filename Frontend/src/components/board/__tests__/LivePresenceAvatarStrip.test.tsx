@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import React from 'react';
 import { LivePresenceAvatarStrip } from '../LivePresenceAvatarStrip';
 
 describe('Member 4: shamu-4 - Live Presence Avatar Strip Suite', () => {
@@ -62,5 +61,20 @@ describe('Member 4: shamu-4 - Live Presence Avatar Strip Suite', () => {
 
     const offlineAvatar = screen.getByTestId('presence-avatar-usr-3');
     expect(offlineAvatar.getAttribute('title')).toContain('Offline');
+  });
+
+  it('only renders online members when onlyShowOnline is true', () => {
+    render(
+      <LivePresenceAvatarStrip
+        members={sampleMembers}
+        onlineUserIds={['usr-2']}
+        onlyShowOnline
+      />
+    );
+
+    expect(screen.queryByTestId('presence-avatar-usr-1')).toBeNull();
+    expect(screen.getByTestId('presence-avatar-usr-2')).toBeDefined();
+    expect(screen.queryByTestId('presence-avatar-usr-3')).toBeNull();
+    expect(screen.queryByTestId('presence-avatar-usr-4')).toBeNull();
   });
 });

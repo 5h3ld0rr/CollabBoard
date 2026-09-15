@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { X, LayoutGrid, Plus, AlertCircle } from 'lucide-react';
 import type { Workspace } from '../../types';
 import { COLOR_OPTIONS } from '../../constants';

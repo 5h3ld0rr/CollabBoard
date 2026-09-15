@@ -1,4 +1,3 @@
-import React from "react";
 import { Kanban } from "lucide-react";
 
 export interface LogoProps {

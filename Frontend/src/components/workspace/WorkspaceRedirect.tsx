@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { getWorkspaces } from '../../api';
 import { WorkspaceSkeleton } from './WorkspaceSkeleton';
@@ -9,7 +9,7 @@ import { WorkspaceSkeleton } from './WorkspaceSkeleton';
  * without rendering the full dashboard page.
  */
 export const WorkspaceRedirect: React.FC = () => {
-  const [targetPath, setTargetPath] = useState<string | null>(null);
+  const [target, setTarget] = useState<{ path: string; workspaces?: import('../../types').Workspace[] } | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -18,14 +18,14 @@ export const WorkspaceRedirect: React.FC = () => {
         const workspaces = await getWorkspaces();
         if (isMounted) {
           if (workspaces && workspaces.length > 0 && workspaces[0]?.id) {
-            setTargetPath(`/workspaces/${workspaces[0].id}`);
+            setTarget({ path: `/workspaces/${workspaces[0].id}`, workspaces });
           } else {
-            setTargetPath('/workspaces/default');
+            setTarget({ path: '/workspaces/default', workspaces: [] });
           }
         }
       } catch {
         if (isMounted) {
-          setTargetPath('/login');
+          setTarget({ path: '/login' });
         }
       }
     }
@@ -35,11 +35,11 @@ export const WorkspaceRedirect: React.FC = () => {
     };
   }, []);
 
-  if (!targetPath) {
+  if (!target) {
     return <WorkspaceSkeleton />;
   }
 
-  return <Navigate to={targetPath} replace />;
+  return <Navigate to={target.path} state={target.workspaces ? { workspaces: target.workspaces } : undefined} replace />;
 };
 
 export default WorkspaceRedirect;

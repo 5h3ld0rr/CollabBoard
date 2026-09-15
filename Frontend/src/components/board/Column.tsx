@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { TaskCard } from './TaskCard';
 import type { Task, TaskStatus } from '../../types';

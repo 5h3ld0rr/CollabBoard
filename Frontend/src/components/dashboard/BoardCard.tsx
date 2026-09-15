@@ -1,4 +1,4 @@
-import React from 'react';
+import { memo, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Star,
@@ -9,18 +9,21 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import type { Board } from '../../types';
-import { formatRelativeTime, getInitials } from '../../utils';
+import { AuthContext } from '../../context/AuthContext';
+import { formatRelativeTime, getInitials, getProfileGradient } from '../../utils';
 
 interface BoardCardProps {
   board: Board;
   onToggleFavorite: (id: string) => void;
 }
 
-export const BoardCard: React.FC<BoardCardProps> = React.memo(({
+export const BoardCard: React.FC<BoardCardProps> = memo(({
   board,
   onToggleFavorite,
 }) => {
   const navigate = useNavigate();
+  const auth = useContext(AuthContext);
+  const currentUser = auth?.user;
 
   // Icon Resolver
   const renderIcon = (iconName?: string) => {
@@ -140,15 +143,29 @@ export const BoardCard: React.FC<BoardCardProps> = React.memo(({
 
           {members.length > 0 && (
             <div className="flex items-center -space-x-1.5">
-              {members.map((member) => (
-                <div
-                  key={member.id}
-                  title={member.name}
-                  className={`w-6 h-6 rounded-full ${member.color || 'bg-indigo-600'} text-white font-bold text-[9px] flex items-center justify-center ring-2 ring-slate-900 shadow-sm`}
-                >
-                  {member.initials || getInitials(member.name)}
-                </div>
-              ))}
+              {members.map((member) => {
+                const isCurrentUser = Boolean(
+                  currentUser && (
+                    String(member.id) === String(currentUser.id) ||
+                    (member.email && currentUser.email && member.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+                    (member.name && currentUser.name && member.name.toLowerCase() === currentUser.name.toLowerCase())
+                  )
+                );
+                const memberColor = isCurrentUser && currentUser?.color ? currentUser.color : member.color;
+                const initials = isCurrentUser && currentUser?.initials
+                  ? currentUser.initials
+                  : (member.initials || getInitials(member.name));
+
+                return (
+                  <div
+                    key={member.id}
+                    title={member.name}
+                    className={`w-6 h-6 rounded-full ${getProfileGradient(memberColor, member.name)} text-white font-bold text-[9px] flex items-center justify-center ring-2 ring-slate-900 shadow-sm`}
+                  >
+                    {initials}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
