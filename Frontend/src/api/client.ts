@@ -47,8 +47,19 @@ async function toApiError(res: Response): Promise<ApiError> {
  * Universal HTTP client relying on HTTP-only cookies and handling centralized errors & 401 expiration
  */
 export async function request<T = any>(path: string, options: RequestInit = {}): Promise<T> {
+  let token: string | null = null;
+  try {
+    token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null;
+  } catch {
+    // Ignore storage errors
+  }
+
+  const authHeader: Record<string, string> =
+    token && token !== 'cookie-session' ? { Authorization: `Bearer ${token}` } : {};
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    ...authHeader,
     ...((options.headers as Record<string, string>) || {}),
   };
 

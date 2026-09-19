@@ -9,16 +9,26 @@ export interface BoardResponse {
   data: Board;
 }
 
+let inFlightBoardsPromise: Promise<Board[]> | null = null;
+
 /**
  * Fetch all available boards for the authenticated user
  */
 export async function getBoards(): Promise<Board[]> {
-  try {
-    const res = await request<BoardListResponse>('/api/boards');
-    return res.data || [];
-  } catch {
-    return [];
+  if (inFlightBoardsPromise) {
+    return inFlightBoardsPromise;
   }
+  inFlightBoardsPromise = (async () => {
+    try {
+      const res = await request<BoardListResponse>('/api/boards');
+      return res.data || [];
+    } catch {
+      return [];
+    } finally {
+      inFlightBoardsPromise = null;
+    }
+  })();
+  return inFlightBoardsPromise;
 }
 
 /**
@@ -74,12 +84,31 @@ export async function deleteBoard(boardId: string): Promise<boolean> {
 }
 
 /**
- * Add a member to a board by user ID
+ * Add a member to a board by user ID with optional role
  */
-export async function addBoardMember(boardId: string, userId: string): Promise<Board> {
+export async function addBoardMember(
+  boardId: string,
+  userId: string,
+  role?: 'Admin' | 'Editor' | 'Viewer'
+): Promise<Board> {
   const res = await request<BoardResponse>(`/api/boards/${boardId}/members`, {
     method: 'POST',
-    body: JSON.stringify({ userId }),
+    body: JSON.stringify(role ? { userId, role } : { userId }),
+  });
+  return res.data;
+}
+
+/**
+ * Update a member's role on a board
+ */
+export async function updateBoardMemberRole(
+  boardId: string,
+  memberId: string,
+  role: 'Admin' | 'Editor' | 'Viewer'
+): Promise<Board> {
+  const res = await request<BoardResponse>(`/api/boards/${boardId}/members/${memberId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ role }),
   });
   return res.data;
 }

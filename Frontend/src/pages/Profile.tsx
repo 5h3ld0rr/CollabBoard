@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   User as UserIcon,
@@ -37,13 +37,14 @@ import {
   deleteWorkspace as apiDeleteWorkspace,
 } from "../api";
 import {
+  COLOR_OPTIONS,
   DEFAULT_USER_PREFERENCES,
   DEFAULT_ACTIVE_SESSIONS,
   SUBSCRIPTION_PLANS,
 } from "../constants";
 import { saveCachedProfileDetails, getCachedProfileDetails } from "../db";
 import type { Task, TaskStatus, Workspace, User } from "../types";
-import { getInitials as extractInitials } from "../utils";
+import { getInitials as extractInitials, getProfileGradient } from "../utils";
 
 type ProfileTab =
   | "overview"
@@ -62,6 +63,7 @@ interface UserProfileDetails {
   location: string;
   bio: string;
   memberSince: string;
+  color?: string;
 }
 
 export const Profile: React.FC = () => {
@@ -74,7 +76,7 @@ export const Profile: React.FC = () => {
     name: "Alex Chen",
     email: "user1@nsbm.lk",
     initials: "AC",
-    color: "bg-indigo-600",
+    color: "from-indigo-600 to-violet-600",
   };
 
   // Active tab state
@@ -90,6 +92,7 @@ export const Profile: React.FC = () => {
     location: "San Francisco, CA",
     bio: "Specializing in real-time collaborative systems, CRDT state sync, and high-performance WebGL & React interfaces.",
     memberSince: "Member since Oct 2024",
+    color: currentUser.color || "from-indigo-600 to-violet-600",
   });
 
   const [name, setName] = useState(savedProfile.name);
@@ -99,6 +102,9 @@ export const Profile: React.FC = () => {
   const [company, setCompany] = useState(savedProfile.company);
   const [location, setLocation] = useState(savedProfile.location);
   const [bio, setBio] = useState(savedProfile.bio);
+  const [selectedColor, setSelectedColor] = useState<string>(
+    currentUser.color || "from-indigo-600 to-violet-600",
+  );
   const [subscriptionPlan, setSubscriptionPlan] = useState<"basic" | "pro">(
     "pro",
   );
@@ -125,6 +131,9 @@ export const Profile: React.FC = () => {
           if (merged.company) setCompany(merged.company);
           if (merged.location) setLocation(merged.location);
           if (merged.bio) setBio(merged.bio);
+          if (authUser?.color || merged.color) {
+            setSelectedColor(authUser?.color || merged.color);
+          }
           return;
         }
       } catch {
@@ -134,16 +143,26 @@ export const Profile: React.FC = () => {
       if (authUser) {
         setName(authUser.name);
         setEmail(authUser.email);
+        if (authUser.color) {
+          setSelectedColor(authUser.color);
+        }
         setSavedProfile((prev) => ({
           ...prev,
           name: authUser.name,
           email: authUser.email,
           username: authUser.email ? authUser.email.split("@")[0] : prev.username,
+          color: authUser.color || prev.color,
         }));
       }
     }
     loadPouchProfile();
   }, [authUser]);
+
+  useEffect(() => {
+    if (authUser?.color) {
+      setSelectedColor(authUser.color);
+    }
+  }, [authUser?.color]);
 
   // Check if any personal info field has unsaved changes
   const isProfileDirty =
@@ -153,7 +172,8 @@ export const Profile: React.FC = () => {
     role !== savedProfile.role ||
     company !== savedProfile.company ||
     location !== savedProfile.location ||
-    bio !== savedProfile.bio;
+    bio !== savedProfile.bio ||
+    selectedColor !== (savedProfile.color || currentUser.color);
 
   // Preferences state
   const [preferences, setPreferences] = useState(DEFAULT_USER_PREFERENCES);
@@ -205,6 +225,23 @@ export const Profile: React.FC = () => {
     }, 3200);
   };
 
+  const handleSelectGradient = (colorValue: string) => {
+    setSelectedColor(colorValue);
+    setSavedProfile((prev) => ({ ...prev, color: colorValue }));
+    saveCachedProfileDetails({
+      ...savedProfile,
+      color: colorValue,
+    });
+    updateUser({ color: colorValue });
+    const option = COLOR_OPTIONS.find((c) => c.value === colorValue);
+    showToast(
+      option
+        ? `Preferred gradient set to ${option.label}!`
+        : "Preferred color gradient updated!",
+      "success",
+    );
+  };
+
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
     const updated = {
@@ -216,6 +253,7 @@ export const Profile: React.FC = () => {
       location,
       bio,
       memberSince: savedProfile.memberSince,
+      color: selectedColor,
     };
     setSavedProfile(updated);
     saveCachedProfileDetails(updated);
@@ -224,6 +262,7 @@ export const Profile: React.FC = () => {
     updateUser({
       name,
       email,
+      color: selectedColor,
     });
 
     showToast("Profile details updated successfully!");
@@ -237,6 +276,9 @@ export const Profile: React.FC = () => {
     setCompany(savedProfile.company);
     setLocation(savedProfile.location);
     setBio(savedProfile.bio);
+    setSelectedColor(
+      savedProfile.color || currentUser.color || "from-indigo-600 to-violet-600",
+    );
     showToast("Changes discarded", "info");
   };
 
@@ -334,17 +376,21 @@ export const Profile: React.FC = () => {
 
           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
-              {/* Avatar with Gradient selector indicator */}
-              <div className="relative group">
-                <div
-                  className={`w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-linear-to-br ${currentUser.color || "from-indigo-600 to-violet-600"} flex items-center justify-center text-white font-black text-2xl sm:text-3xl shadow-xl shadow-indigo-950/40 ring-4 ring-slate-800/80 transition-transform duration-300 group-hover:scale-105`}
-                >
-                  {getInitials(name)}
+              {/* Avatar with Preferred Color Gradient selector */}
+              {/* Profile Avatar */}
+              <div className="flex flex-col items-center sm:items-start gap-2.5">
+                <div className="relative group">
+                  <div
+                    data-testid="profile-avatar-hero"
+                    className={`w-20 h-20 sm:w-24 sm:h-24 rounded-2xl ${getProfileGradient(selectedColor || currentUser.color, name)} flex items-center justify-center text-white font-black text-2xl sm:text-3xl shadow-xl shadow-indigo-950/40 ring-4 ring-slate-800/80 transition-all duration-300 group-hover:scale-105`}
+                  >
+                    {getInitials(name)}
+                  </div>
+                  <span
+                    title="Online"
+                    className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 ring-4 ring-slate-900"
+                  />
                 </div>
-                <span
-                  title="Online"
-                  className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 ring-4 ring-slate-900"
-                />
               </div>
 
               {/* Name & Basic Info */}
@@ -618,6 +664,57 @@ export const Profile: React.FC = () => {
                   onChange={(e) => setBio(e.target.value)}
                   className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition resize-none"
                 />
+              </div>
+
+              {/* Preferred Avatar Color Gradient */}
+              <div className="space-y-2.5 pt-4 border-t border-slate-800/80">
+                <div>
+                  <label className="text-xs font-semibold text-slate-200">
+                    Preferred Color Gradient
+                  </label>
+                  <p className="text-[11px] text-slate-400">
+                    Your personal signature gradient used on boards, avatar presence, and collaborator badges
+                  </p>
+                </div>
+
+                <div
+                  data-testid="profile-form-gradient-options"
+                  className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 pt-1"
+                >
+                  {COLOR_OPTIONS.map((c) => {
+                    const isSelected = selectedColor === c.value;
+                    return (
+                      <button
+                        key={c.value}
+                        type="button"
+                        onClick={() => handleSelectGradient(c.value)}
+                        aria-label={`Select ${c.label} gradient`}
+                        className={`group flex items-center space-x-2.5 p-2.5 rounded-2xl border transition-all text-left cursor-pointer ${
+                          isSelected
+                            ? "bg-slate-800/90 border-slate-600 ring-2 ring-indigo-500/50 shadow-lg shadow-indigo-950/20"
+                            : "bg-slate-950/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900/60"
+                        }`}
+                      >
+                        <div
+                          className={`w-5 h-5 rounded-full bg-linear-to-br ${c.value} shadow-xs flex items-center justify-center shrink-0 transition-transform group-hover:scale-110`}
+                        >
+                          {isSelected && (
+                            <Check className="w-3 h-3 text-white stroke-3" />
+                          )}
+                        </div>
+                        <span
+                          className={`text-xs font-medium truncate ${
+                            isSelected
+                              ? "text-white font-semibold"
+                              : "text-slate-400 group-hover:text-slate-200"
+                          }`}
+                        >
+                          {c.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 

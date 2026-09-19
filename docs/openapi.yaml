@@ -319,6 +319,206 @@ paths:
         '200':
           description: List of tasks on board
 
+  /api/boards/{id}/share-token:
+    get:
+      summary: Get active share token for board
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Active share token details (or null if none)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    nullable: true
+                    properties:
+                      shareToken:
+                        type: string
+                      shareUrl:
+                        type: string
+                      expiresIn:
+                        type: string
+                      expiresAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+    post:
+      summary: Generate a temporary guest share token for board
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expiresIn:
+                  type: string
+                  enum: [1h, 24h, 7d, never]
+                  default: 24h
+      responses:
+        '200':
+          description: Generated share token and view link
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      shareToken:
+                        type: string
+                      shareUrl:
+                        type: string
+                      expiresIn:
+                        type: string
+                      expiresAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+
+  /api/boards/{id}/share-token/reset:
+    post:
+      summary: Reset/revoke existing share token for board
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Share token revoked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+
+  /api/boards/{id}/members:
+    post:
+      summary: Add collaborator to board
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties:
+                userId:
+                  type: string
+                role:
+                  type: string
+                  enum: [Admin, Editor, Viewer, Member]
+                  default: Editor
+      responses:
+        '200':
+          description: Member added, returns updated board
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+
+  /api/boards/{id}/members/{memberId}:
+    patch:
+      summary: Update collaborator role on board
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [Admin, Editor, Viewer]
+      responses:
+        '200':
+          description: Role updated, returns updated board
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+    delete:
+      summary: Remove collaborator from board
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Member removed, returns updated board
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+
   /api/tasks:
     get:
       summary: List and query tasks across accessible boards
@@ -422,9 +622,142 @@ paths:
         '204':
           description: Task removed
 
+  /api/search:
+    get:
+      summary: Global search across workspaces, boards, and tasks
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Search term matching title, description, or tags
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [all, workspaces, boards, tasks]
+            default: all
+          description: Scope of search
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+          description: Maximum results per category
+      responses:
+        '200':
+          description: Search results grouped by category
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      workspaces:
+                        type: array
+                        items:
+                          type: object
+                      boards:
+                        type: array
+                        items:
+                          type: object
+                      tasks:
+                        type: array
+                        items:
+                          type: object
+                      total:
+                        type: integer
+
 components:
   securitySchemes:
     BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+
+x-web-sockets:
+  description: >
+    WebSocket event specification for Session 5 Real-Time Task Synchronization,
+    Room Scoping, Presence, and Reconnection Resilience.
+  transport: Socket.io v4
+  endpoint: /socket.io/
+  authentication:
+    type: HandshakeAuth
+    description: Client passes bearer token in socket handshake auth object.
+    properties:
+      token:
+        type: string
+        description: Valid signed JWT token
+    errors:
+      NO_TOKEN:
+        description: Sockets connecting without token receive connect_error with message NO_TOKEN
+      BAD_TOKEN:
+        description: Expired or malformed tokens receive connect_error with message BAD_TOKEN
+  clientEvents:
+    board:join:
+      summary: Join board room and subscribe to updates
+      payload:
+        type: string
+        description: Board ID
+    board:leave:
+      summary: Leave board room
+      payload:
+        type: string
+        description: Board ID
+  serverEvents:
+    presence:update:
+      summary: Active users in the current board room
+      payload:
+        type: array
+        items:
+          type: string
+          description: User ID
+    board:updated:
+      summary: Emitted when board metadata or columns change
+      payload:
+        type: object
+        properties:
+          actorId:
+            type: string
+          title:
+            type: string
+          columns:
+            type: array
+    task:created:
+      summary: Broadcasts new task creation to room members
+      payload:
+        type: object
+        properties:
+          actorId:
+            type: string
+          task:
+            type: object
+    task:updated:
+      summary: Broadcasts task updates with OCC version guard
+      payload:
+        type: object
+        properties:
+          actorId:
+            type: string
+          task:
+            type: object
+    task:deleted:
+      summary: Broadcasts task deletion
+      payload:
+        type: object
+        properties:
+          actorId:
+            type: string
+          taskId:
+            type: string
+          boardId:
+            type: string

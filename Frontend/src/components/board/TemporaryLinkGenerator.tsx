@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Copy, Check, Sparkles, RotateCcw, RefreshCw } from 'lucide-react';
 import { generateShareToken, resetShareToken, getActiveShareToken } from '../../api/boards';
 

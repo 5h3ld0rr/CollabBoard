@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import {
   Plus,
   ArrowUpDown,
-  Search,
   Sparkles,
   Star,
   CheckCircle2,
@@ -29,21 +28,21 @@ import type { Board, Workspace } from "../types";
 export const Dashboard: React.FC = () => {
   const { workspaceId } = useParams<{ workspaceId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const preloadedWorkspaces = (location.state as any)?.workspaces as Workspace[] | undefined;
 
   const {
     state: { boards },
-    loadBoards,
     addBoard,
     toggleFavoriteBoard,
   } = useBoard();
 
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(true);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>(preloadedWorkspaces || []);
+  const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(!preloadedWorkspaces || preloadedWorkspaces.length === 0);
   const [managingWorkspace, setManagingWorkspace] = useState<Workspace | null>(
     null
   );
   const [activeTab, setActiveTab] = useState<"all" | "starred">("all");
-  const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"updated" | "tasks" | "title">("updated");
 
   // Modals state
@@ -77,11 +76,13 @@ export const Dashboard: React.FC = () => {
       : workspaces[0];
   }, [workspaces, workspaceId]);
 
-  // Load workspaces and boards from live API once on mount
+  // Load workspaces once on mount (skips if preloaded from WorkspaceRedirect)
   useEffect(() => {
     let isMounted = true;
     async function load() {
-      loadBoards();
+      if (preloadedWorkspaces && preloadedWorkspaces.length > 0) {
+        return;
+      }
       try {
         const list = await getWorkspaces();
         if (isMounted) {
@@ -99,7 +100,7 @@ export const Dashboard: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [loadBoards]);
+  }, [preloadedWorkspaces]);
 
   // If workspaceId in the URL is invalid/not found, navigate to the correct primary workspace
   useEffect(() => {
@@ -199,29 +200,11 @@ export const Dashboard: React.FC = () => {
 
   // Filter and Sort Logic
   const filteredBoards = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-
     return currentWorkspaceBoards
       .filter((board) => {
         if (activeTab === "starred" && !board.isFavorite) {
           return false;
         }
-
-        if (query) {
-          const matchTitle = (board.title || "").toLowerCase().includes(query);
-          const matchDesc = (board.description || "").toLowerCase().includes(query);
-          const matchWorkspace = (board.workspaceName || "")
-            .toLowerCase()
-            .includes(query);
-          const matchTags = (board.tags || []).some((t) =>
-            t.toLowerCase().includes(query)
-          );
-
-          if (!matchTitle && !matchDesc && !matchWorkspace && !matchTags) {
-            return false;
-          }
-        }
-
         return true;
       })
       .sort((a, b) => {
@@ -238,7 +221,7 @@ export const Dashboard: React.FC = () => {
         }
         return 0;
       });
-  }, [currentWorkspaceBoards, activeTab, searchQuery, sortBy]);
+  }, [currentWorkspaceBoards, activeTab, sortBy]);
 
   // Display skeleton loader while initial data loads or while redirecting from an invalid workspace ID
   if (isLoadingWorkspaces || (workspaces.length > 0 && !currentWorkspace)) {
@@ -323,33 +306,20 @@ export const Dashboard: React.FC = () => {
             </button>
           </div>
 
-          {/* Search & Sort Controls */}
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            <div className="relative flex-1 sm:w-56">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Filter boards..."
-                className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 transition"
-              />
-            </div>
-
-            <div className="flex items-center space-x-2 shrink-0">
-              <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <select
-                value={sortBy}
-                onChange={(e) =>
-                  setSortBy(e.target.value as "updated" | "tasks" | "title")
-                }
-                className="px-3 py-1.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-300 focus:outline-none focus:border-slate-700 transition cursor-pointer"
-              >
-                <option value="updated">Recently Updated</option>
-                <option value="tasks">Most Tasks</option>
-                <option value="title">Alphabetical (A-Z)</option>
-              </select>
-            </div>
+          {/* Sort Controls */}
+          <div className="flex items-center space-x-2 shrink-0">
+            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <select
+              value={sortBy}
+              onChange={(e) =>
+                setSortBy(e.target.value as "updated" | "tasks" | "title")
+              }
+              className="px-3 py-1.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-300 focus:outline-none focus:border-slate-700 transition cursor-pointer"
+            >
+              <option value="updated">Recently Updated</option>
+              <option value="tasks">Most Tasks</option>
+              <option value="title">Alphabetical (A-Z)</option>
+            </select>
           </div>
         </div>
 

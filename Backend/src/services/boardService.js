@@ -40,7 +40,7 @@ export async function enrichBoard(board) {
       if (user) {
         const parts = (user.name || 'User').trim().split(/\s+/).filter(Boolean);
         const initials = user.initials || (parts.length === 1 ? parts[0].slice(0, 2).toUpperCase() : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase());
-        const color = memberId === '1' ? 'bg-indigo-600' : memberId === '2' ? 'bg-emerald-600' : 'bg-fuchsia-600';
+        const color = user.color || 'from-indigo-600 to-violet-600';
 
         return {
           id: String(user.id),
@@ -53,22 +53,14 @@ export async function enrichBoard(board) {
         };
       }
 
-      return {
-        id: memberId,
-        name: `User ${memberId}`,
-        email: `user${memberId}@nsbm.lk`,
-        initials: `U${memberId}`,
-        color: 'bg-indigo-600',
-        boardRole,
-        role: boardRole,
-      };
+      return null;
     })
   );
 
   return {
     ...board,
     workspaceName,
-    members: populatedMembers,
+    members: populatedMembers.filter(Boolean),
     stats: {
       totalTasks,
       todoCount,

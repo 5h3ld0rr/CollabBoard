@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { TaskCard } from './TaskCard';
 import type { Task, TaskStatus } from '../../types';
@@ -73,10 +73,13 @@ export const Column: React.FC<ColumnProps> = ({
       <div className="flex items-center justify-between pb-3.5 mb-3.5 border-b border-slate-800/80">
         <div className="flex items-center space-x-2.5">
           <div className={`w-2.5 h-2.5 rounded-full ${colorDot}`} />
-          <h3 className="font-bold text-xs uppercase tracking-wider text-slate-200">
+          <h3 data-testid={`column-header-${status}`} className="font-bold text-xs uppercase tracking-wider text-slate-200">
             {title}
           </h3>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold ${accentBadge}`}>
+          <span
+            data-testid={`column-task-count-${status}`}
+            className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold ${accentBadge}`}
+          >
             {tasks.length}
           </span>
         </div>

@@ -14,6 +14,7 @@ function authHeader(userId = new mongoose.Types.ObjectId().toString(), email = '
   const token = jwt.sign({ sub: userId, email }, config.jwtSecret, { expiresIn: '1h' });
   return {
     userId,
+    email,
     token,
     header: { Authorization: `Bearer ${token}` },
   };
@@ -251,7 +252,15 @@ describe('Board API & Analytics', () => {
 
     it('allows board owner to update another member role', async () => {
       const owner = authHeader();
-      const collaborator = authHeader();
+      const collaborator = authHeader(new mongoose.Types.ObjectId().toString(), 'collab-role@nsbm.lk');
+
+      await User.create({
+        _id: collaborator.userId,
+        name: 'Collaborator',
+        email: collaborator.email,
+        passwordHash: 'dummy',
+      });
+
       const ws = await Workspace.create({ name: 'Update Collab WS', ownerId: owner.userId });
       const board = await Board.create({
         title: 'Collaborator Role Board',

@@ -12,6 +12,8 @@ export interface User {
   boardRole?: 'Owner' | 'Admin' | 'Editor' | 'Viewer';
 }
 
+export type BoardMember = User;
+
 export interface TaskComment {
   id: string;
   taskId: string;
@@ -195,3 +197,29 @@ export interface GlobalSearchResults {
   tasks: GlobalSearchResultTask[];
   total: number;
 }
+
+/* ==========================================================================
+   Real-Time Socket & OCC Event Types
+   ========================================================================== */
+
+export interface RealtimeTaskPayload<T = Task> {
+  task: T;
+  boardId: string;
+  actorId: string;
+  version: number;
+  timestamp?: string;
+}
+
+export interface RealtimeTaskDeletedPayload {
+  taskId: string;
+  boardId: string;
+  actorId: string;
+  version: number;
+  timestamp?: string;
+}
+
+export type RealtimeSocketEvent =
+  | { type: 'task:created'; payload: RealtimeTaskPayload }
+  | { type: 'task:updated'; payload: RealtimeTaskPayload }
+  | { type: 'task:deleted'; payload: RealtimeTaskDeletedPayload };
+

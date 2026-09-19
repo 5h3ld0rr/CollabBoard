@@ -1,9 +1,9 @@
 import 'dotenv/config';
 
 export const config = {
-  port: Number(process.env.PORT ?? 4000),
-  jwtSecret: process.env.JWT_SECRET ?? 'fullstack-development-secret',
-  clientOrigin: process.env.CLIENT_ORIGIN ?? 'http://localhost:5173',
-  mongoUri: process.env.MONGODB_URI ?? 'mongodb://localhost:27017/collabboard',
-  nodeEnv: process.env.NODE_ENV ?? 'development',
+  port: Number(process.env.PORT),
+  jwtSecret: process.env.JWT_SECRET,
+  clientOrigin: process.env.CLIENT_ORIGIN,
+  mongoUri: process.env.MONGODB_URI,
+  nodeEnv: process.env.NODE_ENV,
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Wifi,
@@ -13,7 +13,7 @@ import { WorkspaceSwitcher } from "../workspace/WorkspaceSwitcher";
 import { GlobalSearch } from "./GlobalSearch";
 import { useAuth } from "../../context";
 import type { Workspace } from "../../types";
-import { getInitials } from "../../utils";
+import { getInitials, getProfileGradient } from "../../utils";
 
 interface NavbarProps {
   workspaces?: Workspace[];
@@ -192,7 +192,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                   aria-label="User profile menu"
                   className="flex items-center space-x-2 p-1 rounded-xl hover:bg-slate-900 border border-transparent hover:border-slate-800 transition cursor-pointer"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-linear-to-br from-indigo-600 to-violet-600 text-white font-bold text-xs flex items-center justify-center shadow-inner">
+                  <div
+                    data-testid="navbar-user-avatar"
+                    className={`w-8 h-8 rounded-lg ${getProfileGradient(user?.color, displayName)} text-white font-bold text-xs flex items-center justify-center shadow-inner transition-all`}
+                  >
                     {displayInitials}
                   </div>
                 </button>
