@@ -27,76 +27,6 @@ export interface NotificationContextValue {
 
 const NotificationContext = createContext<NotificationContextValue | undefined>(undefined);
 
-// Initial realistic seed notifications for workspace experience
-const INITIAL_SEEDS: AppNotification[] = [
-  {
-    id: 'notif_seed_1',
-    title: 'Card Moved',
-    message: 'Clara moved "Implement Offline PouchDB Sync" to In Progress',
-    timestamp: new Date(Date.now() - 2 * 60 * 1000).toISOString(), // 2 minutes ago
-    read: false,
-    type: 'task_status',
-    linkUrl: '/tasks/t1',
-    actor: {
-      name: 'Clara Zhang',
-      initials: 'CZ',
-      color: 'from-amber-500 to-orange-600',
-    },
-    meta: {
-      taskId: 't1',
-      status: 'in-progress',
-    },
-  },
-  {
-    id: 'notif_seed_2',
-    title: 'Task Assigned',
-    message: 'Alex Chen assigned you to "Design Global Search Palette"',
-    timestamp: new Date(Date.now() - 25 * 60 * 1000).toISOString(), // 25 minutes ago
-    read: false,
-    type: 'task_assigned',
-    linkUrl: '/tasks/t2',
-    actor: {
-      name: 'Alex Chen',
-      initials: 'AC',
-      color: 'from-indigo-500 to-blue-600',
-    },
-    meta: {
-      taskId: 't2',
-    },
-  },
-  {
-    id: 'notif_seed_3',
-    title: 'Mention in Comment',
-    message: 'Sarah mentioned you in "Sprint 14 Retrospective": @you please review the architecture diagram',
-    timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(), // 3 hours ago
-    read: true,
-    type: 'mention',
-    linkUrl: '/tasks/t3',
-    actor: {
-      name: 'Sarah Connor',
-      initials: 'SC',
-      color: 'from-emerald-500 to-teal-600',
-    },
-  },
-  {
-    id: 'notif_seed_4',
-    title: 'Board Invitation',
-    message: 'Marcus Brody invited you to collaborate on "Mobile App Launch 2026"',
-    timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
-    read: true,
-    type: 'board_invite',
-    linkUrl: '/boards/b1',
-    actor: {
-      name: 'Marcus Brody',
-      initials: 'MB',
-      color: 'from-fuchsia-500 to-pink-600',
-    },
-    meta: {
-      boardId: 'b1',
-    },
-  },
-];
-
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -105,15 +35,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const refreshFromDB = useCallback(async () => {
     try {
       let cached = await getCachedNotifications();
-      const hasSeededKey = 'collabboard_notifications_seeded';
-      const alreadySeeded = localStorage.getItem(hasSeededKey);
-
-      if (cached.length === 0 && !alreadySeeded) {
-        // Seed initial notifications once so user gets immediate realistic data
-        await saveNotificationsToCache(INITIAL_SEEDS);
-        localStorage.setItem(hasSeededKey, 'true');
-        cached = INITIAL_SEEDS;
-      }
       setNotifications(cached);
     } catch (err) {
       console.warn('[NotificationContext] Failed to load from PouchDB:', err);
