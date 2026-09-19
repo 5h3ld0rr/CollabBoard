@@ -28,13 +28,17 @@ export async function enrichBoard(board) {
   const rawMembers = Array.isArray(board.members) ? board.members : [];
   const populatedMembers = await Promise.all(
     rawMembers.map(async (m, idx) => {
-      if (m && typeof m === 'object' && 'name' in m) {
+      if (m && typeof m === 'object' && 'name' in m && m.name) {
         return m;
       }
-      const memberId = String(m);
-      const user = await userRepo.findById(memberId);
-      const isOwner = String(board.ownerId) === memberId;
-      const storedRole = board.memberRoles?.[memberId] || (typeof m === 'object' && m !== null ? m.boardRole : null);
+      const memberId = String(typeof m === 'object' && m !== null ? (m.email || m.id) : m);
+      let user = await userRepo.findById(memberId);
+      if (!user && memberId.includes('@')) {
+        user = await userRepo.findByEmail(memberId);
+      }
+      const safeId = memberId.replace(/\./g, '_dot_');
+      const isOwner = String(board.ownerId) === memberId || (user && String(board.ownerId) === String(user.id));
+      const storedRole = board.memberRoles?.[memberId] || board.memberRoles?.[safeId] || (user && (board.memberRoles?.[String(user.id)] || board.memberRoles?.[String(user.id).replace(/\./g, '_dot_')])) || (typeof m === 'object' && m !== null ? m.boardRole : null);
       const boardRole = isOwner ? 'Owner' : (storedRole || (idx === 0 ? 'Admin' : 'Editor'));
 
       if (user) {
@@ -53,14 +57,40 @@ export async function enrichBoard(board) {
         };
       }
 
-      return null;
+      // If user is not yet in the DB (invited collaborator by email or custom ID)
+      const name = memberId.includes('@') ? memberId.split('@')[0] : (typeof m === 'object' && m?.name ? m.name : 'Collaborator');
+      const initials = name.slice(0, 2).toUpperCase();
+      return {
+        id: memberId,
+        name,
+        email: memberId.includes('@') ? memberId : (typeof m === 'object' && m?.email ? m.email : undefined),
+        initials,
+        color: 'from-indigo-600 to-violet-600',
+        boardRole,
+        role: boardRole,
+      };
     })
   );
+
+  // Deduplicate populated members by user ID and email
+  const seenMemberIds = new Set();
+  const uniqueMembers = [];
+  for (const m of populatedMembers) {
+    if (!m) continue;
+    const uid = String(m.id);
+    const uemail = m.email ? m.email.toLowerCase() : null;
+    if (seenMemberIds.has(uid) || (uemail && seenMemberIds.has(uemail))) {
+      continue;
+    }
+    seenMemberIds.add(uid);
+    if (uemail) seenMemberIds.add(uemail);
+    uniqueMembers.push(m);
+  }
 
   return {
     ...board,
     workspaceName,
-    members: populatedMembers.filter(Boolean),
+    members: uniqueMembers,
     stats: {
       totalTasks,
       todoCount,
@@ -257,13 +287,54 @@ export async function updateBoard(boardId, updates, userId) {
   const uid = String(userId);
   const isOwner = String(board.ownerId) === uid;
 
+  const sanitizedUpdates = { ...updates };
+
+  // Resolve any member email identifiers to their MongoDB user ID if registered
+  if (Array.isArray(sanitizedUpdates.members)) {
+    sanitizedUpdates.members = await Promise.all(
+      sanitizedUpdates.members.map(async (m) => {
+        const identifier = typeof m === 'object' && m !== null ? (m.id || m.email) : m;
+        let resolvedId = String(identifier);
+        if (resolvedId.includes('@')) {
+          const existingUser = await userRepo.findByEmail(resolvedId);
+          if (existingUser) {
+            resolvedId = String(existingUser.id);
+          }
+        }
+        if (typeof m === 'object' && m !== null) {
+          return {
+            ...m,
+            id: resolvedId,
+          };
+        }
+        return resolvedId;
+      })
+    );
+  }
+
+  // Resolve any member email identifiers to their MongoDB user ID if registered in memberRoles
+  if (sanitizedUpdates.memberRoles && typeof sanitizedUpdates.memberRoles === 'object') {
+    const resolvedRoles = {};
+    for (const [k, v] of Object.entries(sanitizedUpdates.memberRoles)) {
+      let resolvedKey = k;
+      if (k.includes('@')) {
+        const u = await userRepo.findByEmail(k);
+        if (u) {
+          resolvedKey = String(u.id);
+        }
+      }
+      resolvedRoles[resolvedKey] = v;
+    }
+    sanitizedUpdates.memberRoles = resolvedRoles;
+  }
+
   // Validate any role updates submitted in memberRoles or members array
-  if (updates.memberRoles || updates.members) {
-    const rolesMap = { ...(updates.memberRoles || {}) };
-    if (Array.isArray(updates.members)) {
-      updates.members.forEach((m) => {
-        if (typeof m === 'object' && m !== null && m.id && (m.boardRole || m.role)) {
-          rolesMap[String(m.id)] = m.boardRole || m.role;
+  if (sanitizedUpdates.memberRoles || sanitizedUpdates.members) {
+    const rolesMap = { ...(sanitizedUpdates.memberRoles || {}) };
+    if (Array.isArray(sanitizedUpdates.members)) {
+      sanitizedUpdates.members.forEach((m) => {
+        if (typeof m === 'object' && m !== null && (m.id || m.email) && (m.boardRole || m.role)) {
+          rolesMap[String(m.id || m.email)] = m.boardRole || m.role;
         }
       });
     }
@@ -271,7 +342,7 @@ export async function updateBoard(boardId, updates, userId) {
     for (const [targetId, newRole] of Object.entries(rolesMap)) {
       const currentRole = String(targetId) === String(board.ownerId)
         ? 'Owner'
-        : (board.memberRoles?.[targetId] || 'Editor');
+        : (board.memberRoles?.[targetId] || board.memberRoles?.[targetId.replace(/\./g, '_dot_')] || 'Editor');
 
       // 1. Prevent self role change!
       if (String(targetId) === uid && newRole !== currentRole) {
@@ -293,7 +364,7 @@ export async function updateBoard(boardId, updates, userId) {
     }
   }
 
-  const updated = await boardRepo.update(board.id, updates);
+  const updated = await boardRepo.update(board.id, sanitizedUpdates);
   return enrichBoard(updated);
 }
 
@@ -317,11 +388,28 @@ export async function deleteBoard(boardId, userId) {
 /**
  * Add a collaborator to a board
  */
-export async function addBoardMember(boardId, targetUserId, userId) {
+export async function addBoardMember(boardId, targetUserId, role = 'Editor', userId) {
   const board = await assertBoardAccess(boardId, userId);
+  let resolvedTargetId = String(targetUserId);
+
+  if (resolvedTargetId.includes('@')) {
+    const existingUser = await userRepo.findByEmail(resolvedTargetId);
+    if (existingUser) {
+      resolvedTargetId = String(existingUser.id);
+    }
+  }
+
   const currentMembers = board.members || [];
-  const updatedMembers = Array.from(new Set([...currentMembers.map(String), String(targetUserId)]));
-  const updated = await boardRepo.update(board.id, { members: updatedMembers });
+  const updatedMembers = Array.from(new Set([...currentMembers.map(String), resolvedTargetId]));
+  const updatedRoles = {
+    ...(board.memberRoles || {}),
+    [resolvedTargetId]: role || 'Editor',
+  };
+
+  const updated = await boardRepo.update(board.id, {
+    members: updatedMembers,
+    memberRoles: updatedRoles,
+  });
   return enrichBoard(updated);
 }
 
@@ -352,7 +440,14 @@ export async function removeBoardMember(boardId, targetUserId, userId) {
 export async function updateMemberRole(boardId, targetUserId, newRole, userId) {
   const board = await assertBoardAccess(boardId, userId);
   const uid = String(userId);
-  const targetId = String(targetUserId);
+  let targetId = String(targetUserId);
+
+  if (targetId.includes('@')) {
+    const existingUser = await userRepo.findByEmail(targetId);
+    if (existingUser) {
+      targetId = String(existingUser.id);
+    }
+  }
 
   // 1. Prevent self role change
   if (targetId === uid) {

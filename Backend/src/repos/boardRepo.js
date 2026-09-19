@@ -1,19 +1,36 @@
 import mongoose from 'mongoose';
 import { Board } from '../models/Board.js';
 
+function toSafeKey(key) {
+  return String(key).replace(/\./g, '_dot_');
+}
+
+function fromSafeKey(key) {
+  return String(key).replace(/_dot_/g, '.');
+}
+
 function formatBoard(doc) {
   if (!doc) return null;
   const obj = typeof doc.toObject === 'function' ? doc.toObject({ virtuals: true }) : { ...doc };
   const { _id, __v, ...rest } = obj;
+
+  const rawRoles = obj.memberRoles instanceof Map
+    ? Object.fromEntries(obj.memberRoles)
+    : (obj.memberRoles && typeof obj.memberRoles === 'object' ? { ...obj.memberRoles } : {});
+
+  const decodedRoles = {};
+  for (const [k, v] of Object.entries(rawRoles)) {
+    decodedRoles[fromSafeKey(k)] = v;
+    decodedRoles[k] = v;
+  }
+
   return {
     ...rest,
     id: String(obj.id || _id),
     workspaceId: String(obj.workspaceId),
     ownerId: String(obj.ownerId),
     members: Array.isArray(obj.members) ? obj.members.map(String) : [],
-    memberRoles: obj.memberRoles instanceof Map
-      ? Object.fromEntries(obj.memberRoles)
-      : (obj.memberRoles && typeof obj.memberRoles === 'object' ? { ...obj.memberRoles } : {}),
+    memberRoles: decodedRoles,
     stats: obj.stats || { totalTasks: 0, todoCount: 0, inProgressCount: 0, doneCount: 0 },
   };
 }
@@ -102,25 +119,50 @@ export const boardRepo = {
       payload.members = Array.from(
         new Set([
           String(existing.ownerId),
-          ...updates.members.map((m) => String(typeof m === 'object' && m !== null ? m.id : m)),
+          ...updates.members.map((m) => String(typeof m === 'object' && m !== null ? (m.id || m.email) : m)),
         ])
       );
-      const newRoles = { ...(existing.memberRoles || {}) };
+      const newRoles = {};
+      if (existing.memberRoles) {
+        for (const [k, v] of Object.entries(existing.memberRoles)) {
+          newRoles[toSafeKey(k)] = v;
+        }
+      }
       updates.members.forEach((m) => {
-        if (typeof m === 'object' && m !== null && m.id && (m.boardRole || m.role)) {
-          newRoles[String(m.id)] = m.boardRole || m.role;
+        if (typeof m === 'object' && m !== null && (m.id || m.email) && (m.boardRole || m.role)) {
+          const key = toSafeKey(m.id || m.email);
+          newRoles[key] = m.boardRole || m.role;
         }
       });
       payload.memberRoles = newRoles;
     }
     if (updates.memberRoles) {
+      const safeRoles = {};
+      for (const [k, v] of Object.entries(updates.memberRoles)) {
+        safeRoles[toSafeKey(k)] = v;
+      }
+      const existingRoles = {};
+      if (existing.memberRoles) {
+        for (const [k, v] of Object.entries(existing.memberRoles)) {
+          existingRoles[toSafeKey(k)] = v;
+        }
+      }
       payload.memberRoles = {
-        ...(existing.memberRoles || {}),
-        ...updates.memberRoles,
+        ...existingRoles,
+        ...safeRoles,
       };
     }
 
-    const doc = await Board.findByIdAndUpdate(boardId, payload, { new: true });
+    // Guarantee that no key in payload.memberRoles contains a dot before sending to Mongoose Map
+    if (payload.memberRoles) {
+      const sanitized = {};
+      for (const [k, v] of Object.entries(payload.memberRoles)) {
+        sanitized[toSafeKey(k)] = v;
+      }
+      payload.memberRoles = sanitized;
+    }
+
+    const doc = await Board.findByIdAndUpdate(boardId, payload, { returnDocument: 'after' });
     return formatBoard(doc);
   },
 

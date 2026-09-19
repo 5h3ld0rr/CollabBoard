@@ -58,7 +58,12 @@ export async function remove(req, res) {
 }
 
 export async function addMember(req, res) {
-  const board = await boardService.addBoardMember(req.params.id, req.body.userId, req.user.id);
+  const board = await boardService.addBoardMember(
+    req.params.id,
+    req.body.userId,
+    req.body.role || 'Editor',
+    req.user.id
+  );
   emitBoardUpdated(board.id, board, req.user.id);
   res.status(200).json({
     data: board,

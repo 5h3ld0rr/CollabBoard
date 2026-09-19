@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   X,
   Users,
@@ -9,6 +9,7 @@ import {
   Eye,
   Edit3,
   Crown,
+  AlertTriangle,
 } from 'lucide-react';
 import type { Board, User } from '../../types';
 import { useAuth } from '../../context/AuthContext';
@@ -85,21 +86,39 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
   workspaceMembers = [],
 }) => {
   const { user: currentUser } = useAuth();
-  const [members, setMembers] = useState<User[]>(() => {
-    return (board.members || []).map((m, i) => normalizeMember(m, i, board.ownerId, currentUser));
-  });
+  const deduplicateMembers = useCallback(
+    (userList: any[]) => {
+      const raw = userList.map((m, i) => normalizeMember(m, i, board.ownerId, currentUser));
+      const seen = new Set<string>();
+      return raw.filter((m) => {
+        const idKey = String(m.id);
+        const emailKey = m.email ? m.email.toLowerCase() : null;
+        if (seen.has(idKey) || (emailKey && seen.has(emailKey))) {
+          return false;
+        }
+        seen.add(idKey);
+        if (emailKey) seen.add(emailKey);
+        return true;
+      });
+    },
+    [board.ownerId, currentUser]
+  );
+
+  const [members, setMembers] = useState<User[]>(() => deduplicateMembers(board.members || []));
 
   const [inviteEmail, setInviteEmail] = useState('');
   const [selectedWorkspaceUser, setSelectedWorkspaceUser] = useState<string>('');
   const [inviteRole, setInviteRole] = useState<'Admin' | 'Editor' | 'Viewer'>('Editor');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
-      setMembers((board.members || []).map((m, i) => normalizeMember(m, i, board.ownerId, currentUser)));
+      setMembers(deduplicateMembers(board.members || []));
       setSuccessMessage(null);
+      setErrorMessage(null);
     }
-  }, [isOpen, board, currentUser]);
+  }, [isOpen, board.members, deduplicateMembers]);
 
   if (!isOpen) return null;
 
@@ -116,6 +135,7 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
 
     let userToAdd: User | null = null;
 
@@ -128,19 +148,54 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
         };
       }
     } else if (inviteEmail.trim()) {
-      const email = inviteEmail.trim();
-      const initials = email.slice(0, 2).toUpperCase();
-      userToAdd = {
-        id: `usr-${Date.now()}`,
-        name: email.split('@')[0],
-        email,
-        initials,
-        color: 'bg-indigo-600',
-        boardRole: inviteRole,
-      };
+      const email = inviteEmail.trim().toLowerCase();
+      // Check if this matches a known workspace teammate
+      const matchingTeammate = (workspaceMembers || []).find(
+        (wm) => wm.email?.toLowerCase() === email
+      );
+
+      if (matchingTeammate) {
+        userToAdd = {
+          ...matchingTeammate,
+          boardRole: inviteRole,
+        };
+      } else {
+        const initials = email.slice(0, 2).toUpperCase();
+        userToAdd = {
+          id: email,
+          name: email.split('@')[0],
+          email,
+          initials,
+          color: 'bg-indigo-600',
+          boardRole: inviteRole,
+        };
+      }
     }
 
     if (userToAdd) {
+      const userEmail = userToAdd.email?.toLowerCase() || '';
+      const userId = String(userToAdd.id);
+
+      // Check if this is the board owner or current user
+      if (
+        (board.ownerId && (userId === String(board.ownerId) || (currentUser && userId === String(currentUser.id)))) ||
+        (currentUser?.email && userEmail === currentUser.email.toLowerCase())
+      ) {
+        setErrorMessage('You are already the owner of this board.');
+        setTimeout(() => setErrorMessage(null), 3000);
+        return;
+      }
+
+      // Check if already in board members
+      if (
+        (userEmail && memberEmailSet.has(userEmail)) ||
+        memberIdSet.has(userId)
+      ) {
+        setErrorMessage('This user is already a member of this board.');
+        setTimeout(() => setErrorMessage(null), 3000);
+        return;
+      }
+
       const updatedMembers = [...members, userToAdd];
       setMembers(updatedMembers);
       try {
@@ -149,8 +204,10 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
         setSelectedWorkspaceUser('');
         setSuccessMessage(`Added ${userToAdd.name} to the board as ${inviteRole}!`);
         setTimeout(() => setSuccessMessage(null), 2500);
-      } catch {
-        setSuccessMessage(null);
+      } catch (err: any) {
+        setMembers(members); // revert optimistic update
+        setErrorMessage(err?.message || 'Failed to add member to board.');
+        setTimeout(() => setErrorMessage(null), 3500);
       }
     }
   };
@@ -219,68 +276,76 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
           </div>
         )}
 
+        {/* Error Alert */}
+        {errorMessage && (
+          <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-medium flex items-center space-x-2 animate-fade-in">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
         {/* Add Member Form */}
         <div className="mb-6 space-y-3">
           <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
             Invite Teammate to Board
           </label>
 
-          <form onSubmit={handleAddMember} className="flex flex-col sm:flex-row gap-2">
-            {availableTeammates.length > 0 ? (
-              <div className="flex-1 flex gap-2">
+          <form onSubmit={handleAddMember} className="flex flex-col gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
+              {availableTeammates.length > 0 ? (
+                <div className="flex-1 flex gap-2">
+                  <select
+                    aria-label="Select teammate to invite"
+                    value={selectedWorkspaceUser}
+                    onChange={(e) => {
+                      setSelectedWorkspaceUser(e.target.value);
+                      if (e.target.value) setInviteEmail('');
+                    }}
+                    className="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    <option value="">Select teammate or type email below...</option>
+                    {availableTeammates.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="colleague@collabboard.io"
+                  className="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              )}
+
+              <div className="flex items-center gap-2">
                 <select
-                  aria-label="Select teammate to invite"
-                  value={selectedWorkspaceUser}
-                  onChange={(e) => {
-                    setSelectedWorkspaceUser(e.target.value);
-                    if (e.target.value) setInviteEmail('');
-                  }}
-                  className="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  aria-label="Invite role"
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value as 'Admin' | 'Editor' | 'Viewer')}
+                  className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 focus:outline-none"
                 >
-                  <option value="">Select teammate or type email below...</option>
-                  {availableTeammates.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name} ({u.email})
-                    </option>
-                  ))}
+                  <option value="Editor">Editor</option>
+                  <option value="Admin">Admin</option>
+                  <option value="Viewer">Viewer</option>
                 </select>
+
+                <button
+                  type="submit"
+                  disabled={!selectedWorkspaceUser && !inviteEmail.trim()}
+                  className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-md flex items-center space-x-1 shrink-0 transition cursor-pointer"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Add</span>
+                </button>
               </div>
-            ) : (
-              <input
-                type="email"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="colleague@collabboard.io"
-                className="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              />
-            )}
-
-            <div className="flex items-center gap-2">
-              <select
-                aria-label="Invite role"
-                value={inviteRole}
-                onChange={(e) => setInviteRole(e.target.value as 'Admin' | 'Editor' | 'Viewer')}
-                className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 focus:outline-none"
-              >
-                <option value="Editor">Editor</option>
-                <option value="Admin">Admin</option>
-                <option value="Viewer">Viewer</option>
-              </select>
-
-              <button
-                type="submit"
-                disabled={!selectedWorkspaceUser && !inviteEmail.trim()}
-                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-md flex items-center space-x-1 shrink-0 transition"
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-                <span>Add</span>
-              </button>
             </div>
-          </form>
 
-          {/* Quick email alternative if select dropdown is shown */}
-          {availableTeammates.length > 0 && !selectedWorkspaceUser && (
-            <div className="pt-1">
+            {/* Quick email alternative if select dropdown is shown */}
+            {availableTeammates.length > 0 && !selectedWorkspaceUser && (
               <input
                 type="email"
                 value={inviteEmail}
@@ -288,8 +353,8 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
                 placeholder="Or enter new email (e.g. teammate@domain.com)"
                 className="w-full px-3 py-1.5 rounded-xl bg-slate-950/60 border border-slate-800/80 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
-            </div>
-          )}
+            )}
+          </form>
         </div>
 
         {/* Active Board Members List */}
