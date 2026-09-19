@@ -16,11 +16,26 @@ export interface BoardUpdatedSocketPayload {
 let socketInstance: Socket | null = null;
 let currentJoinedBoard: string | null = null;
 
-const SOCKET_SERVER_URL =
-  (typeof window !== 'undefined' && (window as any).__SOCKET_URL__) ||
-  (import.meta.env && (import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_API_URL)) ||
-  ((globalThis as any).process?.env?.VITE_SOCKET_URL) ||
-  'http://localhost:4000';
+function getSocketServerUrl(): string {
+  if (typeof window !== 'undefined' && (window as any).__SOCKET_URL__) {
+    return (window as any).__SOCKET_URL__;
+  }
+  if (import.meta.env && (import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_API_URL)) {
+    return (import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_API_URL);
+  }
+  if ((globalThis as any).process?.env?.VITE_SOCKET_URL) {
+    return (globalThis as any).process.env.VITE_SOCKET_URL;
+  }
+  if (typeof window !== 'undefined' && window.location) {
+    const hostname = window.location.hostname;
+    if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      return window.location.origin;
+    }
+  }
+  return 'http://localhost:4000';
+}
+
+const SOCKET_SERVER_URL = getSocketServerUrl();
 
 export interface SocketClientOptions {
   token?: string | null;
