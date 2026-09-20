@@ -120,6 +120,20 @@ describe('BoardSettingsModal Component', () => {
     });
   });
 
+  it('does not render workspace selector in general settings tab', () => {
+    render(
+      <BoardSettingsModal
+        isOpen={true}
+        onClose={mockOnClose}
+        board={{ ...mockBoard, workspaceId: 'ws-1' }}
+        onUpdateBoard={mockOnUpdateBoard}
+      />
+    );
+
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.queryByText(/switch or move this board across your workspaces/i)).not.toBeInTheDocument();
+  });
+
   it('renders only General and Danger Zone tabs and does not show share or members tabs', () => {
     render(
       <BoardSettingsModal

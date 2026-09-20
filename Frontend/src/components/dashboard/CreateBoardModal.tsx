@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import {
   X,
   Plus,
@@ -8,9 +8,11 @@ import {
   ShieldCheck,
   Sparkles,
   AlertCircle,
+  Crown,
 } from 'lucide-react';
 import type { Board, Workspace } from '../../types';
-import { COLOR_OPTIONS } from '../../constants';
+import { COLOR_OPTIONS, PLAN_LIMITS } from '../../constants';
+import { AuthContext } from '../../context/AuthContext';
 
 interface CreateBoardModalProps {
   isOpen: boolean;
@@ -18,6 +20,7 @@ interface CreateBoardModalProps {
   workspaces: Workspace[];
   currentWorkspaceId?: string;
   onCreateBoard: (board: Board) => Promise<void> | void;
+  subscriptionPlan?: 'basic' | 'pro';
 }
 
 const ICON_OPTIONS = [
@@ -33,7 +36,9 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
   workspaces,
   currentWorkspaceId,
   onCreateBoard,
+  subscriptionPlan,
 }) => {
+  const auth = useContext(AuthContext);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [workspaceId, setWorkspaceId] = useState(currentWorkspaceId || workspaces[0]?.id || '');
@@ -42,6 +47,12 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
   const [tagInput, setTagInput] = useState('Frontend, Core');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const plan = subscriptionPlan ?? auth?.user?.subscriptionPlan ?? 'basic';
+  const isPro = plan === 'pro';
+  const selectedWorkspace = workspaces.find((w) => w.id === workspaceId);
+  const currentBoardCount = selectedWorkspace?.boardCount ?? 0;
+  const isLimitReached = !isPro && currentBoardCount >= PLAN_LIMITS.basic.maxBoardsPerWorkspace;
 
   useEffect(() => {
     if (isOpen) {
@@ -57,12 +68,18 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLimitReached) {
+      setError(
+        `Board limit reached for this workspace (${currentBoardCount}/${PLAN_LIMITS.basic.maxBoardsPerWorkspace} on Basic plan). Please upgrade to Pro for unlimited boards.`
+      );
+      return;
+    }
+
     if (!title.trim()) {
       setError('Please provide a board title.');
       return;
     }
 
-    const selectedWorkspace = workspaces.find((w) => w.id === workspaceId);
     const parsedTags = tagInput
       .split(',')
       .map((t) => t.trim())
@@ -71,7 +88,7 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
     const newBoard: Board = {
       id: `board-${Date.now()}`,
       title: title.trim(),
-      description: description.trim() || 'No description provided.',
+      description: description.trim(),
       workspaceId,
       workspaceName: selectedWorkspace ? selectedWorkspace.name : 'Engineering',
       color: selectedColor,
@@ -112,7 +129,7 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
+          className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
@@ -129,6 +146,31 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
             </p>
           </div>
         </div>
+
+        {/* Plan Limit Reached Banner */}
+        {isLimitReached && (
+          <div className="mb-5 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in">
+            <div className="flex items-start space-x-3">
+              <Crown className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-white">
+                  Board Limit Reached ({currentBoardCount}/{PLAN_LIMITS.basic.maxBoardsPerWorkspace})
+                </p>
+                <p className="text-amber-300/80 text-[11px] mt-0.5">
+                  The Basic plan allows up to 10 boards per workspace. Upgrade to Pro for unlimited boards and advanced features.
+                </p>
+              </div>
+            </div>
+            <a
+              href="/profile?tab=subscription"
+              onClick={onClose}
+              className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition shrink-0 cursor-pointer self-start sm:self-auto"
+            >
+              <Crown className="w-3.5 h-3.5" />
+              <span>Upgrade to Pro</span>
+            </a>
+          </div>
+        )}
 
         {error && (
           <div className="mb-4 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-medium flex items-center space-x-2.5 animate-shake">
@@ -260,7 +302,8 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isLimitReached}
+              title={isLimitReached ? "Upgrade to Pro to create more boards in this workspace" : undefined}
               className="inline-flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 transition-all active:scale-95 cursor-pointer"
             >
               {isSubmitting ? (
@@ -271,7 +314,7 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
               ) : (
                 <>
                   <Plus className="w-4 h-4" />
-                  <span>Create Board</span>
+                  <span>{isLimitReached ? 'Limit Reached' : 'Create Board'}</span>
                 </>
               )}
             </button>

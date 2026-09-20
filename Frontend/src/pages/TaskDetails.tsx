@@ -19,6 +19,9 @@ import {
   Send,
   Loader2,
   User as UserIcon,
+  LayoutGrid,
+  Kanban,
+  CheckSquare,
 } from 'lucide-react';
 import { Navbar, AmbientBackground } from '../components/common';
 import { TaskModal, ConflictModal } from '../components/board';
@@ -440,7 +443,7 @@ export const TaskDetails: React.FC = () => {
       )}
 
       {/* Main Container */}
-      <main className="flex-1 flex flex-col max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-1 flex flex-col max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {isLoading ? (
           /* Loading State Skeleton */
           <div className="space-y-6 animate-pulse">
@@ -497,30 +500,59 @@ export const TaskDetails: React.FC = () => {
           <div className="space-y-6 animate-in fade-in duration-200">
             {/* Navigation & Breadcrumb Header */}
             <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
-              <div className="flex items-center space-x-3 text-xs text-slate-400">
+              <nav aria-label="Breadcrumb" className="flex items-center gap-2 flex-wrap">
                 <button
                   onClick={() => (board ? navigate(`/boards/${board.id}`) : navigate('/dashboard'))}
-                  className="p-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition flex items-center space-x-1 cursor-pointer"
+                  className="p-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800/80 hover:border-slate-700 text-slate-400 hover:text-white shadow-xs transition-all duration-150 flex items-center justify-center shrink-0 cursor-pointer group active:scale-95"
                   title="Back to board"
                 >
-                  <ArrowLeft className="w-4 h-4" />
+                  <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5 text-slate-400 group-hover:text-indigo-400" />
                 </button>
-                <Link to="/dashboard" className="hover:text-white transition">
-                  Workspaces
-                </Link>
-                <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
-                {board ? (
-                  <Link to={`/boards/${board.id}`} className="hover:text-white transition font-medium text-slate-300">
-                    {board.title}
+
+                <div className="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-md shadow-xs shadow-black/20 text-xs text-slate-400">
+                  <Link
+                    to="/dashboard"
+                    className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors duration-150"
+                  >
+                    <LayoutGrid className="w-3.5 h-3.5 text-slate-500 hover:text-indigo-400 transition-colors" />
+                    <span className="font-medium">Workspaces</span>
                   </Link>
-                ) : (
-                  <span>Board</span>
-                )}
-                <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
-                <span className="text-indigo-400 font-semibold truncate max-w-40 sm:max-w-xs">
-                  {task.title}
-                </span>
-              </div>
+
+                  {board?.workspaceName && (
+                    <>
+                      <ChevronRight className="w-3 h-3 text-slate-600 shrink-0" />
+                      <Link
+                        to={board.workspaceId ? `/workspaces/${board.workspaceId}` : '/dashboard'}
+                        className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors duration-150 max-w-28 sm:max-w-44 truncate"
+                        title={board.workspaceName}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500/80 ring-2 ring-indigo-500/20 shrink-0" />
+                        <span className="truncate">{board.workspaceName}</span>
+                      </Link>
+                    </>
+                  )}
+
+                  <ChevronRight className="w-3 h-3 text-slate-600 shrink-0" />
+                  {board ? (
+                    <Link
+                      to={`/boards/${board.id}`}
+                      className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors duration-150 max-w-28 sm:max-w-40 truncate"
+                      title={board.title}
+                    >
+                      <Kanban className="w-3 h-3 text-slate-500 shrink-0" />
+                      <span className="truncate">{board.title}</span>
+                    </Link>
+                  ) : (
+                    <span>Board</span>
+                  )}
+
+                  <ChevronRight className="w-3 h-3 text-slate-600 shrink-0" />
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg font-semibold text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 max-w-36 sm:max-w-xs truncate shadow-xs">
+                    <CheckSquare className="w-3 h-3 text-indigo-400 shrink-0" />
+                    <span className="truncate">{task.title}</span>
+                  </span>
+                </div>
+              </nav>
 
               {/* Action Buttons */}
               <div className="flex items-center space-x-2.5">
@@ -601,9 +633,7 @@ export const TaskDetails: React.FC = () => {
                   <div className="space-y-2">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Description</h3>
                     <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 text-sm text-slate-300 leading-relaxed min-h-24 whitespace-pre-wrap">
-                      {task.description || (
-                        <span className="text-slate-500 italic">No description provided for this task.</span>
-                      )}
+                      {task.description}
                     </div>
                   </div>
 

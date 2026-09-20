@@ -37,11 +37,6 @@ const boardSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
-    workspaceId: {
-      type: String,
-      default: null,
-      index: true,
-    },
     color: {
       type: String,
       default: 'from-indigo-600 to-violet-600',
@@ -49,10 +44,6 @@ const boardSchema = new mongoose.Schema(
     icon: {
       type: String,
       default: 'Kanban',
-    },
-    isFavorite: {
-      type: Boolean,
-      default: false,
     },
     tags: {
       type: [String],

@@ -1,19 +1,35 @@
 import mongoose from 'mongoose';
 import { Board } from '../models/Board.js';
 
+function toSafeKey(key) {
+  return String(key).replace(/\./g, '_dot_');
+}
+
+function fromSafeKey(key) {
+  return String(key).replace(/_dot_/g, '.');
+}
+
 function formatBoard(doc) {
   if (!doc) return null;
   const obj = typeof doc.toObject === 'function' ? doc.toObject({ virtuals: true }) : { ...doc };
   const { _id, __v, ...rest } = obj;
+
+  const rawRoles = obj.memberRoles instanceof Map
+    ? Object.fromEntries(obj.memberRoles)
+    : (obj.memberRoles && typeof obj.memberRoles === 'object' ? { ...obj.memberRoles } : {});
+
+  const decodedRoles = {};
+  for (const [k, v] of Object.entries(rawRoles)) {
+    decodedRoles[fromSafeKey(k)] = v;
+    decodedRoles[k] = v;
+  }
+
   return {
     ...rest,
     id: String(obj.id || _id),
-    workspaceId: String(obj.workspaceId),
     ownerId: String(obj.ownerId),
     members: Array.isArray(obj.members) ? obj.members.map(String) : [],
-    memberRoles: obj.memberRoles instanceof Map
-      ? Object.fromEntries(obj.memberRoles)
-      : (obj.memberRoles && typeof obj.memberRoles === 'object' ? { ...obj.memberRoles } : {}),
+    memberRoles: decodedRoles,
     stats: obj.stats || { totalTasks: 0, todoCount: 0, inProgressCount: 0, doneCount: 0 },
   };
 }
@@ -22,8 +38,19 @@ export const boardRepo = {
   async listByUserId(userId) {
     if (!userId) return [];
     const uid = String(userId);
+    const userDoc = await mongoose.model('User').findById(userId).lean().catch(() => null);
+    const orConditions = [{ ownerId: uid }, { members: uid }];
+
+    if (userDoc?.email) {
+      const email = userDoc.email.toLowerCase().trim();
+      orConditions.push({ members: email });
+      orConditions.push({
+        members: new RegExp(`^${email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
+      });
+    }
+
     const docs = await Board.find({
-      $or: [{ ownerId: uid }, { members: uid }],
+      $or: orConditions,
     });
     return docs.map(formatBoard);
   },
@@ -49,8 +76,11 @@ export const boardRepo = {
     if (!workspaceId || !mongoose.Types.ObjectId.isValid(workspaceId)) {
       return 0;
     }
-    const wsId = String(workspaceId);
-    const query = { workspaceId: wsId };
+    const ws = await mongoose.model('Workspace').findById(workspaceId).lean();
+    if (!ws || !Array.isArray(ws.boards) || ws.boards.length === 0) {
+      return 0;
+    }
+    const query = { _id: { $in: ws.boards } };
 
     if (userId) {
       if (!mongoose.Types.ObjectId.isValid(userId)) return 0;
@@ -70,7 +100,6 @@ export const boardRepo = {
     color = 'from-indigo-600 to-violet-600',
     icon = 'Kanban',
     tags = ['General'],
-    workspaceId = null,
   }) {
     const uid = String(ownerId);
     const uniqueMembers = Array.from(new Set([uid, ...members.map(String)]));
@@ -83,8 +112,6 @@ export const boardRepo = {
       color,
       icon,
       tags: Array.isArray(tags) ? tags : ['General'],
-      workspaceId: String(workspaceId),
-      isFavorite: false,
       stats: { totalTasks: 0, todoCount: 0, inProgressCount: 0, doneCount: 0 },
     });
 
@@ -98,29 +125,65 @@ export const boardRepo = {
     if (!existing) return null;
 
     const payload = { ...updates };
+    delete payload.workspaceId;
+    delete payload.isFavorite;
     if (updates.members) {
-      payload.members = Array.from(
-        new Set([
-          String(existing.ownerId),
-          ...updates.members.map((m) => String(typeof m === 'object' && m !== null ? m.id : m)),
-        ])
-      );
-      const newRoles = { ...(existing.memberRoles || {}) };
+      const memberList = [String(existing.ownerId)];
+      const newRoles = {};
+      if (existing.memberRoles) {
+        for (const [k, v] of Object.entries(existing.memberRoles)) {
+          newRoles[toSafeKey(k)] = v;
+        }
+      }
+
       updates.members.forEach((m) => {
-        if (typeof m === 'object' && m !== null && m.id && (m.boardRole || m.role)) {
-          newRoles[String(m.id)] = m.boardRole || m.role;
+        if (typeof m === 'object' && m !== null) {
+          if (m.id) memberList.push(String(m.id));
+          if (m.email) memberList.push(String(m.email).toLowerCase().trim());
+          const role = m.boardRole || m.role;
+          if (role) {
+            if (m.id) newRoles[toSafeKey(m.id)] = role;
+            if (m.email) newRoles[toSafeKey(String(m.email).toLowerCase().trim())] = role;
+          }
+        } else if (m) {
+          const str = String(m).trim();
+          memberList.push(str);
+          if (str.includes('@')) {
+            memberList.push(str.toLowerCase());
+          }
         }
       });
+
+      payload.members = Array.from(new Set(memberList));
       payload.memberRoles = newRoles;
     }
     if (updates.memberRoles) {
+      const safeRoles = {};
+      for (const [k, v] of Object.entries(updates.memberRoles)) {
+        safeRoles[toSafeKey(k)] = v;
+      }
+      const existingRoles = {};
+      if (existing.memberRoles) {
+        for (const [k, v] of Object.entries(existing.memberRoles)) {
+          existingRoles[toSafeKey(k)] = v;
+        }
+      }
       payload.memberRoles = {
-        ...(existing.memberRoles || {}),
-        ...updates.memberRoles,
+        ...existingRoles,
+        ...safeRoles,
       };
     }
 
-    const doc = await Board.findByIdAndUpdate(boardId, payload, { new: true });
+    // Guarantee that no key in payload.memberRoles contains a dot before sending to Mongoose Map
+    if (payload.memberRoles) {
+      const sanitized = {};
+      for (const [k, v] of Object.entries(payload.memberRoles)) {
+        sanitized[toSafeKey(k)] = v;
+      }
+      payload.memberRoles = sanitized;
+    }
+
+    const doc = await Board.findByIdAndUpdate(boardId, payload, { returnDocument: 'after' });
     return formatBoard(doc);
   },
 

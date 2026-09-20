@@ -1,5 +1,7 @@
 /* oxlint-disable react/only-export-components */
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Bell, Kanban, UserPlus, X } from 'lucide-react';
 import type { AppNotification } from '../types';
 import {
   getCachedNotifications,
@@ -9,6 +11,8 @@ import {
   clearCachedNotifications,
   subscribeNotificationsChange,
 } from '../db';
+import { playNotificationSound } from '../utils/sound';
+import { subscribeDirectNotification } from '../sync/socketClient';
 
 export interface NotificationContextValue {
   notifications: AppNotification[];
@@ -27,93 +31,50 @@ export interface NotificationContextValue {
 
 const NotificationContext = createContext<NotificationContextValue | undefined>(undefined);
 
-// Initial realistic seed notifications for workspace experience
-const INITIAL_SEEDS: AppNotification[] = [
-  {
-    id: 'notif_seed_1',
-    title: 'Card Moved',
-    message: 'Clara moved "Implement Offline PouchDB Sync" to In Progress',
-    timestamp: new Date(Date.now() - 2 * 60 * 1000).toISOString(), // 2 minutes ago
-    read: false,
-    type: 'task_status',
-    linkUrl: '/tasks/t1',
-    actor: {
-      name: 'Clara Zhang',
-      initials: 'CZ',
-      color: 'from-amber-500 to-orange-600',
-    },
-    meta: {
-      taskId: 't1',
-      status: 'in-progress',
-    },
-  },
-  {
-    id: 'notif_seed_2',
-    title: 'Task Assigned',
-    message: 'Alex Chen assigned you to "Design Global Search Palette"',
-    timestamp: new Date(Date.now() - 25 * 60 * 1000).toISOString(), // 25 minutes ago
-    read: false,
-    type: 'task_assigned',
-    linkUrl: '/tasks/t2',
-    actor: {
-      name: 'Alex Chen',
-      initials: 'AC',
-      color: 'from-indigo-500 to-blue-600',
-    },
-    meta: {
-      taskId: 't2',
-    },
-  },
-  {
-    id: 'notif_seed_3',
-    title: 'Mention in Comment',
-    message: 'Sarah mentioned you in "Sprint 14 Retrospective": @you please review the architecture diagram',
-    timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(), // 3 hours ago
-    read: true,
-    type: 'mention',
-    linkUrl: '/tasks/t3',
-    actor: {
-      name: 'Sarah Connor',
-      initials: 'SC',
-      color: 'from-emerald-500 to-teal-600',
-    },
-  },
-  {
-    id: 'notif_seed_4',
-    title: 'Board Invitation',
-    message: 'Marcus Brody invited you to collaborate on "Mobile App Launch 2026"',
-    timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
-    read: true,
-    type: 'board_invite',
-    linkUrl: '/boards/b1',
-    actor: {
-      name: 'Marcus Brody',
-      initials: 'MB',
-      color: 'from-fuchsia-500 to-pink-600',
-    },
-    meta: {
-      boardId: 'b1',
-    },
-  },
-];
-
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [activeToasts, setActiveToasts] = useState<AppNotification[]>([]);
+  const [exitingToastIds, setExitingToastIds] = useState<Set<string>>(new Set());
+  const toastTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const navigate = useNavigate();
+
+  const removeToast = useCallback((id: string) => {
+    const timer = toastTimersRef.current.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      toastTimersRef.current.delete(id);
+    }
+
+    setExitingToastIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+
+    setTimeout(() => {
+      setActiveToasts((prev) => prev.filter((t) => t.id !== id));
+      setExitingToastIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }, 350);
+  }, []);
+
+  // Clear any pending toast timers on unmount
+  useEffect(() => {
+    return () => {
+      toastTimersRef.current.forEach((timer) => clearTimeout(timer));
+      toastTimersRef.current.clear();
+    };
+  }, []);
 
   // Load notifications from PouchDB
   const refreshFromDB = useCallback(async () => {
     try {
       let cached = await getCachedNotifications();
-      const hasSeededKey = 'collabboard_notifications_seeded';
-      const alreadySeeded = localStorage.getItem(hasSeededKey);
-
-      if (cached.length === 0 && !alreadySeeded) {
-        // Seed initial notifications once so user gets immediate realistic data
-        await saveNotificationsToCache(INITIAL_SEEDS);
-        localStorage.setItem(hasSeededKey, 'true');
-        cached = INITIAL_SEEDS;
-      }
       setNotifications(cached);
     } catch (err) {
       console.warn('[NotificationContext] Failed to load from PouchDB:', err);
@@ -197,11 +158,23 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setNotifications((prev) => [newNotif, ...prev.filter((n) => n.id !== newNotif.id)]);
       await saveNotificationToCache(newNotif);
 
+      // Trigger in-app live toast banner (stacks down, auto-dismisses 1 by 1)
+      setActiveToasts((prev) => {
+        // Keep at most 4 previous + 1 new = 5 toasts maximum to prevent viewport crowding
+        const trimmed = prev.length >= 5 ? prev.slice(prev.length - 4) : prev;
+        return [...trimmed, newNotif];
+      });
+
+      const timer = setTimeout(() => {
+        removeToast(newNotif.id);
+      }, 5000);
+      toastTimersRef.current.set(newNotif.id, timer);
+
       // Trigger native desktop push notification if enabled
       try {
         const savedPrefs = localStorage.getItem('user_profile_preferences');
         const prefs = savedPrefs ? JSON.parse(savedPrefs) : null;
-        const desktopEnabled = prefs?.desktopNotifications ?? true;
+        const desktopEnabled = prefs?.desktopNotifications ?? false;
 
         if (
           desktopEnabled &&
@@ -217,9 +190,29 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       } catch {
         // Ignore desktop notification failures
       }
+
+      // Trigger subtle sound cue if enabled
+      try {
+        playNotificationSound();
+      } catch {
+        // Ignore sound failures
+      }
     },
     []
   );
+
+  // Listen for direct personal notifications over Socket.io (e.g. task assignment, board invite)
+  useEffect(() => {
+    const unsubscribe = subscribeDirectNotification((payload) => {
+      if (payload) {
+        addNotification(payload);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [addNotification]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -238,6 +231,66 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }}
     >
       {children}
+
+      {/* Floating In-App Real-Time Notification Toast Stack (grows down, disappears 1 by 1 with slide-out transition) */}
+      {activeToasts.length > 0 && (
+        <div
+          aria-live="polite"
+          className="fixed top-20 right-4 sm:right-6 z-100 flex flex-col pointer-events-none max-w-sm w-full"
+        >
+          {activeToasts.map((toast) => {
+            const isExiting = exitingToastIds.has(toast.id);
+
+            return (
+              <div
+                key={toast.id}
+                role="status"
+                className={`pointer-events-auto w-full bg-slate-900/95 border border-indigo-500/50 shadow-2xl shadow-black/80 rounded-2xl p-4 mb-3 backdrop-blur-xl flex items-start space-x-3.5 ring-1 ring-white/10 transition-colors hover:border-indigo-400/70 overflow-hidden ${
+                  isExiting ? 'toast-slide-out' : 'toast-slide-in'
+                }`}
+              >
+                <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shrink-0">
+                  {toast.type === 'task_status' ? (
+                    <Kanban className="w-4 h-4 text-amber-400" />
+                  ) : toast.type === 'task_assigned' ? (
+                    <UserPlus className="w-4 h-4 text-indigo-400" />
+                  ) : (
+                    <Bell className="w-4 h-4 text-indigo-400" />
+                  )}
+                </div>
+
+                <div
+                  className="flex-1 min-w-0 cursor-pointer"
+                  onClick={() => {
+                    if (toast.linkUrl) {
+                      navigate(toast.linkUrl);
+                    }
+                    removeToast(toast.id);
+                  }}
+                >
+                  <div className="flex items-center space-x-2">
+                    <p className="text-xs font-bold text-white tracking-wide truncate">
+                      {toast.title}
+                    </p>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-1 line-clamp-2 leading-relaxed">
+                    {toast.message}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => removeToast(toast.id)}
+                  className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition shrink-0 cursor-pointer"
+                  title="Dismiss notification"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </NotificationContext.Provider>
   );
 };
@@ -248,4 +301,8 @@ export const useNotifications = (): NotificationContextValue => {
     throw new Error('useNotifications must be used within a NotificationProvider');
   }
   return context;
+};
+
+export const useOptionalNotifications = (): NotificationContextValue | null => {
+  return useContext(NotificationContext) || null;
 };

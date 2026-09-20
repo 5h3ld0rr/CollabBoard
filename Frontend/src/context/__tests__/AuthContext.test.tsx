@@ -188,4 +188,21 @@ describe('AuthContext', () => {
       expect(screen.getByTestId('auth-status')).toHaveTextContent('Logged Out');
     });
   });
+
+  it('resets user and clears session when /auth/me returns 404 NOT_FOUND', async () => {
+    const cachedUser = { id: 'u1', name: 'Cached User', email: 'cached@example.com' } as any;
+    vi.spyOn(db, 'getCachedUser').mockResolvedValue(cachedUser);
+    vi.spyOn(authApi, 'getMe').mockRejectedValue({ status: 404, code: 'NOT_FOUND', message: 'User not found' });
+
+    render(
+      <AuthProvider>
+        <TestConsumer />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-status')).toHaveTextContent('Logged Out');
+    });
+    expect(db.clearCachedUser).toHaveBeenCalled();
+  });
 });

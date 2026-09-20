@@ -69,7 +69,7 @@ export async function request<T = any>(path: string, options: RequestInit = {}):
     headers,
   });
 
-  if (res.status === 401) {
+  if (res.status === 401 || (res.status === 404 && path.includes('/auth/me'))) {
     const isShareTokenRequest =
       path.includes('shareToken=') ||
       (typeof options.headers === 'object' && options.headers !== null && 'x-share-token' in options.headers);

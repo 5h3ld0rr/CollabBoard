@@ -60,7 +60,7 @@ function getNotificationIcon(type: NotificationType) {
 
 export const NotificationDropdown: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'all' | 'unread'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'unread'>('unread');
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
@@ -117,7 +117,15 @@ export const NotificationDropdown: React.FC = () => {
     <div className="relative" ref={dropdownRef}>
       {/* Trigger Bell Button */}
       <button
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={() => {
+          setIsOpen((prev) => {
+            const next = !prev;
+            if (next) {
+              setActiveTab('unread');
+            }
+            return next;
+          });
+        }}
         aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
         aria-expanded={isOpen}
         className={`p-2 rounded-xl border transition relative cursor-pointer ${
@@ -318,7 +326,7 @@ export const NotificationDropdown: React.FC = () => {
               type="button"
               onClick={() => {
                 setIsOpen(false);
-                navigate('/profile');
+                navigate('/profile?tab=preferences');
               }}
               className="flex items-center space-x-1 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer ml-auto"
             >

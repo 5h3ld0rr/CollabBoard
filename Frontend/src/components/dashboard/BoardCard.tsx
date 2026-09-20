@@ -57,6 +57,10 @@ export const BoardCard: React.FC<BoardCardProps> = memo(({
     onToggleFavorite(board.id);
   };
 
+  const isShared = Boolean(
+    currentUser?.id && board.ownerId && String(board.ownerId) !== String(currentUser.id)
+  );
+
   return (
     <div
       onClick={handleCardClick}
@@ -65,16 +69,25 @@ export const BoardCard: React.FC<BoardCardProps> = memo(({
       <div>
         {/* Card Header: Icon, Tags & Favorite */}
         <div className="flex items-start justify-between gap-3 mb-4">
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-3 min-w-0">
             <div
-              className={`w-10 h-10 rounded-xl bg-linear-to-br ${color} text-white flex items-center justify-center shadow-md`}
+              className={`w-10 h-10 rounded-xl bg-linear-to-br ${color} text-white flex items-center justify-center shadow-md shrink-0`}
             >
               {renderIcon(board.icon)}
             </div>
-            <div>
-              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-                {workspaceName}
-              </span>
+            <div className="min-w-0">
+              <div className="flex items-center space-x-1.5 mb-1 flex-wrap">
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-slate-800/40 border border-slate-800/80 text-slate-400 text-[11px] font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500/80 ring-2 ring-indigo-500/20 shrink-0" />
+                  <span className="truncate max-w-28 sm:max-w-36">{workspaceName}</span>
+                </span>
+
+                {isShared && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                    Shared
+                  </span>
+                )}
+              </div>
               <h3 className="text-base font-bold text-white group-hover:text-indigo-300 transition-colors leading-snug line-clamp-1">
                 {board.title}
               </h3>

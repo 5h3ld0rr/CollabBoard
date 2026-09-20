@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import app from '../src/app.js';
+import { config } from '../src/config.js';
 import { User } from '../src/models/User.js';
 import { connectTestDb, clearTestDb, closeTestDb } from './setup/db.js';
 
@@ -159,6 +161,65 @@ describe('Authentication API', () => {
       const res = await request(app).post('/api/auth/logout');
       expect(res.status).toBe(200);
       expect(res.body.message).toBe('Logged out successfully');
+    });
+  });
+
+  describe('PUT /api/auth/password', () => {
+    it('returns 401 when unauthenticated', async () => {
+      const res = await request(app)
+        .put('/api/auth/password')
+        .send({ currentPassword: 'OldPassword123!', newPassword: 'NewPassword123!' });
+
+      expect(res.status).toBe(401);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('NO_TOKEN');
+    });
+
+    it('returns 400 when currentPassword is wrong', async () => {
+      const passwordHash = await bcrypt.hash('CorrectPassword123!', 10);
+      const user = await User.create({
+        name: 'Password Tester',
+        email: 'pwdtester@nsbm.lk',
+        passwordHash,
+      });
+
+      const token = jwt.sign({ sub: user._id.toString(), email: user.email }, config.jwtSecret);
+
+      const res = await request(app)
+        .put('/api/auth/password')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ currentPassword: 'WrongPassword!', newPassword: 'NewPassword123!' });
+
+      expect(res.status).toBe(400);
+      const code = res.body.code || res.body.error?.code;
+      expect(code).toBe('INVALID_CURRENT_PASSWORD');
+    });
+
+    it('successfully updates password and enables login with new password', async () => {
+      const passwordHash = await bcrypt.hash('OldPassword123!', 10);
+      const user = await User.create({
+        name: 'Password Tester 2',
+        email: 'pwdtester2@nsbm.lk',
+        passwordHash,
+      });
+
+      const token = jwt.sign({ sub: user._id.toString(), email: user.email }, config.jwtSecret);
+
+      const updateRes = await request(app)
+        .put('/api/auth/password')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ currentPassword: 'OldPassword123!', newPassword: 'NewBrandNewPassword123!' });
+
+      expect(updateRes.status).toBe(200);
+      expect(updateRes.body.message || updateRes.body.data?.message).toBe('Password updated successfully');
+
+      // Verify db updated directly
+      const updatedUser = await User.findById(user._id);
+      const isOldMatch = await bcrypt.compare('OldPassword123!', updatedUser.passwordHash);
+      expect(isOldMatch).toBe(false);
+
+      const isNewMatch = await bcrypt.compare('NewBrandNewPassword123!', updatedUser.passwordHash);
+      expect(isNewMatch).toBe(true);
     });
   });
 

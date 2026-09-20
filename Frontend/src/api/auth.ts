@@ -20,6 +20,25 @@ export interface LoginInput {
   rememberMe?: boolean;
 }
 
+export interface UpdateProfileInput {
+  name?: string;
+  email?: string;
+  color?: string;
+  subscriptionPlan?: 'basic' | 'pro';
+  billingCycle?: 'monthly' | 'yearly';
+}
+
+/**
+ * Update authenticated user profile
+ */
+export async function updateProfile(input: UpdateProfileInput): Promise<User> {
+  const res = await request<{ data: { user: User } }>('/api/auth/profile', {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+  return res.data.user;
+}
+
 /**
  * Register a new user account
  */
@@ -73,4 +92,20 @@ export async function logout(): Promise<void> {
   } catch {
     // Ignore errors on logout
   }
+}
+
+export interface UpdatePasswordInput {
+  currentPassword: string;
+  newPassword: string;
+}
+
+/**
+ * Update user password
+ */
+export async function updatePassword(input: UpdatePasswordInput): Promise<{ message: string }> {
+  const res = await request<{ message: string; data?: { message: string } }>('/api/auth/password', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+  return res.data || res;
 }

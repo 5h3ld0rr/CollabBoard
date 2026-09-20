@@ -107,6 +107,8 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
       color,
       icon,
       tags: cleanTags.length > 0 ? cleanTags : (Array.isArray(board.tags) ? board.tags : []),
+      workspaceId: board.workspaceId,
+      workspaceName: board.workspaceName,
       updatedAt: 'Just now',
     };
 
@@ -233,6 +235,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition resize-none"
               />
             </div>
+
 
             {/* Board Icon */}
             <div>

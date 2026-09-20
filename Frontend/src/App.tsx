@@ -23,11 +23,11 @@ function AuthLayout() {
 /** Wraps protected workspace/board routes that require Board and Notification state */
 function ProtectedAppLayout() {
   return (
-    <BoardProvider>
-      <NotificationProvider>
+    <NotificationProvider>
+      <BoardProvider>
         <Outlet />
-      </NotificationProvider>
-    </BoardProvider>
+      </BoardProvider>
+    </NotificationProvider>
   );
 }
 
@@ -36,12 +36,12 @@ function App() {
     <Router>
       <OfflineIndicator />
       <Routes>
-        {/* Public routes — no auth context, no auth/me request */}
-        <Route path="/" element={<Home />} />
+        {/* Public routes */}
         <Route path="*" element={<NotFound />} />
 
         {/* Auth-aware routes — AuthProvider mounts here, triggers auth/me */}
         <Route element={<AuthLayout />}>
+          <Route path="/" element={<Home />} />
           <Route
             path="/login"
             element={

@@ -1,15 +1,16 @@
+import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
 import { config } from '../config.js';
 import { boardRepo } from '../repos/boardRepo.js';
 import { taskRepo } from '../repos/taskRepo.js';
 import { userRepo } from '../repos/userRepo.js';
 import { workspaceRepo } from '../repos/workspaceRepo.js';
-import { NotFoundError, ForbiddenError, ValidationError } from '../utils/AppError.js';
+import { NotFoundError, ForbiddenError, ValidationError, AppError } from '../utils/AppError.js';
 
 /**
- * Enriches a board with dynamic, live computed task statistics and populated member profiles
+ * Enriches a board with dynamic, live computed task statistics, populated member profiles, and per-user isFavorite
  */
-export async function enrichBoard(board) {
+export async function enrichBoard(board, userId = null, preloadedUser = null) {
   if (!board) return null;
   const boardTasks = await taskRepo.findByBoardId(board.id);
   const totalTasks = boardTasks.length;
@@ -17,24 +18,36 @@ export async function enrichBoard(board) {
   const inProgressCount = boardTasks.filter((t) => t.status === 'in-progress').length;
   const doneCount = boardTasks.filter((t) => t.status === 'done').length;
 
-  let workspaceName = '';
-  if (board.workspaceId) {
-    const ws = await workspaceRepo.findById(board.workspaceId);
-    if (ws) {
-      workspaceName = ws.name;
+  let isFavorite = false;
+  if (userId) {
+    const user = preloadedUser || (await userRepo.findById(userId));
+    if (user && Array.isArray(user.favoriteBoardIds)) {
+      isFavorite = user.favoriteBoardIds.map(String).includes(String(board.id));
     }
+  }
+
+  let workspaceId = null;
+  let workspaceName = '';
+  const ws = await workspaceRepo.findByBoardId(board.id);
+  if (ws) {
+    workspaceId = String(ws.id);
+    workspaceName = ws.name;
   }
 
   const rawMembers = Array.isArray(board.members) ? board.members : [];
   const populatedMembers = await Promise.all(
     rawMembers.map(async (m, idx) => {
-      if (m && typeof m === 'object' && 'name' in m) {
+      if (m && typeof m === 'object' && 'name' in m && m.name) {
         return m;
       }
-      const memberId = String(m);
-      const user = await userRepo.findById(memberId);
-      const isOwner = String(board.ownerId) === memberId;
-      const storedRole = board.memberRoles?.[memberId] || (typeof m === 'object' && m !== null ? m.boardRole : null);
+      const memberId = String(typeof m === 'object' && m !== null ? (m.email || m.id) : m);
+      let user = await userRepo.findById(memberId);
+      if (!user && memberId.includes('@')) {
+        user = await userRepo.findByEmail(memberId);
+      }
+      const safeId = memberId.replace(/\./g, '_dot_');
+      const isOwner = String(board.ownerId) === memberId || (user && String(board.ownerId) === String(user.id));
+      const storedRole = board.memberRoles?.[memberId] || board.memberRoles?.[safeId] || (user && (board.memberRoles?.[String(user.id)] || board.memberRoles?.[String(user.id).replace(/\./g, '_dot_')])) || (typeof m === 'object' && m !== null ? m.boardRole : null);
       const boardRole = isOwner ? 'Owner' : (storedRole || (idx === 0 ? 'Admin' : 'Editor'));
 
       if (user) {
@@ -53,14 +66,42 @@ export async function enrichBoard(board) {
         };
       }
 
-      return null;
+      // If user is not yet in the DB (invited collaborator by email or custom ID)
+      const name = memberId.includes('@') ? memberId.split('@')[0] : (typeof m === 'object' && m?.name ? m.name : 'Collaborator');
+      const initials = name.slice(0, 2).toUpperCase();
+      return {
+        id: memberId,
+        name,
+        email: memberId.includes('@') ? memberId : (typeof m === 'object' && m?.email ? m.email : undefined),
+        initials,
+        color: 'from-indigo-600 to-violet-600',
+        boardRole,
+        role: boardRole,
+      };
     })
   );
 
+  // Deduplicate populated members by user ID and email
+  const seenMemberIds = new Set();
+  const uniqueMembers = [];
+  for (const m of populatedMembers) {
+    if (!m) continue;
+    const uid = String(m.id);
+    const uemail = m.email ? m.email.toLowerCase() : null;
+    if (seenMemberIds.has(uid) || (uemail && seenMemberIds.has(uemail))) {
+      continue;
+    }
+    seenMemberIds.add(uid);
+    if (uemail) seenMemberIds.add(uemail);
+    uniqueMembers.push(m);
+  }
+
   return {
     ...board,
+    workspaceId,
     workspaceName,
-    members: populatedMembers.filter(Boolean),
+    isFavorite: Boolean(isFavorite),
+    members: uniqueMembers,
     stats: {
       totalTasks,
       todoCount,
@@ -111,27 +152,62 @@ export async function assertBoardAccess(boardId, userId, shareToken = null) {
           throw new ForbiddenError('This temporary share link has been revoked or reset');
         }
       }
-      return enrichBoard(board);
+      return enrichBoard(board, userId);
     }
   }
 
   const uid = String(userId);
-  const isOwner = String(board.ownerId) === uid;
-  const isMember = Array.isArray(board.members) && board.members.map(String).includes(uid);
+  const user = await userRepo.findById(userId);
+  const userEmail = user?.email?.toLowerCase().trim();
 
-  if (!isOwner && !isMember) {
+  const isOwner = String(board.ownerId) === uid;
+  const isMemberById = Array.isArray(board.members) && board.members.map(String).includes(uid);
+  const isMemberByEmail = Boolean(
+    userEmail &&
+    Array.isArray(board.members) &&
+    board.members.some((m) => String(m).toLowerCase().trim() === userEmail)
+  );
+
+  if (!isOwner && !isMemberById && !isMemberByEmail) {
     throw new ForbiddenError('You do not have permission to access this board');
   }
 
-  return enrichBoard(board);
+  // Self-heal: If user was invited by email and matched, append their uid to members
+  if (isMemberByEmail && !isMemberById) {
+    const updatedMembers = Array.from(new Set([...(board.members || []).map(String), uid]));
+    const updatedRoles = { ...(board.memberRoles || {}) };
+    if (userEmail && (updatedRoles[userEmail] || updatedRoles[userEmail.replace(/\./g, '_dot_')])) {
+      updatedRoles[uid] = updatedRoles[userEmail] || updatedRoles[userEmail.replace(/\./g, '_dot_')];
+    }
+    await boardRepo.update(board.id, {
+      members: updatedMembers,
+      memberRoles: updatedRoles,
+    });
+    board.members = updatedMembers;
+    board.memberRoles = updatedRoles;
+  }
+
+  return enrichBoard(board, userId, user);
 }
 
 /**
  * List all boards accessible to the requesting user with live dynamic stats
  */
 export async function listBoards(userId) {
+  const user = userId ? await userRepo.findById(userId) : null;
+  const favoriteBoardIds = new Set(
+    Array.isArray(user?.favoriteBoardIds) ? user.favoriteBoardIds.map(String) : []
+  );
   const rawBoards = await boardRepo.listByUserId(userId);
-  return Promise.all(rawBoards.map((b) => enrichBoard(b)));
+  return Promise.all(
+    rawBoards.map(async (b) => {
+      const enriched = await enrichBoard(b, userId, user);
+      return {
+        ...enriched,
+        isFavorite: favoriteBoardIds.has(String(b.id)),
+      };
+    })
+  );
 }
 
 /**
@@ -241,12 +317,36 @@ export async function createBoard(boardData, userId) {
     targetWorkspaceId = userWorkspaces[0]?.id || null;
   }
 
+  if (userId) {
+    const user = await userRepo.findById(userId);
+    const plan = user?.subscriptionPlan || 'basic';
+    if (plan === 'basic' && targetWorkspaceId) {
+      const boardCount = await boardRepo.countByWorkspaceId(targetWorkspaceId, userId);
+      if (boardCount >= 10) {
+        throw new AppError(
+          'Board limit reached for Basic plan (maximum 10 boards per workspace). Upgrade to Pro for unlimited boards.',
+          403,
+          'PLAN_LIMIT_REACHED'
+        );
+      }
+    }
+  }
+
+  const { workspaceId, isFavorite: initialFavorite, ...boardPayload } = boardData;
   const created = await boardRepo.create({
-    ...boardData,
-    workspaceId: targetWorkspaceId,
+    ...boardPayload,
     ownerId: userId,
   });
-  return enrichBoard(created);
+
+  if (initialFavorite && userId) {
+    await userRepo.addFavoriteBoard(userId, created.id);
+  }
+
+  if (targetWorkspaceId) {
+    await workspaceRepo.addBoard(targetWorkspaceId, created.id);
+  }
+
+  return enrichBoard(created, userId);
 }
 
 /**
@@ -257,13 +357,114 @@ export async function updateBoard(boardId, updates, userId) {
   const uid = String(userId);
   const isOwner = String(board.ownerId) === uid;
 
+  const sanitizedUpdates = { ...updates };
+
+  // Handle toggling favorite status per user
+  if (sanitizedUpdates.isFavorite !== undefined) {
+    if (userId) {
+      if (sanitizedUpdates.isFavorite) {
+        await userRepo.addFavoriteBoard(userId, board.id);
+      } else {
+        await userRepo.removeFavoriteBoard(userId, board.id);
+      }
+    }
+    delete sanitizedUpdates.isFavorite;
+  }
+
+  // Handle switching board across workspaces
+  if (sanitizedUpdates.workspaceId && String(sanitizedUpdates.workspaceId) !== String(board.workspaceId)) {
+    const newWsId = String(sanitizedUpdates.workspaceId);
+    const targetWs = await workspaceRepo.findById(newWsId);
+    if (!targetWs) {
+      throw new NotFoundError('Target Workspace');
+    }
+    if (userId && targetWs.ownerId && String(targetWs.ownerId) !== uid) {
+      throw new ForbiddenError('You do not have permission to move this board to that workspace');
+    }
+
+    if (userId) {
+      const user = await userRepo.findById(userId);
+      const plan = user?.subscriptionPlan || 'basic';
+      if (plan === 'basic') {
+        const count = await boardRepo.countByWorkspaceId(newWsId, userId);
+        if (count >= 10) {
+          throw new AppError(
+            'Board limit reached for Basic plan (maximum 10 boards per workspace). Upgrade to Pro for unlimited boards.',
+            403,
+            'PLAN_LIMIT_REACHED'
+          );
+        }
+      }
+    }
+
+    if (board.workspaceId) {
+      await workspaceRepo.removeBoard(board.workspaceId, board.id);
+    }
+    await workspaceRepo.addBoard(newWsId, board.id);
+  }
+  delete sanitizedUpdates.workspaceId;
+
+  // Resolve any member email identifiers to their MongoDB user ID if registered
+  if (Array.isArray(sanitizedUpdates.members)) {
+    if (userId) {
+      const user = await userRepo.findById(userId);
+      const plan = user?.subscriptionPlan || 'basic';
+      if (plan === 'basic' && sanitizedUpdates.members.length > 5) {
+        throw new AppError(
+          'Collaborator limit reached for Basic plan (maximum 5 collaborators per board). Upgrade to Pro for unlimited collaborators.',
+          403,
+          'PLAN_LIMIT_REACHED'
+        );
+      }
+    }
+
+    sanitizedUpdates.members = await Promise.all(
+      sanitizedUpdates.members.map(async (m) => {
+        const identifier = typeof m === 'object' && m !== null ? (m.id || m.email) : m;
+        let resolvedId = String(identifier).trim();
+        let email = typeof m === 'object' && m !== null && m.email ? String(m.email).toLowerCase().trim() : undefined;
+        if (resolvedId.includes('@')) {
+          email = resolvedId.toLowerCase().trim();
+          const existingUser = await userRepo.findByEmail(resolvedId);
+          if (existingUser) {
+            resolvedId = String(existingUser.id);
+          }
+        }
+        if (typeof m === 'object' && m !== null) {
+          return {
+            ...m,
+            id: resolvedId,
+            email,
+          };
+        }
+        return resolvedId;
+      })
+    );
+  }
+
+  // Resolve any member email identifiers to their MongoDB user ID if registered in memberRoles
+  if (sanitizedUpdates.memberRoles && typeof sanitizedUpdates.memberRoles === 'object') {
+    const resolvedRoles = {};
+    for (const [k, v] of Object.entries(sanitizedUpdates.memberRoles)) {
+      let resolvedKey = k;
+      if (k.includes('@')) {
+        const u = await userRepo.findByEmail(k);
+        if (u) {
+          resolvedKey = String(u.id);
+        }
+      }
+      resolvedRoles[resolvedKey] = v;
+    }
+    sanitizedUpdates.memberRoles = resolvedRoles;
+  }
+
   // Validate any role updates submitted in memberRoles or members array
-  if (updates.memberRoles || updates.members) {
-    const rolesMap = { ...(updates.memberRoles || {}) };
-    if (Array.isArray(updates.members)) {
-      updates.members.forEach((m) => {
-        if (typeof m === 'object' && m !== null && m.id && (m.boardRole || m.role)) {
-          rolesMap[String(m.id)] = m.boardRole || m.role;
+  if (sanitizedUpdates.memberRoles || sanitizedUpdates.members) {
+    const rolesMap = { ...(sanitizedUpdates.memberRoles || {}) };
+    if (Array.isArray(sanitizedUpdates.members)) {
+      sanitizedUpdates.members.forEach((m) => {
+        if (typeof m === 'object' && m !== null && (m.id || m.email) && (m.boardRole || m.role)) {
+          rolesMap[String(m.id || m.email)] = m.boardRole || m.role;
         }
       });
     }
@@ -271,7 +472,7 @@ export async function updateBoard(boardId, updates, userId) {
     for (const [targetId, newRole] of Object.entries(rolesMap)) {
       const currentRole = String(targetId) === String(board.ownerId)
         ? 'Owner'
-        : (board.memberRoles?.[targetId] || 'Editor');
+        : (board.memberRoles?.[targetId] || board.memberRoles?.[targetId.replace(/\./g, '_dot_')] || 'Editor');
 
       // 1. Prevent self role change!
       if (String(targetId) === uid && newRole !== currentRole) {
@@ -293,8 +494,8 @@ export async function updateBoard(boardId, updates, userId) {
     }
   }
 
-  const updated = await boardRepo.update(board.id, updates);
-  return enrichBoard(updated);
+  const updated = await boardRepo.update(board.id, sanitizedUpdates);
+  return enrichBoard(updated, userId);
 }
 
 /**
@@ -310,6 +511,13 @@ export async function deleteBoard(boardId, userId) {
     throw new ForbiddenError('Only the board owner is permitted to delete this board');
   }
 
+  await mongoose.model('Workspace').updateMany(
+    { boards: String(board.id) },
+    { $pull: { boards: String(board.id) } }
+  );
+
+  await userRepo.removeBoardFromAllFavorites(board.id);
+
   await boardRepo.delete(boardId);
   return true;
 }
@@ -317,12 +525,43 @@ export async function deleteBoard(boardId, userId) {
 /**
  * Add a collaborator to a board
  */
-export async function addBoardMember(boardId, targetUserId, userId) {
+export async function addBoardMember(boardId, targetUserId, role = 'Editor', userId) {
   const board = await assertBoardAccess(boardId, userId);
+  let resolvedTargetId = String(targetUserId).trim();
+  let targetEmail = undefined;
+
+  if (resolvedTargetId.includes('@')) {
+    targetEmail = resolvedTargetId.toLowerCase().trim();
+    const existingUser = await userRepo.findByEmail(resolvedTargetId);
+    if (existingUser) {
+      resolvedTargetId = String(existingUser.id);
+    }
+  } else if (mongoose.Types.ObjectId.isValid(resolvedTargetId)) {
+    const existingUser = await userRepo.findById(resolvedTargetId);
+    if (existingUser?.email) {
+      targetEmail = existingUser.email.toLowerCase().trim();
+    }
+  }
+
   const currentMembers = board.members || [];
-  const updatedMembers = Array.from(new Set([...currentMembers.map(String), String(targetUserId)]));
-  const updated = await boardRepo.update(board.id, { members: updatedMembers });
-  return enrichBoard(updated);
+  const memberList = [...currentMembers.map(String), resolvedTargetId];
+  if (targetEmail) {
+    memberList.push(targetEmail);
+  }
+  const updatedMembers = Array.from(new Set(memberList));
+  const updatedRoles = {
+    ...(board.memberRoles || {}),
+    [resolvedTargetId]: role || 'Editor',
+  };
+  if (targetEmail) {
+    updatedRoles[targetEmail] = role || 'Editor';
+  }
+
+  const updated = await boardRepo.update(board.id, {
+    members: updatedMembers,
+    memberRoles: updatedRoles,
+  });
+  return enrichBoard(updated, userId);
 }
 
 /**
@@ -343,7 +582,7 @@ export async function removeBoardMember(boardId, targetUserId, userId) {
   const currentMembers = board.members || [];
   const updatedMembers = currentMembers.filter((m) => String(m) !== targetId);
   const updated = await boardRepo.update(board.id, { members: updatedMembers });
-  return enrichBoard(updated);
+  return enrichBoard(updated, userId);
 }
 
 /**
@@ -352,7 +591,14 @@ export async function removeBoardMember(boardId, targetUserId, userId) {
 export async function updateMemberRole(boardId, targetUserId, newRole, userId) {
   const board = await assertBoardAccess(boardId, userId);
   const uid = String(userId);
-  const targetId = String(targetUserId);
+  let targetId = String(targetUserId);
+
+  if (targetId.includes('@')) {
+    const existingUser = await userRepo.findByEmail(targetId);
+    if (existingUser) {
+      targetId = String(existingUser.id);
+    }
+  }
 
   // 1. Prevent self role change
   if (targetId === uid) {
@@ -382,5 +628,5 @@ export async function updateMemberRole(boardId, targetUserId, newRole, userId) {
   };
 
   const updated = await boardRepo.update(board.id, { memberRoles: updatedRoles });
-  return enrichBoard(updated);
+  return enrichBoard(updated, userId);
 }

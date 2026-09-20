@@ -50,4 +50,21 @@ describe('api/auth', () => {
     vi.spyOn(clientModule, 'request').mockRejectedValueOnce(new Error('Network fail'));
     await expect(authApi.logout()).resolves.toBeUndefined();
   });
+
+  it('updatePassword sends PUT /api/auth/password', async () => {
+    vi.spyOn(clientModule, 'request').mockResolvedValue({ data: { message: 'Password updated successfully' } });
+
+    const result = await authApi.updatePassword({
+      currentPassword: 'oldPassword123',
+      newPassword: 'newPassword123',
+    });
+    expect(result).toEqual({ message: 'Password updated successfully' });
+    expect(clientModule.request).toHaveBeenCalledWith('/api/auth/password', {
+      method: 'PUT',
+      body: JSON.stringify({
+        currentPassword: 'oldPassword123',
+        newPassword: 'newPassword123',
+      }),
+    });
+  });
 });

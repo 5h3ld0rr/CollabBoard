@@ -1,9 +1,7 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
-  User as UserIcon,
   Mail,
-  MapPin,
   Building2,
   CheckCircle2,
   ShieldCheck,
@@ -12,7 +10,6 @@ import {
   Laptop,
   Smartphone,
   Sparkles,
-  Save,
   Calendar,
   Check,
   ExternalLink,
@@ -22,6 +19,8 @@ import {
   Crown,
   CreditCard,
   Settings,
+  Pencil,
+  X,
 } from "lucide-react";
 import {
   Navbar,
@@ -35,19 +34,23 @@ import {
   getWorkspaces,
   updateWorkspace as apiUpdateWorkspace,
   deleteWorkspace as apiDeleteWorkspace,
+  updatePassword as apiUpdatePassword,
 } from "../api";
 import {
-  COLOR_OPTIONS,
+  getRandomGradient,
   DEFAULT_USER_PREFERENCES,
-  DEFAULT_ACTIVE_SESSIONS,
   SUBSCRIPTION_PLANS,
 } from "../constants";
 import { saveCachedProfileDetails, getCachedProfileDetails } from "../db";
-import type { Task, TaskStatus, Workspace, User } from "../types";
-import { getInitials as extractInitials, getProfileGradient } from "../utils";
+import type { Task, TaskStatus, Workspace, User, ActiveSession } from "../types";
+import {
+  getInitials as extractInitials,
+  getProfileGradient,
+  playNotificationSound,
+  detectCurrentDevice,
+} from "../utils";
 
 type ProfileTab =
-  | "overview"
   | "workspaces"
   | "subscription"
   | "tasks"
@@ -56,18 +59,47 @@ type ProfileTab =
 
 interface UserProfileDetails {
   name: string;
-  username: string;
   email: string;
-  role: string;
-  company: string;
-  location: string;
-  bio: string;
   memberSince: string;
   color?: string;
+  subscriptionPlan?: "basic" | "pro";
+  billingCycle?: "monthly" | "yearly";
+}
+
+function formatMemberSince(createdAt?: string | Date, userId?: string): string {
+  if (createdAt) {
+    try {
+      const d = new Date(createdAt);
+      if (!isNaN(d.getTime())) {
+        const month = d.toLocaleString("en-US", { month: "short" });
+        const year = d.getFullYear();
+        return `Member since ${month} ${year}`;
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  if (userId && /^[0-9a-fA-F]{24}$/.test(userId)) {
+    try {
+      const timestamp = parseInt(userId.substring(0, 8), 16) * 1000;
+      const d = new Date(timestamp);
+      if (!isNaN(d.getTime())) {
+        const month = d.toLocaleString("en-US", { month: "short" });
+        const year = d.getFullYear();
+        return `Member since ${month} ${year}`;
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  return "Member since Oct 2024";
 }
 
 export const Profile: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user: authUser, updateUser } = useAuth();
   const { state: { boards: contextBoards, tasks: contextTasks } } = useBoard();
 
@@ -77,40 +109,145 @@ export const Profile: React.FC = () => {
     email: "user1@nsbm.lk",
     initials: "AC",
     color: "from-indigo-600 to-violet-600",
+    createdAt: "2024-10-15T00:00:00.000Z",
   };
 
-  // Active tab state
-  const [activeTab, setActiveTab] = useState<ProfileTab>("overview");
+  const validTabs: ProfileTab[] = [
+    "workspaces",
+    "subscription",
+    "tasks",
+    "preferences",
+    "security",
+  ];
+
+  // Derive active tab from ?tab= query parameter, defaulting to "workspaces"
+  const tabParam = searchParams.get("tab") as ProfileTab | null;
+  const activeTab: ProfileTab =
+    tabParam && validTabs.includes(tabParam) ? tabParam : "workspaces";
+
+  const handleTabChange = (tab: ProfileTab) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("tab", tab);
+        return next;
+      },
+      { replace: true, preventScrollReset: true },
+    );
+  };
 
   // Saved & Form State
-  const [savedProfile, setSavedProfile] = useState<UserProfileDetails>({
-    name: currentUser.name,
-    username: currentUser.email ? currentUser.email.split("@")[0] : "alex.chen",
-    email: currentUser.email,
-    role: "Lead Full-Stack Engineer",
-    company: "CollabBoard Labs",
-    location: "San Francisco, CA",
-    bio: "Specializing in real-time collaborative systems, CRDT state sync, and high-performance WebGL & React interfaces.",
-    memberSince: "Member since Oct 2024",
-    color: currentUser.color || "from-indigo-600 to-violet-600",
+  const [savedProfile, setSavedProfile] = useState<UserProfileDetails>(() => {
+    const initialColor = currentUser.color || getRandomGradient();
+    return {
+      name: currentUser.name,
+      email: currentUser.email,
+      memberSince: formatMemberSince(currentUser.createdAt, currentUser.id),
+      color: initialColor,
+    };
   });
 
   const [name, setName] = useState(savedProfile.name);
-  const [username, setUsername] = useState(savedProfile.username);
   const [email, setEmail] = useState(savedProfile.email);
-  const [role, setRole] = useState(savedProfile.role);
-  const [company, setCompany] = useState(savedProfile.company);
-  const [location, setLocation] = useState(savedProfile.location);
-  const [bio, setBio] = useState(savedProfile.bio);
   const [selectedColor, setSelectedColor] = useState<string>(
-    currentUser.color || "from-indigo-600 to-violet-600",
+    savedProfile.color || getRandomGradient(),
   );
   const [subscriptionPlan, setSubscriptionPlan] = useState<"basic" | "pro">(
-    "pro",
+    authUser?.subscriptionPlan || "pro",
   );
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">(
-    "monthly",
+    authUser?.billingCycle || "monthly",
   );
+
+  // Plan and billing cycle persistence handlers
+  const handleSelectPlan = async (
+    newPlan: "basic" | "pro",
+    cycle?: "monthly" | "yearly",
+  ) => {
+    if (newPlan === "pro") {
+      return;
+    }
+    const nextCycle = cycle || billingCycle;
+    setSubscriptionPlan(newPlan);
+    if (cycle) setBillingCycle(cycle);
+
+    const updated: UserProfileDetails = {
+      ...savedProfile,
+      subscriptionPlan: newPlan,
+      billingCycle: nextCycle,
+    };
+    setSavedProfile(updated);
+    saveCachedProfileDetails(updated);
+
+    try {
+      await updateUser({
+        subscriptionPlan: newPlan,
+        billingCycle: nextCycle,
+      });
+      showToast("Switched to Basic Plan", "success");
+    } catch (err: any) {
+      showToast(err.message || "Failed to update subscription", "info");
+    }
+  };
+
+  const handleSelectBillingCycle = async (newCycle: "monthly" | "yearly") => {
+    setBillingCycle(newCycle);
+    const updated: UserProfileDetails = {
+      ...savedProfile,
+      subscriptionPlan,
+      billingCycle: newCycle,
+    };
+    setSavedProfile(updated);
+    saveCachedProfileDetails(updated);
+    try {
+      await updateUser({
+        subscriptionPlan,
+        billingCycle: newCycle,
+      });
+    } catch {
+      // Ignored
+    }
+  };
+
+  // Inline name editing state in hero banner
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [tempName, setTempName] = useState(savedProfile.name);
+  const [isSavingName, setIsSavingName] = useState(false);
+
+  const handleSaveInlineName = async () => {
+    const trimmed = tempName.trim();
+    if (!trimmed) {
+      showToast("Name cannot be empty", "error");
+      return;
+    }
+    if (trimmed === name) {
+      setIsEditingName(false);
+      return;
+    }
+
+    setIsSavingName(true);
+    try {
+      setName(trimmed);
+      const updated = {
+        ...savedProfile,
+        name: trimmed,
+      };
+      setSavedProfile(updated);
+      saveCachedProfileDetails(updated);
+      await updateUser({ name: trimmed });
+      showToast(`Name updated to "${trimmed}"!`, "success");
+      setIsEditingName(false);
+    } catch (err: any) {
+      showToast(err.message || "Failed to update name", "info");
+    } finally {
+      setIsSavingName(false);
+    }
+  };
+
+  const handleCancelInlineName = () => {
+    setTempName(name);
+    setIsEditingName(false);
+  };
 
   // Load cached profile from PouchDB and keep synced with authUser
   useEffect(() => {
@@ -118,21 +255,27 @@ export const Profile: React.FC = () => {
       try {
         const cached = await getCachedProfileDetails();
         if (cached) {
-          const merged = {
+          const effectiveCreatedAt = authUser?.createdAt || cached.createdAt || currentUser.createdAt;
+          const memberDate = formatMemberSince(effectiveCreatedAt, authUser?.id || currentUser.id);
+          const activePlan = authUser?.subscriptionPlan || cached.subscriptionPlan || "pro";
+          const activeCycle = authUser?.billingCycle || cached.billingCycle || "monthly";
+          const merged: UserProfileDetails = {
             ...cached,
             name: authUser?.name || cached.name,
             email: authUser?.email || cached.email,
+            memberSince: memberDate,
+            subscriptionPlan: activePlan,
+            billingCycle: activeCycle,
           };
           setSavedProfile(merged);
           setName(merged.name);
-          setUsername(merged.username);
+          setTempName(merged.name);
           setEmail(merged.email);
-          if (merged.role) setRole(merged.role);
-          if (merged.company) setCompany(merged.company);
-          if (merged.location) setLocation(merged.location);
-          if (merged.bio) setBio(merged.bio);
-          if (authUser?.color || merged.color) {
-            setSelectedColor(authUser?.color || merged.color);
+          setSubscriptionPlan(activePlan);
+          setBillingCycle(activeCycle);
+          const resolvedColor = authUser?.color || merged.color;
+          if (resolvedColor) {
+            setSelectedColor(resolvedColor);
           }
           return;
         }
@@ -142,21 +285,27 @@ export const Profile: React.FC = () => {
 
       if (authUser) {
         setName(authUser.name);
+        setTempName(authUser.name);
         setEmail(authUser.email);
-        if (authUser.color) {
-          setSelectedColor(authUser.color);
-        }
+        const userColor = authUser.color || getRandomGradient();
+        setSelectedColor(userColor);
+        const activePlan = authUser.subscriptionPlan || "pro";
+        const activeCycle = authUser.billingCycle || "monthly";
+        setSubscriptionPlan(activePlan);
+        setBillingCycle(activeCycle);
         setSavedProfile((prev) => ({
           ...prev,
           name: authUser.name,
           email: authUser.email,
-          username: authUser.email ? authUser.email.split("@")[0] : prev.username,
-          color: authUser.color || prev.color,
+          memberSince: formatMemberSince(authUser.createdAt, authUser.id),
+          color: userColor,
+          subscriptionPlan: activePlan,
+          billingCycle: activeCycle,
         }));
       }
     }
     loadPouchProfile();
-  }, [authUser]);
+  }, [authUser, currentUser.createdAt, currentUser.id]);
 
   useEffect(() => {
     if (authUser?.color) {
@@ -164,19 +313,77 @@ export const Profile: React.FC = () => {
     }
   }, [authUser?.color]);
 
-  // Check if any personal info field has unsaved changes
-  const isProfileDirty =
-    name !== savedProfile.name ||
-    username !== savedProfile.username ||
-    email !== savedProfile.email ||
-    role !== savedProfile.role ||
-    company !== savedProfile.company ||
-    location !== savedProfile.location ||
-    bio !== savedProfile.bio ||
-    selectedColor !== (savedProfile.color || currentUser.color);
+  // Preferences state - persisted to localStorage
+  const [preferences, setPreferences] = useState(() => {
+    try {
+      const stored = localStorage.getItem("user_profile_preferences");
+      if (stored) {
+        return { ...DEFAULT_USER_PREFERENCES, ...JSON.parse(stored) };
+      }
+    } catch {
+      // fallback
+    }
+    return DEFAULT_USER_PREFERENCES;
+  });
 
-  // Preferences state
-  const [preferences, setPreferences] = useState(DEFAULT_USER_PREFERENCES);
+  const handlePreferenceToggle = async (key: keyof typeof preferences) => {
+    const nextVal = !preferences[key];
+
+    if (key === "desktopNotifications") {
+      if (nextVal) {
+        if (!("Notification" in window)) {
+          showToast("Desktop notifications are not supported in this browser", "error");
+          return;
+        }
+
+        if (Notification.permission === "denied") {
+          showToast(
+            "Notifications are blocked in your browser settings. Please enable them in your address bar.",
+            "error",
+          );
+          return;
+        }
+
+        if (Notification.permission !== "granted") {
+          const permission = await Notification.requestPermission();
+          if (permission !== "granted") {
+            showToast("Desktop notification permission was not granted", "info");
+            return;
+          }
+        }
+
+        try {
+          new window.Notification("CollabBoard", {
+            body: "Desktop push notifications are enabled!",
+            icon: "/favicon.ico",
+          });
+        } catch {
+          // Ignore
+        }
+        showToast("Desktop push notifications enabled!", "success");
+      } else {
+        showToast("Desktop push notifications disabled", "info");
+      }
+    }
+
+    if (key === "soundEffects") {
+      if (nextVal) {
+        playNotificationSound();
+        showToast("Sound cues enabled", "success");
+      } else {
+        showToast("Sound cues muted", "info");
+      }
+    }
+
+    const updated = { ...preferences, [key]: nextVal };
+    setPreferences(updated);
+    try {
+      localStorage.setItem("user_profile_preferences", JSON.stringify(updated));
+    } catch {
+      // Ignore
+    }
+  };
+
 
   // Workspaces state
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -198,11 +405,82 @@ export const Profile: React.FC = () => {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+
+  // Active device sessions state with dynamic device detection & localStorage persistence
+  const [activeSessions, setActiveSessions] = useState<ActiveSession[]>(() => {
+    const current = detectCurrentDevice();
+    const isLocal =
+      typeof window !== "undefined" &&
+      (window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1");
+
+    const currentSession: ActiveSession = {
+      id: "current-session",
+      device: current.device,
+      browser: current.browser,
+      ip: isLocal ? "127.0.0.1" : "Client IP",
+      location: "Local Network",
+      lastActive: "Active Now",
+      isCurrent: true,
+      iconType: current.iconType,
+    };
+
+    if (typeof localStorage !== "undefined") {
+      const stored = localStorage.getItem("collabboard_active_sessions");
+      if (stored) {
+        try {
+          const parsed: ActiveSession[] = JSON.parse(stored);
+          const others = parsed.filter((s) => !s.isCurrent);
+          return [currentSession, ...others];
+        } catch {
+          // ignore corrupted data
+        }
+      }
+    }
+
+    // Realistic secondary sessions for interactive testing and management
+    return [
+      currentSession,
+      {
+        id: "sess-mobile-ios",
+        device: "iOS • Safari Mobile",
+        browser: "Safari Mobile",
+        ip: "192.168.1.104",
+        location: "Mobile Device",
+        lastActive: "2 hours ago",
+        isCurrent: false,
+        iconType: "smartphone",
+      },
+      {
+        id: "sess-macos-chrome",
+        device: "macOS • Chrome",
+        browser: "Chrome",
+        ip: "192.168.1.145",
+        location: "Office Workstation",
+        lastActive: "Yesterday at 4:15 PM",
+        isCurrent: false,
+        iconType: "laptop",
+      },
+    ];
+  });
+
+  // Sync active sessions to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "collabboard_active_sessions",
+        JSON.stringify(activeSessions),
+      );
+    } catch {
+      // ignore
+    }
+  }, [activeSessions]);
 
   // Toast feedback state
   const [toastMessage, setToastMessage] = useState<{
     text: string;
-    type: "success" | "info";
+    type: "success" | "info" | "error";
   } | null>(null);
 
   // User tasks state
@@ -211,91 +489,22 @@ export const Profile: React.FC = () => {
     allTasksList.filter(
       (t) =>
         t.assignee?.id === currentUser.id ||
-        t.assignee?.name === currentUser.name,
+        t.assignee?.name?.toLowerCase() === currentUser.name.toLowerCase(),
     ),
   );
+
   const [taskFilter, setTaskFilter] = useState<
     "all" | "in-progress" | "todo" | "done"
   >("all");
 
-  const showToast = (text: string, type: "success" | "info" = "success") => {
+  const showToast = (text: string, type: "success" | "info" | "error" = "success") => {
     setToastMessage({ text, type });
     setTimeout(() => {
       setToastMessage(null);
     }, 3200);
   };
 
-  const handleSelectGradient = (colorValue: string) => {
-    setSelectedColor(colorValue);
-    setSavedProfile((prev) => ({ ...prev, color: colorValue }));
-    saveCachedProfileDetails({
-      ...savedProfile,
-      color: colorValue,
-    });
-    updateUser({ color: colorValue });
-    const option = COLOR_OPTIONS.find((c) => c.value === colorValue);
-    showToast(
-      option
-        ? `Preferred gradient set to ${option.label}!`
-        : "Preferred color gradient updated!",
-      "success",
-    );
-  };
-
-  const handleSaveProfile = (e: React.FormEvent) => {
-    e.preventDefault();
-    const updated = {
-      name,
-      username,
-      email,
-      role,
-      company,
-      location,
-      bio,
-      memberSince: savedProfile.memberSince,
-      color: selectedColor,
-    };
-    setSavedProfile(updated);
-    saveCachedProfileDetails(updated);
-
-    // Update global AuthContext user
-    updateUser({
-      name,
-      email,
-      color: selectedColor,
-    });
-
-    showToast("Profile details updated successfully!");
-  };
-
-  const handleCancelProfile = () => {
-    setName(savedProfile.name);
-    setUsername(savedProfile.username);
-    setEmail(savedProfile.email);
-    setRole(savedProfile.role);
-    setCompany(savedProfile.company);
-    setLocation(savedProfile.location);
-    setBio(savedProfile.bio);
-    setSelectedColor(
-      savedProfile.color || currentUser.color || "from-indigo-600 to-violet-600",
-    );
-    showToast("Changes discarded", "info");
-  };
-
-  const handlePreferenceToggle = (key: keyof typeof preferences) => {
-    setPreferences((prev) => {
-      const next = { ...prev, [key]: !prev[key] };
-      showToast(
-        `Preference updated: ${String(key)
-          .replace(/([A-Z])/g, " $1")
-          .toLowerCase()}`,
-        "info",
-      );
-      return next;
-    });
-  };
-
-  const handlePasswordUpdate = (e: React.FormEvent) => {
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentPassword) {
       showToast("Please enter your current password", "info");
@@ -309,10 +518,40 @@ export const Profile: React.FC = () => {
       showToast("Passwords do not match", "info");
       return;
     }
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    showToast("Password updated securely!");
+
+    try {
+      setIsUpdatingPassword(true);
+      await apiUpdatePassword({ currentPassword, newPassword });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      showToast("Password updated securely!");
+    } catch (err: any) {
+      const errorMsg =
+        err?.message || "Failed to update password. Please check your credentials.";
+      showToast(errorMsg, "info");
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
+
+  const otherSessionsCount = activeSessions.filter((s) => !s.isCurrent).length;
+
+  const handleRevokeOtherSessions = () => {
+    if (otherSessionsCount === 0) {
+      showToast("No other active sessions to revoke", "info");
+      return;
+    }
+    setActiveSessions((prev) => prev.filter((s) => s.isCurrent));
+    showToast(
+      `Revoked ${otherSessionsCount} other session${otherSessionsCount > 1 ? "s" : ""} successfully!`,
+      "success",
+    );
+  };
+
+  const handleLogoutSession = (sessionId: string, deviceName: string) => {
+    setActiveSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    showToast(`${deviceName} session logged out successfully!`, "info");
   };
 
   const toggleTaskStatus = (taskId: string) => {
@@ -353,7 +592,9 @@ export const Profile: React.FC = () => {
             className={`w-2 h-2 rounded-full ${
               toastMessage.type === "success"
                 ? "bg-emerald-400 animate-pulse"
-                : "bg-indigo-400"
+                : toastMessage.type === "error"
+                  ? "bg-rose-400"
+                  : "bg-indigo-400"
             }`}
           />
           <span className="text-xs font-medium text-slate-200">
@@ -376,9 +617,8 @@ export const Profile: React.FC = () => {
 
           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
-              {/* Avatar with Preferred Color Gradient selector */}
               {/* Profile Avatar */}
-              <div className="flex flex-col items-center sm:items-start gap-2.5">
+              <div className="flex flex-col items-center sm:items-start gap-2">
                 <div className="relative group">
                   <div
                     data-testid="profile-avatar-hero"
@@ -396,20 +636,70 @@ export const Profile: React.FC = () => {
               {/* Name & Basic Info */}
               <div className="space-y-1.5">
                 <div className="flex flex-wrap items-center gap-2.5">
-                  <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-                    {name}
-                  </h1>
-                  <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
-                    <Sparkles className="w-3 h-3 text-indigo-400" />
-                    <span>Workspace Owner</span>
-                  </span>
+                  {isEditingName ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={tempName}
+                        onChange={(e) => setTempName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleSaveInlineName();
+                          } else if (e.key === "Escape") {
+                            handleCancelInlineName();
+                          }
+                        }}
+                        autoFocus
+                        disabled={isSavingName}
+                        className="text-lg sm:text-2xl font-bold text-white bg-slate-950/90 border border-indigo-500 rounded-xl px-3 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 shadow-inner"
+                        placeholder="Enter full name"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSaveInlineName}
+                        disabled={isSavingName}
+                        className="p-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition disabled:opacity-50 cursor-pointer"
+                        title="Save name (Enter)"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelInlineName}
+                        disabled={isSavingName}
+                        className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
+                        title="Cancel (Esc)"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="group flex items-center gap-2">
+                      <h1
+                        onClick={() => {
+                          setTempName(name);
+                          setIsEditingName(true);
+                        }}
+                        className="text-xl sm:text-2xl font-bold text-white tracking-tight cursor-pointer hover:text-indigo-200 transition"
+                        title="Click to edit name"
+                      >
+                        {name}
+                      </h1>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTempName(name);
+                          setIsEditingName(true);
+                        }}
+                        className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition opacity-80 group-hover:opacity-100 cursor-pointer"
+                        title="Edit name"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
-
-                <p className="text-xs sm:text-sm text-slate-300 font-medium flex items-center space-x-2">
-                  <span>{role}</span>
-                  <span className="text-slate-600">•</span>
-                  <span className="text-slate-400">{company}</span>
-                </p>
 
                 <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400 pt-1">
                   <span className="flex items-center space-x-1.5">
@@ -417,12 +707,8 @@ export const Profile: React.FC = () => {
                     <span>{email}</span>
                   </span>
                   <span className="flex items-center space-x-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                    <span>{location}</span>
-                  </span>
-                  <span className="flex items-center space-x-1.5">
                     <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Member since Oct 2024</span>
+                    <span>{savedProfile.memberSince || formatMemberSince(authUser?.createdAt || currentUser.createdAt)}</span>
                   </span>
                 </div>
               </div>
@@ -483,21 +769,10 @@ export const Profile: React.FC = () => {
 
         {/* Tab Navigation Pill Bar */}
         <div className="flex items-center space-x-1.5 p-1 rounded-2xl bg-slate-900/90 border border-slate-800/80 backdrop-blur-md overflow-x-auto">
-          <button
-            onClick={() => setActiveTab("overview")}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === "overview"
-                ? "bg-indigo-600 text-white shadow-md shadow-indigo-950/60"
-                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
-            }`}
-          >
-            <UserIcon className="w-3.5 h-3.5" />
-            <span>Personal Info</span>
-          </button>
 
           <button
-            onClick={() => setActiveTab("workspaces")}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+            onClick={() => handleTabChange("workspaces")}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 whitespace-nowrap cursor-pointer ${
               activeTab === "workspaces"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-950/60"
                 : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
@@ -508,8 +783,8 @@ export const Profile: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab("subscription")}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+            onClick={() => handleTabChange("subscription")}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 whitespace-nowrap cursor-pointer ${
               activeTab === "subscription"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-950/60"
                 : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
@@ -520,8 +795,8 @@ export const Profile: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab("tasks")}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+            onClick={() => handleTabChange("tasks")}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 whitespace-nowrap cursor-pointer ${
               activeTab === "tasks"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-950/60"
                 : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
@@ -532,8 +807,8 @@ export const Profile: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab("preferences")}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+            onClick={() => handleTabChange("preferences")}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 whitespace-nowrap cursor-pointer ${
               activeTab === "preferences"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-950/60"
                 : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
@@ -544,8 +819,8 @@ export const Profile: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab("security")}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+            onClick={() => handleTabChange("security")}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 whitespace-nowrap cursor-pointer ${
               activeTab === "security"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-950/60"
                 : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
@@ -556,190 +831,8 @@ export const Profile: React.FC = () => {
           </button>
         </div>
 
-        {/* Tab 1: Overview & Personal Info */}
-        {activeTab === "overview" && (
-          <form onSubmit={handleSaveProfile} className="space-y-6">
-            {/* General Information Card */}
-            <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-5">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                <div>
-                  <h2 className="text-sm font-bold text-white">
-                    General Information
-                  </h2>
-                  <p className="text-xs text-slate-400">
-                    Update your public identity and profile details
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">
-                    Full Name
-                  </label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">
-                    Username / Handle
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-500">
-                      @
-                    </span>
-                    <input
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      required
-                      className="w-full pl-8 pr-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">
-                    Primary Email
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">
-                    Job Title / Role
-                  </label>
-                  <input
-                    type="text"
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">
-                    Company / Organization
-                  </label>
-                  <input
-                    type="text"
-                    value={company}
-                    onChange={(e) => setCompany(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">
-                    Location / Timezone
-                  </label>
-                  <input
-                    type="text"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-300">
-                  Bio / About Me
-                </label>
-                <textarea
-                  rows={3}
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition resize-none"
-                />
-              </div>
-
-              {/* Preferred Avatar Color Gradient */}
-              <div className="space-y-2.5 pt-4 border-t border-slate-800/80">
-                <div>
-                  <label className="text-xs font-semibold text-slate-200">
-                    Preferred Color Gradient
-                  </label>
-                  <p className="text-[11px] text-slate-400">
-                    Your personal signature gradient used on boards, avatar presence, and collaborator badges
-                  </p>
-                </div>
-
-                <div
-                  data-testid="profile-form-gradient-options"
-                  className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 pt-1"
-                >
-                  {COLOR_OPTIONS.map((c) => {
-                    const isSelected = selectedColor === c.value;
-                    return (
-                      <button
-                        key={c.value}
-                        type="button"
-                        onClick={() => handleSelectGradient(c.value)}
-                        aria-label={`Select ${c.label} gradient`}
-                        className={`group flex items-center space-x-2.5 p-2.5 rounded-2xl border transition-all text-left cursor-pointer ${
-                          isSelected
-                            ? "bg-slate-800/90 border-slate-600 ring-2 ring-indigo-500/50 shadow-lg shadow-indigo-950/20"
-                            : "bg-slate-950/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900/60"
-                        }`}
-                      >
-                        <div
-                          className={`w-5 h-5 rounded-full bg-linear-to-br ${c.value} shadow-xs flex items-center justify-center shrink-0 transition-transform group-hover:scale-110`}
-                        >
-                          {isSelected && (
-                            <Check className="w-3 h-3 text-white stroke-3" />
-                          )}
-                        </div>
-                        <span
-                          className={`text-xs font-medium truncate ${
-                            isSelected
-                              ? "text-white font-semibold"
-                              : "text-slate-400 group-hover:text-slate-200"
-                          }`}
-                        >
-                          {c.label}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Save & Cancel Buttons - Visible only when form is modified */}
-            {isProfileDirty && (
-              <div className="flex items-center justify-end space-x-3 pt-4 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={handleCancelProfile}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  icon={<Save className="w-4 h-4" />}
-                >
-                  Save Profile Changes
-                </Button>
-              </div>
-            )}
-          </form>
-        )}
-
+        {/* Tab Content Panels (min-h prevents layout shift/jump) */}
+        <div className="min-h-125">
         {/* Tab: Subscription & Plans */}
         {activeTab === "subscription" && (
           <div className="space-y-6">
@@ -830,10 +923,7 @@ export const Profile: React.FC = () => {
                           type="button"
                           variant="secondary"
                           className="w-full"
-                          onClick={() => {
-                            setSubscriptionPlan("basic");
-                            showToast("Switched to Basic Plan", "info");
-                          }}
+                          onClick={() => handleSelectPlan("basic")}
                         >
                           Downgrade to Basic
                         </Button>
@@ -891,7 +981,7 @@ export const Profile: React.FC = () => {
                         <div className="flex items-center space-x-1 p-1 rounded-2xl bg-slate-950/90 border border-slate-800 shrink-0 self-start sm:self-auto">
                           <button
                             type="button"
-                            onClick={() => setBillingCycle("monthly")}
+                            onClick={() => handleSelectBillingCycle("monthly")}
                             className={`px-3 py-1 rounded-xl text-xs font-semibold transition cursor-pointer ${
                               billingCycle === "monthly"
                                 ? "bg-indigo-600 text-white shadow-xs"
@@ -902,7 +992,7 @@ export const Profile: React.FC = () => {
                           </button>
                           <button
                             type="button"
-                            onClick={() => setBillingCycle("yearly")}
+                            onClick={() => handleSelectBillingCycle("yearly")}
                             className={`flex items-center space-x-1.5 px-3 py-1 rounded-xl text-xs font-semibold transition cursor-pointer ${
                               billingCycle === "yearly"
                                 ? "bg-indigo-600 text-white shadow-xs"
@@ -944,12 +1034,10 @@ export const Profile: React.FC = () => {
                         <Button
                           type="button"
                           variant="primary"
+                          disabled
                           className="w-full shadow-xl shadow-indigo-950/60"
                           icon={<Sparkles className="w-4 h-4" />}
-                          onClick={() => {
-                            setSubscriptionPlan("pro");
-                            showToast("Upgraded to Pro Plan!");
-                          }}
+                          onClick={() => handleSelectPlan("pro", billingCycle)}
                         >
                           Upgrade to Pro (
                           {billingCycle === "yearly" ? "$115.20/yr" : "$12/mo"})
@@ -1271,64 +1359,6 @@ export const Profile: React.FC = () => {
               </div>
 
               <div className="space-y-4">
-                <div className="flex items-center justify-between py-2">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-200">
-                      Email task assignments
-                    </p>
-                    <p className="text-[11px] text-slate-400">
-                      Receive an email when you are assigned or mentioned in a
-                      card
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handlePreferenceToggle("emailTaskAssignment")
-                    }
-                    className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
-                      preferences.emailTaskAssignment
-                        ? "bg-indigo-600"
-                        : "bg-slate-800"
-                    }`}
-                  >
-                    <div
-                      className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                        preferences.emailTaskAssignment
-                          ? "translate-x-5"
-                          : "translate-x-0"
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between py-2">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-200">
-                      Weekly activity summary digest
-                    </p>
-                    <p className="text-[11px] text-slate-400">
-                      Receive weekly email roundup of workspace velocity
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handlePreferenceToggle("emailWeeklyDigest")}
-                    className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
-                      preferences.emailWeeklyDigest
-                        ? "bg-indigo-600"
-                        : "bg-slate-800"
-                    }`}
-                  >
-                    <div
-                      className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                        preferences.emailWeeklyDigest
-                          ? "translate-x-5"
-                          : "translate-x-0"
-                      }`}
-                    />
-                  </button>
-                </div>
 
                 <div className="flex items-center justify-between py-2">
                   <div>
@@ -1387,76 +1417,7 @@ export const Profile: React.FC = () => {
                     />
                   </button>
                 </div>
-              </div>
-            </div>
 
-            <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-6">
-              <div className="pb-3 border-b border-slate-800">
-                <h2 className="text-sm font-bold text-white">
-                  Board Display & Sync
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Customize your board viewing experience and offline behavior
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex items-center justify-between py-2">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-200">
-                      Compact Kanban density
-                    </p>
-                    <p className="text-[11px] text-slate-400">
-                      Reduce task card padding to fit more items on screen
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handlePreferenceToggle("compactBoardView")}
-                    className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
-                      preferences.compactBoardView
-                        ? "bg-indigo-600"
-                        : "bg-slate-800"
-                    }`}
-                  >
-                    <div
-                      className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                        preferences.compactBoardView
-                          ? "translate-x-5"
-                          : "translate-x-0"
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between py-2">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-200">
-                      Offline Automatic Sync
-                    </p>
-                    <p className="text-[11px] text-slate-400">
-                      Queue mutations in IndexedDB when disconnected and flush
-                      on reconnect
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handlePreferenceToggle("offlineAutoSync")}
-                    className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
-                      preferences.offlineAutoSync
-                        ? "bg-indigo-600"
-                        : "bg-slate-800"
-                    }`}
-                  >
-                    <div
-                      className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                        preferences.offlineAutoSync
-                          ? "translate-x-5"
-                          : "translate-x-0"
-                      }`}
-                    />
-                  </button>
-                </div>
               </div>
             </div>
           </div>
@@ -1525,35 +1486,19 @@ export const Profile: React.FC = () => {
                   type="submit"
                   variant="primary"
                   size="sm"
+                  isLoading={isUpdatingPassword}
+                  disabled={isUpdatingPassword}
                   icon={<KeyRound className="w-3.5 h-3.5" />}
                 >
-                  Update Password
+                  {isUpdatingPassword ? "Updating..." : "Update Password"}
                 </Button>
               </div>
             </form>
 
-            {/* Two Factor Authentication Card */}
-            <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-sm font-bold text-white">
-                    Two-Factor Authentication (2FA)
-                  </h2>
-                  <p className="text-xs text-slate-400">
-                    Protect your CollabBoard workspaces with hardware or
-                    app-based 2FA
-                  </p>
-                </div>
-                <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Active & Protected</span>
-                </span>
-              </div>
-            </div>
 
             {/* Active Sessions */}
             <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
                 <div>
                   <h2 className="text-sm font-bold text-white">
                     Active Device Sessions
@@ -1565,19 +1510,21 @@ export const Profile: React.FC = () => {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() =>
-                    showToast("All other sessions revoked successfully")
-                  }
+                  disabled={otherSessionsCount === 0}
+                  onClick={handleRevokeOtherSessions}
+                  className={otherSessionsCount === 0 ? "opacity-50 cursor-not-allowed" : ""}
                 >
-                  Revoke Other Sessions
+                  {otherSessionsCount > 0
+                    ? `Revoke Other Sessions (${otherSessionsCount})`
+                    : "No Other Sessions"}
                 </Button>
               </div>
 
               <div className="space-y-3">
-                {DEFAULT_ACTIVE_SESSIONS.map((session) => (
+                {activeSessions.map((session) => (
                   <div
                     key={session.id}
-                    className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/70 flex items-center justify-between text-xs"
+                    className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/70 flex items-center justify-between text-xs transition-all hover:border-slate-700/80"
                   >
                     <div className="flex items-center space-x-3">
                       <div
@@ -1609,13 +1556,14 @@ export const Profile: React.FC = () => {
                       </div>
                     </div>
                     {session.isCurrent ? (
-                      <span className="text-[11px] font-medium text-emerald-400">
-                        Active Now
+                      <span className="text-[11px] font-medium text-emerald-400 inline-flex items-center space-x-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>Active Now</span>
                       </span>
                     ) : (
                       <button
-                        onClick={() => showToast("Device logged out")}
-                        className="text-xs text-rose-400 hover:text-rose-300 font-medium cursor-pointer"
+                        onClick={() => handleLogoutSession(session.id, session.device)}
+                        className="text-xs text-rose-400 hover:text-rose-300 font-medium px-2 py-1 rounded-lg hover:bg-rose-500/10 transition-colors cursor-pointer"
                       >
                         Log Out
                       </button>
@@ -1626,6 +1574,7 @@ export const Profile: React.FC = () => {
             </div>
           </div>
         )}
+        </div>
       </main>
 
       {/* Manage Workspace Settings Modal */}

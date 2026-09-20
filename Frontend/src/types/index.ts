@@ -10,6 +10,10 @@ export interface User {
   color: string;
   role?: 'Owner' | 'Admin' | 'Member';
   boardRole?: 'Owner' | 'Admin' | 'Editor' | 'Viewer';
+  createdAt?: string;
+  subscriptionPlan?: 'basic' | 'pro';
+  billingCycle?: 'monthly' | 'yearly';
+  favoriteBoardIds?: string[];
 }
 
 export type BoardMember = User;
@@ -66,16 +70,18 @@ export interface Workspace {
   id: string;
   name: string;
   description: string;
+  boards?: string[];
+  boardIds?: string[];
   boardCount?: number;
   color?: string;
   memberCount?: number;
+  ownerId?: string;
   role?: 'Owner' | 'Admin' | 'Member';
   members?: User[];
 }
 
 export interface UserProfile {
   name: string;
-  username: string;
   email: string;
   role: string;
   company: string;

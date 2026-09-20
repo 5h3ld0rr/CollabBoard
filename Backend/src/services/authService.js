@@ -4,6 +4,7 @@ import { config } from '../config.js';
 import { AppError, NotFoundError } from '../utils/AppError.js';
 import { userRepo, publicUser } from '../repos/userRepo.js';
 import { workspaceRepo } from '../repos/workspaceRepo.js';
+import { User, getRandomColor } from '../models/User.js';
 
 /**
  * Register a new user with hashed password and return auth token
@@ -19,6 +20,7 @@ export async function register({ email, password, name }) {
     email,
     passwordHash,
     name: name || 'User',
+    color: getRandomColor(),
   });
 
   // Automatically provision a default workspace on the backend if none exists
@@ -26,7 +28,7 @@ export async function register({ email, password, name }) {
   if (existingWs.length === 0) {
     await workspaceRepo.create({
       name: 'My Workspace',
-      description: 'Personal workspace for sprint boards and tasks',
+      description: '',
       color: 'from-indigo-600 to-violet-600',
     });
   }
@@ -73,4 +75,63 @@ export async function getMe(userId) {
     throw new NotFoundError('User');
   }
   return publicUser(user);
+}
+
+/**
+ * Update authenticated user profile
+ */
+export async function updateProfile(userId, { name, email, color, subscriptionPlan, billingCycle }) {
+  const user = await userRepo.findById(userId);
+  if (!user) {
+    throw new NotFoundError('User');
+  }
+
+  const updates = {};
+  if (name !== undefined) {
+    updates.name = name.trim();
+  }
+  if (color !== undefined) {
+    updates.color = color;
+  }
+  if (subscriptionPlan !== undefined) {
+    updates.subscriptionPlan = subscriptionPlan;
+  }
+  if (billingCycle !== undefined) {
+    updates.billingCycle = billingCycle;
+  }
+  if (email !== undefined) {
+    const normalizedEmail = email.toLowerCase().trim();
+    if (normalizedEmail !== user.email) {
+      const existing = await userRepo.findByEmail(normalizedEmail);
+      if (existing && String(existing.id) !== String(userId)) {
+        throw new AppError('Email already registered', 409, 'EMAIL_EXISTS');
+      }
+      updates.email = normalizedEmail;
+    }
+  }
+
+  const updated = await userRepo.update(userId, updates);
+  return updated;
+}
+
+/**
+ * Update authenticated user password
+ */
+export async function updatePassword(userId, { currentPassword, newPassword }) {
+  const user = await userRepo.findById(userId);
+  if (!user) {
+    throw new NotFoundError('User');
+  }
+
+  const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!ok) {
+    throw new AppError('Invalid current password', 400, 'INVALID_CURRENT_PASSWORD');
+  }
+
+  const newHash = await bcrypt.hash(newPassword, 10);
+  await userRepo.updatePassword(userId, newHash);
+
+  return {
+    message: 'Password updated successfully',
+  };
 }

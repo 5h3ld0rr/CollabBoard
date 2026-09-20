@@ -13,7 +13,7 @@ interface AuthContextType {
   login: (credentials: authApi.LoginInput) => Promise<void>;
   register: (data: authApi.RegisterInput) => Promise<void>;
   logout: () => Promise<void>;
-  updateUser: (updatedData: Partial<User>) => void;
+  updateUser: (updatedData: Partial<User>) => Promise<User>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -61,6 +61,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } catch (err: any) {
         const isAuthError =
           err?.status === 401 ||
+          err?.status === 404 ||
+          err?.code === 'NOT_FOUND' ||
           err?.code === 'NO_TOKEN' ||
           err?.code === 'TOKEN_EXPIRED' ||
           err?.code === 'BAD_TOKEN' ||
@@ -126,32 +128,50 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const updateUser = (updatedData: Partial<User>) => {
-    setUser((prev) => {
-      const base: User = prev || {
-        id: 'usr-1',
-        name: 'Alex Chen',
-        email: 'alex.chen@collabboard.io',
-        initials: 'AC',
-        color: 'from-indigo-600 to-violet-600',
-      };
+  const updateUser = async (updatedData: Partial<User>): Promise<User> => {
+    let backendUser: User | null = null;
+    const isOnline = typeof navigator === 'undefined' || navigator.onLine;
 
-      const newName = updatedData.name !== undefined ? updatedData.name : base.name;
-      const computedInitials =
-        updatedData.initials ||
-        (newName ? getInitials(newName) : base.initials) ||
-        'AC';
+    if (isOnline) {
+      try {
+        backendUser = await authApi.updateProfile({
+          name: updatedData.name,
+          email: updatedData.email,
+          color: updatedData.color,
+          subscriptionPlan: updatedData.subscriptionPlan,
+          billingCycle: updatedData.billingCycle,
+        });
+      } catch (err) {
+        console.warn('[AuthContext] Failed to update user profile in DB:', err);
+        throw err;
+      }
+    }
 
-      const nextUser: User = {
-        ...base,
-        ...updatedData,
-        name: newName,
-        initials: computedInitials,
-      };
+    const base: User = user || {
+      id: 'usr-1',
+      name: 'User',
+      email: 'user@collabboard.io',
+      initials: 'U',
+      color: 'from-indigo-600 to-violet-600',
+    };
 
-      saveCachedUser(nextUser);
-      return nextUser;
-    });
+    const source = backendUser || updatedData;
+    const newName = source.name !== undefined ? source.name : base.name;
+    const computedInitials =
+      source.initials ||
+      (newName ? getInitials(newName) : base.initials) ||
+      'U';
+
+    const nextUser: User = {
+      ...base,
+      ...source,
+      name: newName,
+      initials: computedInitials,
+    };
+
+    setUser(nextUser);
+    await saveCachedUser(nextUser);
+    return nextUser;
   };
 
   return (

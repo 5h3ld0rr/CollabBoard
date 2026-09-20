@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   X,
   Users,
@@ -9,8 +9,10 @@ import {
   Eye,
   Edit3,
   Crown,
+  AlertTriangle,
 } from 'lucide-react';
 import type { Board, User } from '../../types';
+import { PLAN_LIMITS } from '../../constants';
 import { useAuth } from '../../context/AuthContext';
 import { getProfileGradient } from '../../utils';
 import { TemporaryLinkGenerator } from './TemporaryLinkGenerator';
@@ -21,6 +23,7 @@ interface BoardMembersModalProps {
   board: Board;
   onUpdateMembers: (newMembers: User[]) => void | Promise<void>;
   workspaceMembers?: User[];
+  onlineUserIds?: string[];
 }
 
 const ROLE_BADGES: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
@@ -83,23 +86,47 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
   board,
   onUpdateMembers,
   workspaceMembers = [],
+  onlineUserIds = [],
 }) => {
   const { user: currentUser } = useAuth();
-  const [members, setMembers] = useState<User[]>(() => {
-    return (board.members || []).map((m, i) => normalizeMember(m, i, board.ownerId, currentUser));
-  });
+  const onlineSet = useMemo(() => new Set(onlineUserIds), [onlineUserIds]);
+  const deduplicateMembers = useCallback(
+    (userList: any[]) => {
+      const raw = userList.map((m, i) => normalizeMember(m, i, board.ownerId, currentUser));
+      const seen = new Set<string>();
+      return raw.filter((m) => {
+        const idKey = String(m.id);
+        const emailKey = m.email ? m.email.toLowerCase() : null;
+        if (seen.has(idKey) || (emailKey && seen.has(emailKey))) {
+          return false;
+        }
+        seen.add(idKey);
+        if (emailKey) seen.add(emailKey);
+        return true;
+      });
+    },
+    [board.ownerId, currentUser]
+  );
+
+  const [members, setMembers] = useState<User[]>(() => deduplicateMembers(board.members || []));
 
   const [inviteEmail, setInviteEmail] = useState('');
   const [selectedWorkspaceUser, setSelectedWorkspaceUser] = useState<string>('');
   const [inviteRole, setInviteRole] = useState<'Admin' | 'Editor' | 'Viewer'>('Editor');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const isPro = currentUser?.subscriptionPlan === 'pro';
+  const isCollaboratorLimitReached =
+    !isPro && members.length >= PLAN_LIMITS.basic.maxCollaboratorsPerBoard;
 
   useEffect(() => {
     if (isOpen) {
-      setMembers((board.members || []).map((m, i) => normalizeMember(m, i, board.ownerId, currentUser)));
+      setMembers(deduplicateMembers(board.members || []));
       setSuccessMessage(null);
+      setErrorMessage(null);
     }
-  }, [isOpen, board, currentUser]);
+  }, [isOpen, board.members, deduplicateMembers]);
 
   if (!isOpen) return null;
 
@@ -116,6 +143,14 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
+
+    if (isCollaboratorLimitReached) {
+      setErrorMessage(
+        `Collaborator limit reached (${members.length}/${PLAN_LIMITS.basic.maxCollaboratorsPerBoard} on Basic plan). Upgrade to Pro for unlimited collaborators.`
+      );
+      return;
+    }
 
     let userToAdd: User | null = null;
 
@@ -128,19 +163,54 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
         };
       }
     } else if (inviteEmail.trim()) {
-      const email = inviteEmail.trim();
-      const initials = email.slice(0, 2).toUpperCase();
-      userToAdd = {
-        id: `usr-${Date.now()}`,
-        name: email.split('@')[0],
-        email,
-        initials,
-        color: 'bg-indigo-600',
-        boardRole: inviteRole,
-      };
+      const email = inviteEmail.trim().toLowerCase();
+      // Check if this matches a known workspace teammate
+      const matchingTeammate = (workspaceMembers || []).find(
+        (wm) => wm.email?.toLowerCase() === email
+      );
+
+      if (matchingTeammate) {
+        userToAdd = {
+          ...matchingTeammate,
+          boardRole: inviteRole,
+        };
+      } else {
+        const initials = email.slice(0, 2).toUpperCase();
+        userToAdd = {
+          id: email,
+          name: email.split('@')[0],
+          email,
+          initials,
+          color: 'bg-indigo-600',
+          boardRole: inviteRole,
+        };
+      }
     }
 
     if (userToAdd) {
+      const userEmail = userToAdd.email?.toLowerCase() || '';
+      const userId = String(userToAdd.id);
+
+      // Check if this is the board owner or current user
+      if (
+        (board.ownerId && (userId === String(board.ownerId) || (currentUser && userId === String(currentUser.id)))) ||
+        (currentUser?.email && userEmail === currentUser.email.toLowerCase())
+      ) {
+        setErrorMessage('You are already the owner of this board.');
+        setTimeout(() => setErrorMessage(null), 3000);
+        return;
+      }
+
+      // Check if already in board members
+      if (
+        (userEmail && memberEmailSet.has(userEmail)) ||
+        memberIdSet.has(userId)
+      ) {
+        setErrorMessage('This user is already a member of this board.');
+        setTimeout(() => setErrorMessage(null), 3000);
+        return;
+      }
+
       const updatedMembers = [...members, userToAdd];
       setMembers(updatedMembers);
       try {
@@ -149,8 +219,10 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
         setSelectedWorkspaceUser('');
         setSuccessMessage(`Added ${userToAdd.name} to the board as ${inviteRole}!`);
         setTimeout(() => setSuccessMessage(null), 2500);
-      } catch {
-        setSuccessMessage(null);
+      } catch (err: any) {
+        setMembers(members); // revert optimistic update
+        setErrorMessage(err?.message || 'Failed to add member to board.');
+        setTimeout(() => setErrorMessage(null), 3500);
       }
     }
   };
@@ -211,11 +283,43 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
           <TemporaryLinkGenerator boardId={board.id} />
         </div>
 
+        {/* Collaborator Limit Reached Banner */}
+        {isCollaboratorLimitReached && (
+          <div className="mb-5 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in">
+            <div className="flex items-start space-x-2.5">
+              <Crown className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-white">
+                  Collaborator Limit Reached ({members.length}/{PLAN_LIMITS.basic.maxCollaboratorsPerBoard})
+                </p>
+                <p className="text-amber-300/80 text-[11px] mt-0.5">
+                  The Basic plan allows up to 5 collaborators per board. Upgrade to Pro for unlimited team members and guests.
+                </p>
+              </div>
+            </div>
+            <a
+              href="/profile?tab=subscription"
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition shrink-0 cursor-pointer self-start sm:self-auto"
+            >
+              <Crown className="w-3 h-3" />
+              <span>Upgrade to Pro</span>
+            </a>
+          </div>
+        )}
+
         {/* Feedback Alert */}
         {successMessage && (
           <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium flex items-center space-x-2 animate-fade-in">
             <Check className="w-4 h-4 shrink-0" />
             <span>{successMessage}</span>
+          </div>
+        )}
+
+        {/* Error Alert */}
+        {errorMessage && (
+          <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-medium flex items-center space-x-2 animate-fade-in">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>{errorMessage}</span>
           </div>
         )}
 
@@ -225,71 +329,75 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
             Invite Teammate to Board
           </label>
 
-          <form onSubmit={handleAddMember} className="flex flex-col sm:flex-row gap-2">
-            {availableTeammates.length > 0 ? (
-              <div className="flex-1 flex gap-2">
+          <form onSubmit={handleAddMember} className="flex flex-col gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
+              {availableTeammates.length > 0 ? (
+                <div className="flex-1 flex gap-2">
+                  <select
+                    aria-label="Select teammate to invite"
+                    value={selectedWorkspaceUser}
+                    disabled={isCollaboratorLimitReached}
+                    onChange={(e) => {
+                      setSelectedWorkspaceUser(e.target.value);
+                      if (e.target.value) setInviteEmail('');
+                    }}
+                    className="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">Select teammate or type email below...</option>
+                    {availableTeammates.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  disabled={isCollaboratorLimitReached}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="colleague@collabboard.io"
+                  className="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+              )}
+
+              <div className="flex items-center gap-2">
                 <select
-                  aria-label="Select teammate to invite"
-                  value={selectedWorkspaceUser}
-                  onChange={(e) => {
-                    setSelectedWorkspaceUser(e.target.value);
-                    if (e.target.value) setInviteEmail('');
-                  }}
-                  className="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  aria-label="Invite role"
+                  value={inviteRole}
+                  disabled={isCollaboratorLimitReached}
+                  onChange={(e) => setInviteRole(e.target.value as 'Admin' | 'Editor' | 'Viewer')}
+                  className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <option value="">Select teammate or type email below...</option>
-                  {availableTeammates.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name} ({u.email})
-                    </option>
-                  ))}
+                  <option value="Editor">Editor</option>
+                  <option value="Admin">Admin</option>
+                  <option value="Viewer">Viewer</option>
                 </select>
+
+                <button
+                  type="submit"
+                  disabled={isCollaboratorLimitReached || (!selectedWorkspaceUser && !inviteEmail.trim())}
+                  className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-md flex items-center space-x-1 shrink-0 transition cursor-pointer"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>{isCollaboratorLimitReached ? 'Limit Reached' : 'Add'}</span>
+                </button>
               </div>
-            ) : (
-              <input
-                type="email"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="colleague@collabboard.io"
-                className="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              />
-            )}
-
-            <div className="flex items-center gap-2">
-              <select
-                aria-label="Invite role"
-                value={inviteRole}
-                onChange={(e) => setInviteRole(e.target.value as 'Admin' | 'Editor' | 'Viewer')}
-                className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 focus:outline-none"
-              >
-                <option value="Editor">Editor</option>
-                <option value="Admin">Admin</option>
-                <option value="Viewer">Viewer</option>
-              </select>
-
-              <button
-                type="submit"
-                disabled={!selectedWorkspaceUser && !inviteEmail.trim()}
-                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-md flex items-center space-x-1 shrink-0 transition"
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-                <span>Add</span>
-              </button>
             </div>
-          </form>
 
-          {/* Quick email alternative if select dropdown is shown */}
-          {availableTeammates.length > 0 && !selectedWorkspaceUser && (
-            <div className="pt-1">
+            {/* Quick email alternative if select dropdown is shown */}
+            {availableTeammates.length > 0 && !selectedWorkspaceUser && (
               <input
                 type="email"
                 value={inviteEmail}
+                disabled={isCollaboratorLimitReached}
                 onChange={(e) => setInviteEmail(e.target.value)}
                 placeholder="Or enter new email (e.g. teammate@domain.com)"
-                className="w-full px-3 py-1.5 rounded-xl bg-slate-950/60 border border-slate-800/80 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="w-full px-3 py-1.5 rounded-xl bg-slate-950/60 border border-slate-800/80 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
               />
-            </div>
-          )}
+            )}
+          </form>
         </div>
 
         {/* Active Board Members List */}
@@ -317,14 +425,15 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
               // Guard against self role change and owner role change
               const canChangeRole = !isOwner && !isSelf;
               const canRemove = !isOwner && !isSelf && members.length > 1;
+              const isOnline = isSelf || onlineSet.has(String(member.id)) || (member.email ? onlineSet.has(member.email.toLowerCase()) : false);
 
               return (
                 <div
                   key={member.id}
                   className="flex items-center justify-between p-3 rounded-2xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700/80 transition"
                 >
-                  <div className="flex items-center space-x-3 truncate">
-                    <div className="relative">
+                  <div className="flex items-center space-x-3 min-w-0 flex-1 mr-3">
+                    <div className="relative shrink-0">
                       <div
                         className={`w-8 h-8 rounded-xl ${getProfileGradient(
                           member.color,
@@ -333,10 +442,17 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
                       >
                         {member.initials}
                       </div>
-                      <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-slate-950" />
+                      <span
+                        className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-slate-950 ${
+                          isOnline
+                            ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.9)]'
+                            : 'bg-slate-600'
+                        }`}
+                        title={isOnline ? 'Online' : 'Offline'}
+                      />
                     </div>
 
-                    <div className="truncate">
+                    <div className="min-w-0 flex-1 truncate">
                       <div className="flex items-center space-x-1.5">
                         <p className="text-xs font-semibold text-white leading-tight truncate">
                           {member.name}

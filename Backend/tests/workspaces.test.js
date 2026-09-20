@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import app from '../src/app.js';
 import { config } from '../src/config.js';
 import { Workspace } from '../src/models/Workspace.js';
+import { Board } from '../src/models/Board.js';
 import { connectTestDb, clearTestDb, closeTestDb } from './setup/db.js';
 
 function authHeader(userId = new mongoose.Types.ObjectId().toString(), email = 'shamika@nsbm.lk') {
@@ -68,6 +69,28 @@ describe('Workspace API', () => {
       expect(workspaces.map((w) => w.name)).toEqual(
         expect.arrayContaining(['Engineering', 'Design'])
       );
+    });
+
+    it('does not return workspaces belonging to another user', async () => {
+      const user1 = authHeader();
+      const user2 = authHeader();
+
+      await request(app)
+        .post('/api/workspaces')
+        .set(user1.header)
+        .send({
+          name: "User 1's Private Workspace",
+          description: 'Secret projects',
+        });
+
+      const res = await request(app)
+        .get('/api/workspaces')
+        .set(user2.header);
+
+      expect(res.status).toBe(200);
+      const workspaces = res.body.data || res.body;
+      const names = workspaces.map((w) => w.name);
+      expect(names).not.toContain("User 1's Private Workspace");
     });
   });
 
@@ -238,6 +261,68 @@ describe('Workspace API', () => {
       expect(res.status).toBe(404);
       const code = res.body.code || res.body.error?.code;
       expect(code).toBe('NOT_FOUND');
+    });
+
+    it('contains boards and boardIds array in workspace responses and syncs on board creation/move', async () => {
+      const user = authHeader();
+
+      // Create two workspaces
+      const ws1 = await Workspace.create({ name: 'Workspace Alpha', ownerId: user.userId });
+      const ws2 = await Workspace.create({ name: 'Workspace Beta', ownerId: user.userId });
+
+      // Create a board in Workspace Alpha
+      const createBoardRes = await request(app)
+        .post('/api/boards')
+        .set(user.header)
+        .send({
+          title: 'Switchable Board',
+          workspaceId: ws1._id.toString(),
+        });
+
+      expect(createBoardRes.status).toBe(201);
+      const board = createBoardRes.body.data || createBoardRes.body;
+      const boardId = board.id;
+
+      // Verify Workspace Alpha includes this board ID
+      const ws1Res = await request(app)
+        .get(`/api/workspaces/${ws1._id}`)
+        .set(user.header);
+
+      expect(ws1Res.status).toBe(200);
+      const ws1Data = ws1Res.body.data || ws1Res.body;
+      expect(ws1Data.boards).toContain(boardId);
+      expect(ws1Data.boardIds).toContain(boardId);
+
+      // Now switch/move the board to Workspace Beta via PATCH /api/boards/:id
+      const moveRes = await request(app)
+        .patch(`/api/boards/${boardId}`)
+        .set(user.header)
+        .send({
+          workspaceId: ws2._id.toString(),
+        });
+
+      expect(moveRes.status).toBe(200);
+      const movedBoard = moveRes.body.data || moveRes.body;
+      expect(movedBoard.workspaceId).toBe(ws2._id.toString());
+
+      // Verify Workspace Beta now contains the board ID
+      const ws2Res = await request(app)
+        .get(`/api/workspaces/${ws2._id}`)
+        .set(user.header);
+
+      expect(ws2Res.status).toBe(200);
+      const ws2Data = ws2Res.body.data || ws2Res.body;
+      expect(ws2Data.boards).toContain(boardId);
+      expect(ws2Data.boardIds).toContain(boardId);
+
+      // Verify Workspace Alpha no longer contains the board ID
+      const ws1AfterRes = await request(app)
+        .get(`/api/workspaces/${ws1._id}`)
+        .set(user.header);
+
+      expect(ws1AfterRes.status).toBe(200);
+      const ws1AfterData = ws1AfterRes.body.data || ws1AfterRes.body;
+      expect(ws1AfterData.boards).not.toContain(boardId);
     });
   });
 });

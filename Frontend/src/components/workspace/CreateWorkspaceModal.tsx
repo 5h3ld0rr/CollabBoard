@@ -1,19 +1,29 @@
-import { useState, useEffect } from 'react';
-import { X, LayoutGrid, Plus, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useContext } from 'react';
+import { X, LayoutGrid, Plus, AlertCircle, Crown } from 'lucide-react';
 import type { Workspace } from '../../types';
-import { COLOR_OPTIONS } from '../../constants';
+import { COLOR_OPTIONS, PLAN_LIMITS } from '../../constants';
+import { AuthContext } from '../../context/AuthContext';
 
 interface CreateWorkspaceModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreateWorkspace: (workspace: Workspace) => Promise<void> | void;
+  currentWorkspaceCount?: number;
+  subscriptionPlan?: 'basic' | 'pro';
 }
 
 export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({
   isOpen,
   onClose,
   onCreateWorkspace,
+  currentWorkspaceCount = 0,
+  subscriptionPlan,
 }) => {
+  const auth = useContext(AuthContext);
+  const plan = subscriptionPlan ?? auth?.user?.subscriptionPlan ?? 'basic';
+  const isPro = plan === 'pro';
+  const isLimitReached = !isPro && currentWorkspaceCount >= PLAN_LIMITS.basic.maxWorkspaces;
+
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedColor, setSelectedColor] = useState(COLOR_OPTIONS[0].value);
@@ -34,10 +44,17 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (isLimitReached) {
+      setError(
+        `Workspace limit reached (${currentWorkspaceCount}/${PLAN_LIMITS.basic.maxWorkspaces} on Basic plan). Please upgrade to Pro for unlimited workspaces.`
+      );
+      return;
+    }
+
     const newWorkspace: Workspace = {
       id: `ws-${Date.now()}`,
       name: name.trim(),
-      description: description.trim() || 'No description provided.',
+      description: description.trim(),
       boardCount: 0,
       color: selectedColor,
     };
@@ -65,7 +82,7 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
+          className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
@@ -82,6 +99,29 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({
             </p>
           </div>
         </div>
+
+        {/* Plan Limit Reached Banner */}
+        {isLimitReached && (
+          <div className="mb-5 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in">
+            <div className="flex items-start space-x-3">
+              <Crown className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-white">Workspace Limit Reached ({currentWorkspaceCount}/{PLAN_LIMITS.basic.maxWorkspaces})</p>
+                <p className="text-amber-300/80 text-[11px] mt-0.5">
+                  The Basic plan includes up to 3 workspaces. Upgrade to Pro for unlimited workspaces and team collaboration.
+                </p>
+              </div>
+            </div>
+            <a
+              href="/profile?tab=subscription"
+              onClick={onClose}
+              className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition shrink-0 cursor-pointer self-start sm:self-auto"
+            >
+              <Crown className="w-3.5 h-3.5" />
+              <span>Upgrade to Pro</span>
+            </a>
+          </div>
+        )}
 
         {error && (
           <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-medium flex items-center space-x-2 animate-fade-in">
@@ -103,9 +143,10 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({
                 setName(e.target.value);
                 if (error) setError(null);
               }}
+              disabled={isLimitReached}
               placeholder="e.g. Infrastructure & DevOps"
-              className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
-              autoFocus
+              className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              autoFocus={!isLimitReached}
             />
           </div>
 
@@ -118,8 +159,9 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({
               rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              disabled={isLimitReached}
               placeholder="What kind of projects and sprints belong here?"
-              className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition resize-none"
+              className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition resize-none disabled:opacity-50 disabled:cursor-not-allowed"
             />
           </div>
 
@@ -133,12 +175,13 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({
                 <button
                   key={i}
                   type="button"
+                  disabled={isLimitReached}
                   onClick={() => setSelectedColor(c.value)}
                   className={`w-8 h-8 rounded-lg bg-linear-to-br ${c.value} transition-all ${
                     selectedColor === c.value
                       ? 'ring-2 ring-white scale-110 shadow-lg'
                       : 'opacity-70 hover:opacity-100'
-                  }`}
+                  } ${isLimitReached ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                 />
               ))}
             </div>
@@ -150,14 +193,15 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition disabled:opacity-50"
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition disabled:opacity-50 cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="inline-flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 transition-all active:scale-95"
+              disabled={isSubmitting || isLimitReached}
+              title={isLimitReached ? "Upgrade to Pro to create more workspaces" : undefined}
+              className="inline-flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 transition-all active:scale-95 cursor-pointer"
             >
               {isSubmitting ? (
                 <>
@@ -167,7 +211,7 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({
               ) : (
                 <>
                   <Plus className="w-4 h-4" />
-                  <span>Create Workspace</span>
+                  <span>{isLimitReached ? 'Limit Reached' : 'Create Workspace'}</span>
                 </>
               )}
             </button>
