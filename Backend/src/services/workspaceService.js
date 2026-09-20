@@ -1,6 +1,7 @@
 import { workspaceRepo } from '../repos/workspaceRepo.js';
 import { boardRepo } from '../repos/boardRepo.js';
-import { NotFoundError } from '../utils/AppError.js';
+import { userRepo } from '../repos/userRepo.js';
+import { NotFoundError, AppError } from '../utils/AppError.js';
 
 /**
  * Calculates live stats for a workspace (board count)
@@ -46,6 +47,21 @@ export async function getWorkspace(workspaceId, userId) {
  * Create a new workspace
  */
 export async function createWorkspace(data, userId) {
+  if (userId) {
+    const user = await userRepo.findById(userId);
+    const plan = user?.subscriptionPlan || 'basic';
+    if (plan === 'basic') {
+      const existing = await workspaceRepo.listByUserId(userId);
+      if (existing.length >= 3) {
+        throw new AppError(
+          'Workspace limit reached for Basic plan (maximum 3 workspaces). Upgrade to Pro for unlimited workspaces.',
+          403,
+          'PLAN_LIMIT_REACHED'
+        );
+      }
+    }
+  }
+
   const created = await workspaceRepo.create(data);
   return enrichWorkspace(created, userId);
 }

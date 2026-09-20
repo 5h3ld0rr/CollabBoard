@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Mail,
   Building2,
@@ -94,6 +94,7 @@ function formatMemberSince(createdAt?: string | Date, userId?: string): string {
 
 export const Profile: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user: authUser, updateUser } = useAuth();
   const { state: { boards: contextBoards, tasks: contextTasks } } = useBoard();
 
@@ -106,8 +107,39 @@ export const Profile: React.FC = () => {
     createdAt: "2024-10-15T00:00:00.000Z",
   };
 
-  // Active tab state
-  const [activeTab, setActiveTab] = useState<ProfileTab>("workspaces");
+  const validTabs: ProfileTab[] = [
+    "workspaces",
+    "subscription",
+    "tasks",
+    "preferences",
+    "security",
+  ];
+
+  // Active tab state - reads ?tab= from URL on load
+  const [activeTab, setActiveTab] = useState<ProfileTab>(() => {
+    const tabParam = new URLSearchParams(window.location.search).get("tab") as ProfileTab | null;
+    return tabParam && validTabs.includes(tabParam) ? tabParam : "workspaces";
+  });
+
+  // Sync activeTab if ?tab= changes in URL
+  useEffect(() => {
+    const tabParam = searchParams.get("tab") as ProfileTab | null;
+    if (tabParam && validTabs.includes(tabParam) && tabParam !== activeTab) {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams, activeTab]);
+
+  const handleTabChange = (tab: ProfileTab) => {
+    setActiveTab(tab);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("tab", tab);
+        return next;
+      },
+      { replace: true },
+    );
+  };
 
   // Saved & Form State
   const [savedProfile, setSavedProfile] = useState<UserProfileDetails>(() => {
@@ -589,7 +621,7 @@ export const Profile: React.FC = () => {
         <div className="flex items-center space-x-1.5 p-1 rounded-2xl bg-slate-900/90 border border-slate-800/80 backdrop-blur-md overflow-x-auto">
 
           <button
-            onClick={() => setActiveTab("workspaces")}
+            onClick={() => handleTabChange("workspaces")}
             className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === "workspaces"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-950/60"
@@ -601,7 +633,7 @@ export const Profile: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab("subscription")}
+            onClick={() => handleTabChange("subscription")}
             className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === "subscription"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-950/60"
@@ -613,7 +645,7 @@ export const Profile: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab("tasks")}
+            onClick={() => handleTabChange("tasks")}
             className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === "tasks"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-950/60"
@@ -625,7 +657,7 @@ export const Profile: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab("preferences")}
+            onClick={() => handleTabChange("preferences")}
             className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === "preferences"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-950/60"
@@ -637,7 +669,7 @@ export const Profile: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab("security")}
+            onClick={() => handleTabChange("security")}
             className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === "security"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-950/60"

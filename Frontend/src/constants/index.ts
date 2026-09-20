@@ -80,3 +80,17 @@ export const SUBSCRIPTION_PLANS = [
     ],
   },
 ];
+
+export const PLAN_LIMITS = {
+  basic: {
+    maxWorkspaces: 3,
+    maxBoardsPerWorkspace: 10,
+    maxCollaboratorsPerBoard: 5,
+  },
+  pro: {
+    maxWorkspaces: Infinity,
+    maxBoardsPerWorkspace: Infinity,
+    maxCollaboratorsPerBoard: Infinity,
+  },
+} as const;
+

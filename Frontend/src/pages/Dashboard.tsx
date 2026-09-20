@@ -16,13 +16,14 @@ import {
   ManageWorkspaceModal,
   WorkspaceSkeleton,
 } from "../components/workspace";
-import { useBoard } from "../context";
+import { useBoard, useAuth } from "../context";
 import {
   getWorkspaces,
   createWorkspace as apiCreateWorkspace,
   updateWorkspace as apiUpdateWorkspace,
   deleteWorkspace as apiDeleteWorkspace,
 } from "../api";
+import { PLAN_LIMITS } from "../constants";
 import type { Board, Workspace } from "../types";
 
 export const Dashboard: React.FC = () => {
@@ -36,6 +37,8 @@ export const Dashboard: React.FC = () => {
     addBoard,
     toggleFavoriteBoard,
   } = useBoard();
+  const { user } = useAuth();
+  const isPro = user?.subscriptionPlan === 'pro';
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>(preloadedWorkspaces || []);
   const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(!preloadedWorkspaces || preloadedWorkspaces.length === 0);
@@ -121,6 +124,10 @@ export const Dashboard: React.FC = () => {
   const handleCreateWorkspace = async (
     newWsData: Partial<Workspace> & { name: string }
   ) => {
+    if (!isPro && workspaces.length >= PLAN_LIMITS.basic.maxWorkspaces) {
+      showToast(`Workspace limit reached (${workspaces.length}/${PLAN_LIMITS.basic.maxWorkspaces}). Upgrade to Pro for unlimited workspaces.`);
+      return;
+    }
     const created = await apiCreateWorkspace(newWsData);
     setWorkspaces((prev) => [...prev, created]);
     navigate(`/workspaces/${created.id}`);
@@ -168,6 +175,12 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleCreateBoard = async (newBoard: Board) => {
+    const targetWs = workspaces.find((w) => w.id === newBoard.workspaceId) || currentWorkspace;
+    const currentCount = targetWs?.boardCount ?? currentWorkspaceBoards.length;
+    if (!isPro && currentCount >= PLAN_LIMITS.basic.maxBoardsPerWorkspace) {
+      showToast(`Board limit reached for this workspace (${currentCount}/${PLAN_LIMITS.basic.maxBoardsPerWorkspace}). Upgrade to Pro for unlimited boards.`);
+      return;
+    }
     await addBoard(newBoard);
     setWorkspaces((prev) =>
       prev.map((w) =>
@@ -368,6 +381,7 @@ export const Dashboard: React.FC = () => {
         isOpen={isCreateWorkspaceModalOpen}
         onClose={() => setIsCreateWorkspaceModalOpen(false)}
         onCreateWorkspace={handleCreateWorkspace}
+        currentWorkspaceCount={workspaces.length}
       />
 
       {/* Manage Workspace Modal */}

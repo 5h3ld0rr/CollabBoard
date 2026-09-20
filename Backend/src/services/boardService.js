@@ -4,7 +4,7 @@ import { boardRepo } from '../repos/boardRepo.js';
 import { taskRepo } from '../repos/taskRepo.js';
 import { userRepo } from '../repos/userRepo.js';
 import { workspaceRepo } from '../repos/workspaceRepo.js';
-import { NotFoundError, ForbiddenError, ValidationError } from '../utils/AppError.js';
+import { NotFoundError, ForbiddenError, ValidationError, AppError } from '../utils/AppError.js';
 
 /**
  * Enriches a board with dynamic, live computed task statistics and populated member profiles
@@ -271,6 +271,21 @@ export async function createBoard(boardData, userId) {
     targetWorkspaceId = userWorkspaces[0]?.id || null;
   }
 
+  if (userId) {
+    const user = await userRepo.findById(userId);
+    const plan = user?.subscriptionPlan || 'basic';
+    if (plan === 'basic' && targetWorkspaceId) {
+      const boardCount = await boardRepo.countByWorkspaceId(targetWorkspaceId, userId);
+      if (boardCount >= 10) {
+        throw new AppError(
+          'Board limit reached for Basic plan (maximum 10 boards per workspace). Upgrade to Pro for unlimited boards.',
+          403,
+          'PLAN_LIMIT_REACHED'
+        );
+      }
+    }
+  }
+
   const created = await boardRepo.create({
     ...boardData,
     workspaceId: targetWorkspaceId,
@@ -291,6 +306,18 @@ export async function updateBoard(boardId, updates, userId) {
 
   // Resolve any member email identifiers to their MongoDB user ID if registered
   if (Array.isArray(sanitizedUpdates.members)) {
+    if (userId) {
+      const user = await userRepo.findById(userId);
+      const plan = user?.subscriptionPlan || 'basic';
+      if (plan === 'basic' && sanitizedUpdates.members.length > 5) {
+        throw new AppError(
+          'Collaborator limit reached for Basic plan (maximum 5 collaborators per board). Upgrade to Pro for unlimited collaborators.',
+          403,
+          'PLAN_LIMIT_REACHED'
+        );
+      }
+    }
+
     sanitizedUpdates.members = await Promise.all(
       sanitizedUpdates.members.map(async (m) => {
         const identifier = typeof m === 'object' && m !== null ? (m.id || m.email) : m;
