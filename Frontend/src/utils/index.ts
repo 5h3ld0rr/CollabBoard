@@ -4,3 +4,4 @@ export * from './diff';
 export * from './columnUtils';
 export * from './avatarUtils';
 export * from './sound';
+export * from './device';

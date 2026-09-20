@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { BoardView } from '../BoardView';
 import { BoardProvider } from '../../context/BoardContext';
@@ -7,10 +7,12 @@ import { NotificationProvider } from '../../context/NotificationContext';
 import * as syncModule from '../../sync';
 import * as boardsApi from '../../api/boards';
 import * as tasksApi from '../../api/tasks';
+import * as workspacesApi from '../../api/workspaces';
 import * as db from '../../db';
 
 vi.mock('../../api/boards');
 vi.mock('../../api/tasks');
+vi.mock('../../api/workspaces');
 vi.mock('../../db');
 vi.mock('../../context/AuthContext', async () => {
   const React = await import('react');
@@ -79,6 +81,8 @@ describe('Member 2: 32BitXenon - BoardView Socket Events & Live Presence Suite',
     vi.spyOn(db, 'subscribeNotificationsChange').mockReturnValue(() => {});
     vi.spyOn(boardsApi, 'getBoardById').mockResolvedValue(mockBoard as any);
     vi.spyOn(tasksApi, 'getBoardTasks').mockResolvedValue([mockTask]);
+    vi.spyOn(workspacesApi, 'getWorkspaces').mockResolvedValue([]);
+    vi.spyOn(workspacesApi, 'getWorkspaceById').mockResolvedValue(null);
 
     (syncModule.subscribePresenceUpdate as any).mockImplementation((cb: any) => {
       presenceCallback = cb;
@@ -170,5 +174,52 @@ describe('Member 2: 32BitXenon - BoardView Socket Events & Live Presence Suite',
 
     const doneCounter = screen.getByTestId('column-task-count-done');
     expect(doneCounter.textContent).toBe('0');
+  });
+
+  it('renders workspace switcher dropdown in breadcrumbs and allows moving board to another workspace', async () => {
+    const mockWorkspaces = [
+      { id: 'ws-1', name: 'Engineering', description: 'Eng', ownerId: 'usr-xenon' },
+      { id: 'ws-2', name: 'Product Team', description: 'Product', ownerId: 'usr-xenon' },
+    ];
+    vi.spyOn(workspacesApi, 'getWorkspaces').mockResolvedValue(mockWorkspaces as any);
+    const updateBoardSpy = vi.spyOn(boardsApi, 'updateBoard').mockResolvedValue({
+      ...mockBoard,
+      workspaceId: 'ws-2',
+      workspaceName: 'Product Team',
+    } as any);
+
+    render(
+      <MemoryRouter initialEntries={['/boards/b-live-1']}>
+        <NotificationProvider>
+          <BoardProvider>
+            <Routes>
+              <Route path="/boards/:id" element={<BoardView />} />
+            </Routes>
+          </BoardProvider>
+        </NotificationProvider>
+      </MemoryRouter>
+    );
+
+    // Breadcrumb displays the current workspace name
+    expect(await screen.findByText('Engineering')).toBeInTheDocument();
+
+    // Toggle the workspace switcher dropdown
+    const switchBtn = screen.getByRole('button', { name: /switch workspace/i });
+    fireEvent.click(switchBtn);
+
+    // Dropdown options visible
+    const productOption = await screen.findByRole('button', { name: /product team/i });
+    expect(productOption).toBeInTheDocument();
+
+    // Select the new workspace
+    fireEvent.click(productOption);
+
+    expect(updateBoardSpy).toHaveBeenCalledWith(
+      'b-live-1',
+      expect.objectContaining({
+        workspaceId: 'ws-2',
+        workspaceName: 'Product Team',
+      })
+    );
   });
 });

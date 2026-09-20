@@ -120,39 +120,18 @@ describe('BoardSettingsModal Component', () => {
     });
   });
 
-  it('allows switching workspace from general settings tab', async () => {
-    const mockWorkspaces = [
-      { id: 'ws-1', name: 'Engineering', description: 'Eng' },
-      { id: 'ws-2', name: 'Product Team', description: 'Product' },
-    ];
-
+  it('does not render workspace selector in general settings tab', () => {
     render(
       <BoardSettingsModal
         isOpen={true}
         onClose={mockOnClose}
         board={{ ...mockBoard, workspaceId: 'ws-1' }}
-        workspaces={mockWorkspaces}
         onUpdateBoard={mockOnUpdateBoard}
       />
     );
 
-    const workspaceSelect = screen.getByRole('combobox');
-    expect(workspaceSelect).toBeInTheDocument();
-    expect(workspaceSelect).toHaveValue('ws-1');
-
-    fireEvent.change(workspaceSelect, { target: { value: 'ws-2' } });
-
-    const saveBtn = screen.getByRole('button', { name: /save changes/i });
-    fireEvent.click(saveBtn);
-
-    await waitFor(() => {
-      expect(mockOnUpdateBoard).toHaveBeenCalledWith(
-        expect.objectContaining({
-          workspaceId: 'ws-2',
-          workspaceName: 'Product Team',
-        })
-      );
-    });
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.queryByText(/switch or move this board across your workspaces/i)).not.toBeInTheDocument();
   });
 
   it('renders only General and Danger Zone tabs and does not show share or members tabs', () => {

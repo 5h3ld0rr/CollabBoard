@@ -272,9 +272,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
                     <p className="text-xs font-bold text-white tracking-wide truncate">
                       {toast.title}
                     </p>
-                    <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold uppercase bg-indigo-500/20 text-indigo-300">
-                      Live
-                    </span>
                   </div>
                   <p className="text-xs text-slate-300 mt-1 line-clamp-2 leading-relaxed">
                     {toast.message}

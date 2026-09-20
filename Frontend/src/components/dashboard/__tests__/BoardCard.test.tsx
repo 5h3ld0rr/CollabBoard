@@ -141,4 +141,16 @@ describe('BoardCard Component', () => {
     );
     expect(document.querySelector('.lucide-kanban')).toBeInTheDocument();
   });
+
+  it('renders workspace badge statically without an interactive switch dropdown on the card', () => {
+    render(
+      <BoardCard
+        board={baseBoard}
+        onToggleFavorite={mockOnToggleFavorite}
+      />
+    );
+
+    expect(screen.getByText('DevOps & Cloud')).toBeInTheDocument();
+    expect(screen.queryByTitle('Switch workspace for this board')).not.toBeInTheDocument();
+  });
 });

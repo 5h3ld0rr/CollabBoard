@@ -42,8 +42,13 @@ import {
   SUBSCRIPTION_PLANS,
 } from "../constants";
 import { saveCachedProfileDetails, getCachedProfileDetails } from "../db";
-import type { Task, TaskStatus, Workspace, User } from "../types";
-import { getInitials as extractInitials, getProfileGradient, playNotificationSound } from "../utils";
+import type { Task, TaskStatus, Workspace, User, ActiveSession } from "../types";
+import {
+  getInitials as extractInitials,
+  getProfileGradient,
+  playNotificationSound,
+  detectCurrentDevice,
+} from "../utils";
 
 type ProfileTab =
   | "workspaces"
@@ -413,6 +418,7 @@ export const Profile: React.FC = () => {
     const currentSession: ActiveSession = {
       id: "current-session",
       device: current.device,
+      browser: current.browser,
       ip: isLocal ? "127.0.0.1" : "Client IP",
       location: "Local Network",
       lastActive: "Active Now",
@@ -439,6 +445,7 @@ export const Profile: React.FC = () => {
       {
         id: "sess-mobile-ios",
         device: "iOS • Safari Mobile",
+        browser: "Safari Mobile",
         ip: "192.168.1.104",
         location: "Mobile Device",
         lastActive: "2 hours ago",
@@ -448,6 +455,7 @@ export const Profile: React.FC = () => {
       {
         id: "sess-macos-chrome",
         device: "macOS • Chrome",
+        browser: "Chrome",
         ip: "192.168.1.145",
         location: "Office Workstation",
         lastActive: "Yesterday at 4:15 PM",
@@ -496,7 +504,7 @@ export const Profile: React.FC = () => {
     }, 3200);
   };
 
-  const handlePasswordUpdate = (e: React.FormEvent) => {
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentPassword) {
       showToast("Please enter your current password", "info");

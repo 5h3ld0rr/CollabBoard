@@ -114,9 +114,21 @@ export async function getCachedBoard(boardId: string): Promise<Board | null> {
 }
 
 export async function saveBoardsToCache(boards: Board[]): Promise<void> {
-  if (!Array.isArray(boards) || boards.length === 0) return;
+  if (!Array.isArray(boards)) return;
   try {
-    await Promise.all(boards.filter(b => b?.id).map(b => upsert(getBoardsDB(), b)));
+    const db = getBoardsDB();
+    const existing = await db.allDocs({ include_docs: true });
+    const incomingIds = new Set(boards.filter((b) => b?.id).map((b) => b.id));
+
+    // Prune stale boards that are no longer returned by the server
+    const deletePromises = existing.rows
+      .filter((row) => row.doc && !incomingIds.has(row.doc._id))
+      .map((row) => db.remove(row.doc!));
+
+    // Upsert current boards
+    const upsertPromises = boards.filter((b) => b?.id).map((b) => upsert(db, b));
+
+    await Promise.all([...deletePromises, ...upsertPromises]);
   } catch (err) {
     console.warn('[PouchDB] Failed to save boards to cache:', err);
   }

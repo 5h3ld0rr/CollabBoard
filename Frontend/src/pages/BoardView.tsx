@@ -26,6 +26,7 @@ import {
   ChevronRight,
   LayoutGrid,
   Kanban,
+  Loader2,
 } from "lucide-react";
 import { Navbar, AmbientBackground } from "../components/common";
 import { getProfileGradient } from "../utils";
@@ -38,7 +39,12 @@ import {
   LivePresenceAvatarStrip,
 } from "../components/board";
 import { useBoard, useAuth } from "../context";
-import { emitBoardJoin, emitBoardLeave, subscribePresenceUpdate, onSocketAuthError } from "../sync";
+import {
+  emitBoardJoin,
+  emitBoardLeave,
+  subscribePresenceUpdate,
+  onSocketAuthError,
+} from "../sync";
 import { useReconnectionRecovery } from "../hooks/useReconnectionRecovery";
 import * as tasksApi from "../api/tasks";
 import { getWorkspaces, getWorkspaceById } from "../api/workspaces";
@@ -64,6 +70,10 @@ export const BoardView: React.FC = () => {
   } = useBoard();
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [isWorkspaceDropdownOpen, setIsWorkspaceDropdownOpen] = useState(false);
+  const [isSwitchingWorkspace, setIsSwitchingWorkspace] = useState(false);
+  const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState<string | null>(null);
+  const workspaceDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     getWorkspaces()
@@ -71,9 +81,37 @@ export const BoardView: React.FC = () => {
       .catch(() => {});
   }, []);
 
+  // Close workspace switcher dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        workspaceDropdownRef.current &&
+        !workspaceDropdownRef.current.contains(e.target as Node)
+      ) {
+        setIsWorkspaceDropdownOpen(false);
+      }
+    };
+    if (isWorkspaceDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isWorkspaceDropdownOpen]);
+
   const shareToken = searchParams.get("shareToken") || undefined;
   const isGuestView = Boolean(shareToken);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+
+  // Derive viewer-role read-only flag (re-evaluates whenever boardData or user changes)
+  const isViewer = useMemo(() => {
+    if (!boardData?.memberRoles || !user?.id) return false;
+    const role = boardData.memberRoles[user.id];
+    return role === 'Viewer';
+  }, [boardData?.memberRoles, user?.id]);
+
+  // Read-only when on a share-link (guest) OR when the authenticated member has Viewer role
+  const isReadOnly = isGuestView || isViewer;
 
   // Slide 18 & 17: Reconnection resilience hook - re-joins room, refetches board via REST, and flushes offline queue
   useReconnectionRecovery({
@@ -88,8 +126,8 @@ export const BoardView: React.FC = () => {
   // Slide 11 & 12: Redirect on socket handshake error (BAD_TOKEN / NO_TOKEN)
   useEffect(() => {
     const unsubAuthError = onSocketAuthError((reason) => {
-      if (reason === 'BAD_TOKEN' || reason === 'NO_TOKEN') {
-        navigate('/login');
+      if (reason === "BAD_TOKEN" || reason === "NO_TOKEN") {
+        navigate("/login");
       }
     });
 
@@ -110,13 +148,16 @@ export const BoardView: React.FC = () => {
       const handleBeforeUnload = () => {
         emitBoardLeave(boardId);
       };
-      window.addEventListener('beforeunload', handleBeforeUnload);
+      window.addEventListener("beforeunload", handleBeforeUnload);
 
       return () => {
-        window.removeEventListener('beforeunload', handleBeforeUnload);
+        window.removeEventListener("beforeunload", handleBeforeUnload);
         emitBoardLeave(boardId);
         unsubPresence();
-        dispatch({ type: 'SET_ACTIVE_BOARD', payload: { board: null, tasks: [] } });
+        dispatch({
+          type: "SET_ACTIVE_BOARD",
+          payload: { board: null, tasks: [] },
+        });
       };
     }
   }, [boardId, shareToken, loadBoard, dispatch]);
@@ -164,7 +205,14 @@ export const BoardView: React.FC = () => {
   const onlineMembersList = useMemo(() => {
     const knownMembersMap = new Map<
       string,
-      { id: string; name: string; email?: string; avatar?: string; initials?: string; color?: string }
+      {
+        id: string;
+        name: string;
+        email?: string;
+        avatar?: string;
+        initials?: string;
+        color?: string;
+      }
     >();
 
     boardData?.members?.forEach((m) => {
@@ -185,8 +233,8 @@ export const BoardView: React.FC = () => {
         avatar: user.avatar || existing?.avatar,
         initials: user.initials || existing?.initials,
         ...existing,
-        color: user.color || existing?.color || 'from-indigo-600 to-violet-600',
-        name: user.name || existing?.name || 'You',
+        color: user.color || existing?.color || "from-indigo-600 to-violet-600",
+        name: user.name || existing?.name || "You",
       });
     }
 
@@ -195,12 +243,14 @@ export const BoardView: React.FC = () => {
         return knownMembersMap.get(uid)!;
       }
       const isSelf = uid === user?.id;
-      const fallbackName = isSelf ? (user?.name || 'You') : 'Collaborator';
+      const fallbackName = isSelf ? user?.name || "You" : "Collaborator";
       return {
         id: uid,
         name: fallbackName,
         initials: fallbackName.slice(0, 2).toUpperCase(),
-        color: isSelf ? (user?.color || 'from-indigo-600 to-violet-600') : 'from-indigo-600 to-violet-600',
+        color: isSelf
+          ? user?.color || "from-indigo-600 to-violet-600"
+          : "from-indigo-600 to-violet-600",
       };
     });
   }, [boardData?.members, workspaceMembers, user, effectiveOnlineUsers]);
@@ -208,7 +258,9 @@ export const BoardView: React.FC = () => {
   // 409 OCC Conflict Resolution State
   const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
   const [conflictLocalTask, setConflictLocalTask] = useState<Task | null>(null);
-  const [conflictServerTask, setConflictServerTask] = useState<Task | null>(null);
+  const [conflictServerTask, setConflictServerTask] = useState<Task | null>(
+    null,
+  );
 
   // Searchable Assignee Dropdown State
   const [isAssigneeDropdownOpen, setIsAssigneeDropdownOpen] = useState(false);
@@ -262,8 +314,6 @@ export const BoardView: React.FC = () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [isAssigneeDropdownOpen, isStatusDropdownOpen]);
-
-
 
   const selectedUser = useMemo(
     () => boardMembers.find((u) => u.id === selectedAssignee),
@@ -390,12 +440,14 @@ export const BoardView: React.FC = () => {
 
       // 2. Filter by Assignee
       if (selectedAssignee !== "all") {
-        const assigneeId = typeof task.assignee === "object" && task.assignee !== null ? task.assignee.id : String(task.assignee || "");
+        const assigneeId =
+          typeof task.assignee === "object" && task.assignee !== null
+            ? task.assignee.id
+            : String(task.assignee || "");
         if (selectedAssignee === "unassigned") {
           if (task.assignee) return false;
         } else {
-          if (!assigneeId || assigneeId !== selectedAssignee)
-            return false;
+          if (!assigneeId || assigneeId !== selectedAssignee) return false;
         }
       }
 
@@ -445,20 +497,20 @@ export const BoardView: React.FC = () => {
 
   // Task mutation handlers
   const handleOpenCreateTask = (status: TaskStatus = "todo") => {
-    if (isGuestView) return;
+    if (isReadOnly) return;
     setEditingTask(null);
     setModalDefaultStatus(status);
     setIsModalOpen(true);
   };
 
   const handleEditTask = (task: Task) => {
-    if (isGuestView) return;
+    if (isReadOnly) return;
     setEditingTask(task);
     setIsModalOpen(true);
   };
 
   const handleRequestDeleteTask = (taskId: string) => {
-    if (isGuestView) return;
+    if (isReadOnly) return;
     const found = tasks.find((t) => t.id === taskId);
     if (found) {
       setTaskToDelete(found);
@@ -466,23 +518,29 @@ export const BoardView: React.FC = () => {
   };
 
   const handleConfirmDeleteTask = () => {
-    if (isGuestView) return;
+    if (isReadOnly) return;
     if (!taskToDelete) return;
-    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
     deleteTask(taskToDelete.id);
-    showToast(`Task "${taskToDelete.title}" deleted${isOffline ? ' locally (will sync when online)' : ''}`);
+    showToast(
+      `Task "${taskToDelete.title}" deleted${isOffline ? " locally (will sync when online)" : ""}`,
+    );
     setTaskToDelete(null);
   };
 
   const handleMoveStatus = async (taskId: string, newStatus: TaskStatus) => {
-    if (isGuestView) return;
+    if (isReadOnly) return;
     try {
       await moveTaskStatus(taskId, newStatus);
-      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-      showToast(`Task moved to ${newStatus.replace("-", " ")}${isOffline ? ' (saved locally, will sync when online)' : ''}`);
+      const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+      showToast(
+        `Task moved to ${newStatus.replace("-", " ")}${isOffline ? " (saved locally, will sync when online)" : ""}`,
+      );
     } catch (err: any) {
-      if (err?.status === 409 || err?.code === 'CONFLICT') {
-        showToast("⚠️ Task modified by someone else — reloaded latest board state");
+      if (err?.status === 409 || err?.code === "CONFLICT") {
+        showToast(
+          "⚠️ Task modified by someone else — reloaded latest board state",
+        );
       } else {
         showToast(err?.message || "Failed to move task");
       }
@@ -490,19 +548,24 @@ export const BoardView: React.FC = () => {
   };
 
   const handleDropTask = (taskId: string, targetStatus: TaskStatus) => {
-    if (isGuestView) return;
+    if (isReadOnly) return;
     handleMoveStatus(taskId, targetStatus);
   };
 
   const handleSaveTask = async (savedTask: Task) => {
-    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    if (isReadOnly) return;
+    const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
     const exists = tasks.some((t) => t.id === savedTask.id);
     if (exists) {
       try {
         await updateTask(savedTask);
-        showToast(isOffline ? "Task updated locally (will sync when online)" : "Task updated successfully");
+        showToast(
+          isOffline
+            ? "Task updated locally (will sync when online)"
+            : "Task updated successfully",
+        );
       } catch (err: any) {
-        if (err?.status === 409 || err?.code === 'CONFLICT') {
+        if (err?.status === 409 || err?.code === "CONFLICT") {
           // Handle 409 OCC Conflict State
           let serverDoc = err.details?.current;
           if (!serverDoc) {
@@ -523,7 +586,11 @@ export const BoardView: React.FC = () => {
     } else {
       if (boardData) {
         await addTask(boardData.id, savedTask);
-        showToast(isOffline ? "New task added locally (will sync when online)" : "New task added to board");
+        showToast(
+          isOffline
+            ? "New task added locally (will sync when online)"
+            : "New task added to board",
+        );
       }
     }
   };
@@ -534,7 +601,7 @@ export const BoardView: React.FC = () => {
   };
 
   const handleConflictDiscard = (serverTask: Task) => {
-    dispatch({ type: 'UPDATE_TASK', payload: serverTask });
+    dispatch({ type: "UPDATE_TASK", payload: serverTask });
     showToast("Reverted to server's latest version");
   };
 
@@ -550,6 +617,32 @@ export const BoardView: React.FC = () => {
     } catch (err: any) {
       showToast(err?.message || "Failed to update board");
       throw err;
+    }
+  };
+
+  const handleSwitchWorkspace = async (
+    targetWorkspaceId: string,
+    targetWorkspaceName: string,
+  ) => {
+    if (!boardData || isSwitchingWorkspace) return;
+    if (boardData.workspaceId === targetWorkspaceId) {
+      setIsWorkspaceDropdownOpen(false);
+      return;
+    }
+    setIsSwitchingWorkspace(true);
+    setSwitchingWorkspaceId(targetWorkspaceId);
+    try {
+      await handleUpdateBoard({
+        ...boardData,
+        workspaceId: targetWorkspaceId,
+        workspaceName: targetWorkspaceName,
+      });
+      setIsWorkspaceDropdownOpen(false);
+    } catch {
+      // Error notification handled in handleUpdateBoard
+    } finally {
+      setIsSwitchingWorkspace(false);
+      setSwitchingWorkspaceId(null);
     }
   };
 
@@ -677,13 +770,16 @@ export const BoardView: React.FC = () => {
                   </div>
                   <div>
                     <div className="flex items-center space-x-2">
-                      <span className="font-bold text-white text-sm">View-Only Guest Access</span>
+                      <span className="font-bold text-white text-sm">
+                        View-Only Guest Access
+                      </span>
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                         Temporary Link
                       </span>
                     </div>
                     <p className="text-amber-300/80 text-xs mt-0.5">
-                      You are viewing this board in read-only mode. Creating, editing, or moving tasks is disabled.
+                      You are viewing this board in read-only mode. Creating,
+                      editing, or moving tasks is disabled.
                     </p>
                   </div>
                 </div>
@@ -696,17 +792,22 @@ export const BoardView: React.FC = () => {
             )}
 
             {/* Board Header Bar */}
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-6 border-b border-slate-800/80 mb-6">
+            <div className="relative z-40 flex flex-col md:flex-row md:items-end justify-between gap-4 pb-6 border-b border-slate-800/80 mb-6">
               <div className="space-y-2">
                 {/* Modern Glassmorphic Breadcrumb Navigation */}
-                <nav aria-label="Breadcrumb" className="flex items-center gap-2 flex-wrap">
-                  <Link
-                    to={isGuestView ? "/" : "/dashboard"}
+                <nav
+                  aria-label="Breadcrumb"
+                  className="flex items-center gap-2 flex-wrap"
+                >
+                  <button
+                    type="button"
+                    onClick={() => navigate(-1)}
                     className="p-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800/80 hover:border-slate-700 text-slate-400 hover:text-white shadow-xs transition-all duration-150 flex items-center justify-center shrink-0 cursor-pointer group active:scale-95"
-                    title={isGuestView ? "Back to Home" : "Back to Workspaces"}
+                    title="Go back"
+                    aria-label="Go back"
                   >
                     <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5 text-slate-400 group-hover:text-indigo-400" />
-                  </Link>
+                  </button>
 
                   <div className="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-md shadow-xs shadow-black/20 text-xs text-slate-400">
                     <Link
@@ -714,20 +815,136 @@ export const BoardView: React.FC = () => {
                       className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors duration-150"
                     >
                       <LayoutGrid className="w-3.5 h-3.5 text-slate-500 hover:text-indigo-400 transition-colors" />
-                      <span className="font-medium">{isGuestView ? "Home" : "Workspaces"}</span>
+                      <span className="font-medium">
+                        {isGuestView ? "Home" : "Workspaces"}
+                      </span>
                     </Link>
 
-                    {boardData.workspaceName && (
+                    {(boardData.workspaceName || (!isGuestView && workspaces.length > 0)) && (
                       <>
                         <ChevronRight className="w-3 h-3 text-slate-600 shrink-0" />
-                        <Link
-                          to={boardData.workspaceId ? `/workspaces/${boardData.workspaceId}` : "/dashboard"}
-                          className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors duration-150 max-w-28 sm:max-w-44 truncate"
-                          title={boardData.workspaceName}
+                        <div
+                          className="relative inline-flex items-center"
+                          ref={workspaceDropdownRef}
                         >
-                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500/80 ring-2 ring-indigo-500/20 shrink-0" />
-                          <span className="truncate">{boardData.workspaceName}</span>
-                        </Link>
+                          {!isGuestView && workspaces.length > 0 ? (
+                            <div className="inline-flex items-center rounded-lg bg-slate-800/40 hover:bg-slate-800/70 border border-slate-700/50 transition-colors">
+                              <Link
+                                to={
+                                  boardData.workspaceId
+                                    ? `/workspaces/${boardData.workspaceId}`
+                                    : "/dashboard"
+                                }
+                                className="inline-flex items-center gap-1.5 px-2 py-0.5 text-slate-300 hover:text-white max-w-28 sm:max-w-44 truncate transition-colors text-xs"
+                                title={`Go to workspace: ${boardData.workspaceName || "Workspace"}`}
+                              >
+                                {isSwitchingWorkspace ? (
+                                  <Loader2 className="w-3 h-3 text-indigo-400 animate-spin shrink-0" />
+                                ) : (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 ring-2 ring-indigo-500/20 shrink-0" />
+                                )}
+                                <span className="truncate font-medium">
+                                  {boardData.workspaceName || "Select Workspace"}
+                                </span>
+                              </Link>
+
+                              <button
+                                type="button"
+                                disabled={isSwitchingWorkspace}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setIsWorkspaceDropdownOpen((prev) => !prev);
+                                }}
+                                className={`px-1.5 py-1 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-r-lg transition-colors border-l border-slate-700/50 ${
+                                  isSwitchingWorkspace
+                                    ? "opacity-50 cursor-wait"
+                                    : "cursor-pointer"
+                                }`}
+                                title="Switch workspace"
+                                aria-label="Switch workspace"
+                                aria-expanded={isWorkspaceDropdownOpen}
+                              >
+                                <ChevronDown
+                                  className={`w-3 h-3 transition-transform duration-150 ${
+                                    isWorkspaceDropdownOpen
+                                      ? "rotate-180 text-indigo-400"
+                                      : ""
+                                  }`}
+                                />
+                              </button>
+                            </div>
+                          ) : (
+                            <Link
+                              to={
+                                boardData.workspaceId
+                                  ? `/workspaces/${boardData.workspaceId}`
+                                  : "/dashboard"
+                              }
+                              className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors duration-150 max-w-28 sm:max-w-44 truncate"
+                              title={boardData.workspaceName}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500/80 ring-2 ring-indigo-500/20 shrink-0" />
+                              <span className="truncate">
+                                {boardData.workspaceName}
+                              </span>
+                            </Link>
+                          )}
+
+                          {/* Workspace Switcher Glassmorphic Dropdown */}
+                          {isWorkspaceDropdownOpen && !isGuestView && (
+                            <div className="absolute top-full left-0 mt-2 w-56 p-1.5 rounded-2xl bg-slate-900/95 border border-slate-700/80 backdrop-blur-xl shadow-2xl shadow-black/80 z-50 animate-in fade-in zoom-in-95 duration-100">
+                              <div className="px-2.5 py-1.5 mb-1 border-b border-slate-800 text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                                <span>Switch Workspace</span>
+                                {isSwitchingWorkspace ? (
+                                  <span className="text-[10px] text-indigo-400 font-medium flex items-center gap-1">
+                                    <Loader2 className="w-2.5 h-2.5 animate-spin" /> moving...
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-indigo-400 font-normal lowercase">
+                                    move board
+                                  </span>
+                                )}
+                              </div>
+                              <div className="max-h-56 overflow-y-auto space-y-0.5 custom-scrollbar">
+                                {workspaces.map((ws) => {
+                                  const isSelected =
+                                    ws.id === boardData.workspaceId;
+                                  const isCurrentSwitchTarget =
+                                    switchingWorkspaceId === ws.id;
+                                  return (
+                                    <button
+                                      key={ws.id}
+                                      type="button"
+                                      disabled={isSwitchingWorkspace}
+                                      onClick={() =>
+                                        handleSwitchWorkspace(ws.id, ws.name)
+                                      }
+                                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs transition text-left ${
+                                        isSwitchingWorkspace
+                                          ? "cursor-wait opacity-60"
+                                          : "cursor-pointer"
+                                      } ${
+                                        isSelected
+                                          ? "bg-indigo-600/20 text-indigo-300 font-semibold border border-indigo-500/30"
+                                          : "text-slate-300 hover:text-white hover:bg-slate-800/70"
+                                      }`}
+                                    >
+                                      <span className="truncate pr-2">
+                                        {ws.name}
+                                      </span>
+                                      {isCurrentSwitchTarget ? (
+                                        <Loader2 className="w-3.5 h-3.5 text-indigo-400 animate-spin shrink-0" />
+                                      ) : isSelected ? (
+                                        <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                                      ) : null}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </>
                     )}
 
@@ -760,11 +977,15 @@ export const BoardView: React.FC = () => {
                 {onlineMembersList.length > 0 && (
                   <div
                     data-testid="live-presence-indicator"
-                    onClick={() => !isGuestView && setIsMembersModalOpen(true)}
+                    onClick={() => !isReadOnly && setIsMembersModalOpen(true)}
                     className={`flex items-center transition-transform active:scale-95 ${
-                      !isGuestView ? "cursor-pointer" : ""
+                      !isReadOnly ? "cursor-pointer" : ""
                     }`}
-                    title={!isGuestView ? "Active collaborators (click to manage)" : "Active collaborators"}
+                    title={
+                      !isReadOnly
+                        ? "Active collaborators (click to manage)"
+                        : "Active collaborators"
+                    }
                   >
                     <LivePresenceAvatarStrip
                       members={onlineMembersList}
@@ -775,13 +996,13 @@ export const BoardView: React.FC = () => {
                   </div>
                 )}
 
-                {!isGuestView && (
+                {!isGuestView && !isViewer && (
                   <>
                     {onlineMembersList.length > 0 && (
                       <div className="hidden sm:block h-5 w-px bg-slate-800/80" />
                     )}
 
-                    {/* Share & Collaborators Action Button */}
+                    {/* Share & Collaborators — hidden from Viewers */}
                     <button
                       onClick={() => setIsMembersModalOpen(true)}
                       className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800/80 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-semibold shadow-xs transition-all active:scale-95 cursor-pointer"
@@ -791,22 +1012,13 @@ export const BoardView: React.FC = () => {
                       <span>Share</span>
                     </button>
 
-                    {/* Board Settings Action Button */}
+                    {/* Board Settings — hidden from Viewers */}
                     <button
                       onClick={() => setIsSettingsModalOpen(true)}
                       className="p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800/80 hover:border-slate-700 text-slate-400 hover:text-white shadow-xs transition-all active:scale-95 cursor-pointer"
                       title="Board Settings (General, Danger Zone)"
                     >
                       <Settings className="w-4 h-4" />
-                    </button>
-
-                    {/* Create Task Button */}
-                    <button
-                      onClick={() => handleOpenCreateTask("todo")}
-                      className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-linear-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-xs font-semibold shadow-md shadow-indigo-950/40 hover:shadow-indigo-900/50 transition-all active:scale-95 cursor-pointer"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Add Task</span>
                     </button>
                   </>
                 )}
@@ -864,7 +1076,7 @@ export const BoardView: React.FC = () => {
                               selectedUser.id === user?.id
                                 ? user?.color || selectedUser.color
                                 : selectedUser.color,
-                              selectedUser.name
+                              selectedUser.name,
                             )} text-white font-bold text-[8px] flex items-center justify-center`}
                           >
                             {selectedUser.initials}
@@ -1001,7 +1213,7 @@ export const BoardView: React.FC = () => {
                                     <div
                                       className={`w-5 h-5 rounded-full ${getProfileGradient(
                                         memberColor,
-                                        member.name
+                                        member.name,
                                       )} text-white font-bold text-[9px] flex items-center justify-center shrink-0`}
                                     >
                                       {member.initials}
@@ -1188,7 +1400,7 @@ export const BoardView: React.FC = () => {
                     <RotateCcw className="w-3.5 h-3.5" />
                     <span>Reset Filters</span>
                   </button>
-                  {!isGuestView && (
+                  {!isReadOnly && (
                     <button
                       onClick={() => handleOpenCreateTask("todo")}
                       className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition cursor-pointer"
@@ -1214,7 +1426,7 @@ export const BoardView: React.FC = () => {
                 onDeleteTask={handleRequestDeleteTask}
                 onMoveStatus={handleMoveStatus}
                 onDropTask={handleDropTask}
-                readOnly={isGuestView}
+                readOnly={isReadOnly}
               />
 
               <Column
@@ -1228,7 +1440,7 @@ export const BoardView: React.FC = () => {
                 onDeleteTask={handleRequestDeleteTask}
                 onMoveStatus={handleMoveStatus}
                 onDropTask={handleDropTask}
-                readOnly={isGuestView}
+                readOnly={isReadOnly}
               />
 
               <Column
@@ -1242,7 +1454,7 @@ export const BoardView: React.FC = () => {
                 onDeleteTask={handleRequestDeleteTask}
                 onMoveStatus={handleMoveStatus}
                 onDropTask={handleDropTask}
-                readOnly={isGuestView}
+                readOnly={isReadOnly}
               />
             </div>
           </>
@@ -1270,6 +1482,7 @@ export const BoardView: React.FC = () => {
           onClose={() => setIsMembersModalOpen(false)}
           board={boardData}
           workspaceMembers={workspaceMembers}
+          onlineUserIds={effectiveOnlineUsers}
           onUpdateMembers={async (newMembers) => {
             await handleUpdateBoard({
               ...boardData,
@@ -1285,7 +1498,6 @@ export const BoardView: React.FC = () => {
           isOpen={isSettingsModalOpen}
           onClose={() => setIsSettingsModalOpen(false)}
           board={boardData}
-          workspaces={workspaces}
           workspaceMembers={workspaceMembers}
           onUpdateBoard={handleUpdateBoard}
           onDeleteBoard={handleDeleteBoard}
@@ -1351,4 +1563,3 @@ export const BoardView: React.FC = () => {
 };
 
 export default BoardView;
-

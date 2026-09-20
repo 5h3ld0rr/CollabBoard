@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   X,
   Users,
@@ -23,6 +23,7 @@ interface BoardMembersModalProps {
   board: Board;
   onUpdateMembers: (newMembers: User[]) => void | Promise<void>;
   workspaceMembers?: User[];
+  onlineUserIds?: string[];
 }
 
 const ROLE_BADGES: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
@@ -85,8 +86,10 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
   board,
   onUpdateMembers,
   workspaceMembers = [],
+  onlineUserIds = [],
 }) => {
   const { user: currentUser } = useAuth();
+  const onlineSet = useMemo(() => new Set(onlineUserIds), [onlineUserIds]);
   const deduplicateMembers = useCallback(
     (userList: any[]) => {
       const raw = userList.map((m, i) => normalizeMember(m, i, board.ownerId, currentUser));
@@ -422,14 +425,15 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
               // Guard against self role change and owner role change
               const canChangeRole = !isOwner && !isSelf;
               const canRemove = !isOwner && !isSelf && members.length > 1;
+              const isOnline = isSelf || onlineSet.has(String(member.id)) || (member.email ? onlineSet.has(member.email.toLowerCase()) : false);
 
               return (
                 <div
                   key={member.id}
                   className="flex items-center justify-between p-3 rounded-2xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700/80 transition"
                 >
-                  <div className="flex items-center space-x-3 truncate">
-                    <div className="relative">
+                  <div className="flex items-center space-x-3 min-w-0 flex-1 mr-3">
+                    <div className="relative shrink-0">
                       <div
                         className={`w-8 h-8 rounded-xl ${getProfileGradient(
                           member.color,
@@ -438,10 +442,17 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
                       >
                         {member.initials}
                       </div>
-                      <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-slate-950" />
+                      <span
+                        className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-slate-950 ${
+                          isOnline
+                            ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.9)]'
+                            : 'bg-slate-600'
+                        }`}
+                        title={isOnline ? 'Online' : 'Offline'}
+                      />
                     </div>
 
-                    <div className="truncate">
+                    <div className="min-w-0 flex-1 truncate">
                       <div className="flex items-center space-x-1.5">
                         <p className="text-xs font-semibold text-white leading-tight truncate">
                           {member.name}

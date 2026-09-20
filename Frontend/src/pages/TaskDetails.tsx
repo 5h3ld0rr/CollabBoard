@@ -633,9 +633,7 @@ export const TaskDetails: React.FC = () => {
                   <div className="space-y-2">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Description</h3>
                     <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 text-sm text-slate-300 leading-relaxed min-h-24 whitespace-pre-wrap">
-                      {task.description || (
-                        <span className="text-slate-500 italic">No description provided for this task.</span>
-                      )}
+                      {task.description}
                     </div>
                   </div>
 
