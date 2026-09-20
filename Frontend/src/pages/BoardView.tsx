@@ -48,7 +48,7 @@ import {
 import { useReconnectionRecovery } from "../hooks/useReconnectionRecovery";
 import * as tasksApi from "../api/tasks";
 import { getWorkspaces, getWorkspaceById } from "../api/workspaces";
-import type { Board, Task, TaskStatus, User, Workspace } from "../types";
+import type { Board, BoardColumn, Task, TaskStatus, User, Workspace } from "../types";
 
 export const BoardView: React.FC = () => {
   const { id: boardId } = useParams<{ id: string }>();
@@ -64,6 +64,7 @@ export const BoardView: React.FC = () => {
     updateTask,
     deleteTask,
     moveTaskStatus,
+    reorderTask,
     clearBoardTasks,
     updateBoard,
     deleteBoard,
@@ -172,6 +173,8 @@ export const BoardView: React.FC = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [settingsModalTab, setSettingsModalTab] = useState<'general' | 'columns' | 'danger'>('general');
+  const [selectedCreateColumnId, setSelectedCreateColumnId] = useState<string | null>(null);
   const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
   const [workspaceMembers, setWorkspaceMembers] = useState<User[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -481,25 +484,24 @@ export const BoardView: React.FC = () => {
     selectedTag,
   ]);
 
-  // Column grouped tasks
-  const todoTasks = useMemo(
-    () => filteredTasks.filter((t) => t.status === "todo"),
-    [filteredTasks],
-  );
-  const inProgressTasks = useMemo(
-    () => filteredTasks.filter((t) => t.status === "in-progress"),
-    [filteredTasks],
-  );
-  const doneTasks = useMemo(
-    () => filteredTasks.filter((t) => t.status === "done"),
-    [filteredTasks],
-  );
+  // Dynamic columns list
+  const columnsToRender: BoardColumn[] = useMemo(() => {
+    if (boardData?.columns && boardData.columns.length > 0) {
+      return [...boardData.columns].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+    }
+    return [
+      { id: 'col-todo', title: 'To Do', statusKey: 'todo', colorDot: 'bg-slate-400', position: 0 },
+      { id: 'col-in-progress', title: 'In Progress', statusKey: 'in-progress', colorDot: 'bg-indigo-400', position: 1 },
+      { id: 'col-done', title: 'Completed', statusKey: 'done', colorDot: 'bg-emerald-400', position: 2 },
+    ];
+  }, [boardData?.columns]);
 
   // Task mutation handlers
-  const handleOpenCreateTask = (status: TaskStatus = "todo") => {
+  const handleOpenCreateTask = (status: TaskStatus = "todo", columnId?: string) => {
     if (isReadOnly) return;
     setEditingTask(null);
     setModalDefaultStatus(status);
+    setSelectedCreateColumnId(columnId || null);
     setIsModalOpen(true);
   };
 
@@ -547,9 +549,32 @@ export const BoardView: React.FC = () => {
     }
   };
 
-  const handleDropTask = (taskId: string, targetStatus: TaskStatus) => {
+  const handleDropTask = async (
+    taskId: string,
+    targetStatus: TaskStatus,
+    targetIndex?: number,
+    targetColumnId?: string
+  ) => {
     if (isReadOnly) return;
-    handleMoveStatus(taskId, targetStatus);
+    try {
+      if (typeof targetIndex === 'number' || targetColumnId) {
+        await reorderTask(taskId, targetStatus, targetIndex, targetColumnId);
+      } else {
+        await moveTaskStatus(taskId, targetStatus);
+      }
+      const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+      showToast(
+        `Task moved${isOffline ? " (saved locally, will sync when online)" : ""}`,
+      );
+    } catch (err: any) {
+      if (err?.status === 409 || err?.code === "CONFLICT") {
+        showToast(
+          "⚠️ Task modified by someone else — reloaded latest board state",
+        );
+      } else {
+        showToast(err?.message || "Failed to move task");
+      }
+    }
   };
 
   const handleSaveTask = async (savedTask: Task) => {
@@ -585,7 +610,10 @@ export const BoardView: React.FC = () => {
       }
     } else {
       if (boardData) {
-        await addTask(boardData.id, savedTask);
+        await addTask(boardData.id, {
+          ...savedTask,
+          columnId: selectedCreateColumnId || savedTask.columnId,
+        });
         showToast(
           isOffline
             ? "New task added locally (will sync when online)"
@@ -1014,9 +1042,12 @@ export const BoardView: React.FC = () => {
 
                     {/* Board Settings — hidden from Viewers */}
                     <button
-                      onClick={() => setIsSettingsModalOpen(true)}
+                      onClick={() => {
+                        setSettingsModalTab('general');
+                        setIsSettingsModalOpen(true);
+                      }}
                       className="p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800/80 hover:border-slate-700 text-slate-400 hover:text-white shadow-xs transition-all active:scale-95 cursor-pointer"
-                      title="Board Settings (General, Danger Zone)"
+                      title="Board Settings (General, Columns, Danger Zone)"
                     >
                       <Settings className="w-4 h-4" />
                     </button>
@@ -1414,48 +1445,56 @@ export const BoardView: React.FC = () => {
             )}
 
             {/* Kanban Columns Canvas */}
-            <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-5 pb-6">
-              <Column
-                title="To Do"
-                status="todo"
-                colorDot="bg-slate-400"
-                accentBadge="bg-slate-800 text-slate-300"
-                tasks={todoTasks}
-                onAddTask={handleOpenCreateTask}
-                onEditTask={handleEditTask}
-                onDeleteTask={handleRequestDeleteTask}
-                onMoveStatus={handleMoveStatus}
-                onDropTask={handleDropTask}
-                readOnly={isReadOnly}
-              />
+            <div className="flex-1 flex flex-col lg:flex-row gap-5 pb-6 overflow-x-auto items-start">
+              {columnsToRender.map((col) => {
+                const colKey = col.statusKey || col.title.toLowerCase().replace(/\s+/g, '-');
+                const colTasks = filteredTasks
+                  .filter((t) => {
+                    if (t.columnId && (t.columnId === col.id || t.columnId === col._id)) return true;
+                    if (!t.columnId && t.status === colKey) return true;
+                    if (t.status === colKey) return true;
+                    return false;
+                  })
+                  .sort((a, b) => (a.order ?? a.position ?? 0) - (b.order ?? b.position ?? 0));
 
-              <Column
-                title="In Progress"
-                status="in-progress"
-                colorDot="bg-indigo-400"
-                accentBadge="bg-indigo-950 text-indigo-300 border border-indigo-800/60"
-                tasks={inProgressTasks}
-                onAddTask={handleOpenCreateTask}
-                onEditTask={handleEditTask}
-                onDeleteTask={handleRequestDeleteTask}
-                onMoveStatus={handleMoveStatus}
-                onDropTask={handleDropTask}
-                readOnly={isReadOnly}
-              />
+                return (
+                  <Column
+                    key={col.id || col._id || col.title}
+                    title={col.title}
+                    status={colKey as TaskStatus}
+                    columnId={col.id || col._id}
+                    colorDot={col.colorDot || 'bg-indigo-400'}
+                    accentBadge={
+                      colKey === 'in-progress'
+                        ? 'bg-indigo-950 text-indigo-300 border border-indigo-800/60'
+                        : colKey === 'done'
+                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60'
+                        : 'bg-slate-800 text-slate-300'
+                    }
+                    tasks={colTasks}
+                    onAddTask={handleOpenCreateTask}
+                    onEditTask={handleEditTask}
+                    onDeleteTask={handleRequestDeleteTask}
+                    onMoveStatus={handleMoveStatus}
+                    onDropTask={handleDropTask}
+                    readOnly={isReadOnly}
+                  />
+                );
+              })}
 
-              <Column
-                title="Completed"
-                status="done"
-                colorDot="bg-emerald-400"
-                accentBadge="bg-emerald-950 text-emerald-300 border border-emerald-800/60"
-                tasks={doneTasks}
-                onAddTask={handleOpenCreateTask}
-                onEditTask={handleEditTask}
-                onDeleteTask={handleRequestDeleteTask}
-                onMoveStatus={handleMoveStatus}
-                onDropTask={handleDropTask}
-                readOnly={isReadOnly}
-              />
+              {!isReadOnly && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSettingsModalTab('columns');
+                    setIsSettingsModalOpen(true);
+                  }}
+                  className="h-32 min-w-60 rounded-2xl border-2 border-dashed border-slate-800/80 hover:border-indigo-500/50 hover:bg-slate-900/40 flex flex-col items-center justify-center space-y-1.5 text-slate-500 hover:text-indigo-400 transition cursor-pointer text-xs font-semibold shrink-0 p-4"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Manage / Add Column</span>
+                </button>
+              )}
             </div>
           </>
         )}
@@ -1492,13 +1531,14 @@ export const BoardView: React.FC = () => {
         />
       )}
 
-      {/* Board Settings Modal (General, Members, Danger Zone) */}
+      {/* Board Settings Modal (General, Columns, Danger Zone) */}
       {boardData && (
         <BoardSettingsModal
           isOpen={isSettingsModalOpen}
           onClose={() => setIsSettingsModalOpen(false)}
           board={boardData}
           workspaceMembers={workspaceMembers}
+          initialTab={settingsModalTab}
           onUpdateBoard={handleUpdateBoard}
           onDeleteBoard={handleDeleteBoard}
           onClearTasks={handleClearTasks}

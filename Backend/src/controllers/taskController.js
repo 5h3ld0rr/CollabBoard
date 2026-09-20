@@ -105,7 +105,12 @@ export async function update(req, res) {
 }
 
 export async function moveStatus(req, res) {
-  const task = await taskService.moveTaskStatus(req.params.id, req.body.status, req.user.id);
+  const extraFields = {};
+  if (req.body.columnId !== undefined) extraFields.columnId = req.body.columnId;
+  if (req.body.position !== undefined) extraFields.position = req.body.position;
+  if (req.body.order !== undefined) extraFields.order = req.body.order;
+
+  const task = await taskService.moveTaskStatus(req.params.id, req.body.status, req.user.id, extraFields);
   emitTaskUpdated(task.boardId, task, req.user.id);
   res.status(200).json({
     data: task,

@@ -11,8 +11,13 @@ import {
   Activity,
   Sparkles,
   RotateCcw,
+  Plus,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+  Columns as ColumnsIcon,
 } from 'lucide-react';
-import type { Board, User } from '../../types';
+import type { Board, BoardColumn, User } from '../../types';
 import { COLOR_OPTIONS } from '../../constants';
 
 interface BoardSettingsModalProps {
@@ -22,7 +27,7 @@ interface BoardSettingsModalProps {
   onUpdateBoard: (updatedBoard: Board) => void | Promise<void>;
   onDeleteBoard?: (boardId: string) => void;
   onClearTasks?: () => void;
-  initialTab?: 'general' | 'danger' | string;
+  initialTab?: 'general' | 'columns' | 'danger' | string;
   workspaceMembers?: User[];
 }
 
@@ -35,6 +40,17 @@ const ICON_OPTIONS = [
   { name: 'Sparkles', icon: Sparkles, label: 'Sprint' },
 ];
 
+const COLUMN_COLOR_OPTIONS = [
+  { label: 'Slate', value: 'bg-slate-400' },
+  { label: 'Indigo', value: 'bg-indigo-400' },
+  { label: 'Emerald', value: 'bg-emerald-400' },
+  { label: 'Amber', value: 'bg-amber-400' },
+  { label: 'Rose', value: 'bg-rose-400' },
+  { label: 'Purple', value: 'bg-purple-400' },
+  { label: 'Cyan', value: 'bg-cyan-400' },
+  { label: 'Sky', value: 'bg-sky-400' },
+];
+
 export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
   isOpen,
   onClose,
@@ -44,16 +60,19 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
   onClearTasks,
   initialTab = 'general',
 }) => {
-  const [activeTab, setActiveTab] = useState<'general' | 'danger'>(
-    initialTab === 'danger' ? 'danger' : 'general'
+  const [activeTab, setActiveTab] = useState<'general' | 'columns' | 'danger'>(
+    initialTab === 'danger' ? 'danger' : initialTab === 'columns' ? 'columns' : 'general'
   );
-  
+
   // General Tab States
   const [title, setTitle] = useState(board.title);
   const [description, setDescription] = useState(board.description);
   const [color, setColor] = useState(board.color || COLOR_OPTIONS[0].value);
   const [icon, setIcon] = useState(board.icon || 'Kanban');
   const [tagsInput, setTagsInput] = useState(Array.isArray(board.tags) ? board.tags.join(', ') : '');
+
+  // Columns Tab States
+  const [columns, setColumns] = useState<BoardColumn[]>([]);
 
   // Danger Zone States
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -66,12 +85,26 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      setActiveTab(initialTab === 'danger' ? 'danger' : 'general');
+      setActiveTab(
+        initialTab === 'danger' ? 'danger' : initialTab === 'columns' ? 'columns' : 'general'
+      );
       setTitle(board.title);
       setDescription(board.description);
       setColor(board.color || COLOR_OPTIONS[0].value);
       setIcon(board.icon || 'Kanban');
       setTagsInput(Array.isArray(board.tags) ? board.tags.join(', ') : '');
+      
+      const defaultCols: BoardColumn[] = [
+        { id: 'col-todo', title: 'To Do', position: 0, statusKey: 'todo', colorDot: 'bg-slate-400' },
+        { id: 'col-in-progress', title: 'In Progress', position: 1, statusKey: 'in-progress', colorDot: 'bg-indigo-400' },
+        { id: 'col-done', title: 'Done', position: 2, statusKey: 'done', colorDot: 'bg-emerald-400' },
+      ];
+      setColumns(
+        board.columns && board.columns.length > 0
+          ? [...board.columns].sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+          : defaultCols
+      );
+
       setConfirmDelete(false);
       setConfirmClear(false);
       setSuccessMessage(null);
@@ -123,6 +156,81 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
     }
   };
 
+  // Columns Tab Actions
+  const handleMoveColumn = (index: number, direction: 'up' | 'down') => {
+    const targetIdx = direction === 'up' ? index - 1 : index + 1;
+    if (targetIdx < 0 || targetIdx >= columns.length) return;
+    const newCols = [...columns];
+    const temp = newCols[index];
+    newCols[index] = newCols[targetIdx];
+    newCols[targetIdx] = temp;
+    setColumns(newCols);
+  };
+
+  const handleUpdateColumnTitle = (index: number, newTitle: string) => {
+    const newCols = [...columns];
+    newCols[index] = { ...newCols[index], title: newTitle };
+    setColumns(newCols);
+  };
+
+  const handleUpdateColumnColor = (index: number, newColor: string) => {
+    const newCols = [...columns];
+    newCols[index] = { ...newCols[index], colorDot: newColor };
+    setColumns(newCols);
+  };
+
+  const handleAddColumn = () => {
+    const newColId = `col_${Date.now()}`;
+    const newCols: BoardColumn[] = [
+      ...columns,
+      {
+        id: newColId,
+        title: `Column ${columns.length + 1}`,
+        position: columns.length,
+        statusKey: `status-${Date.now()}`,
+        colorDot: 'bg-indigo-400',
+      },
+    ];
+    setColumns(newCols);
+  };
+
+  const handleDeleteColumn = (index: number) => {
+    if (columns.length <= 1) {
+      showError('Board must have at least one column');
+      return;
+    }
+    const newCols = columns.filter((_, i) => i !== index);
+    setColumns(newCols);
+  };
+
+  const handleSaveColumns = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (columns.some((c) => !c.title.trim())) {
+      showError('All columns must have a title');
+      return;
+    }
+
+    const normalizedColumns: BoardColumn[] = columns.map((c, idx) => ({
+      ...c,
+      title: c.title.trim(),
+      position: idx,
+      statusKey: c.statusKey || c.title.trim().toLowerCase().replace(/\s+/g, '-'),
+    }));
+
+    setIsSaving(true);
+    try {
+      await onUpdateBoard({
+        ...board,
+        columns: normalizedColumns,
+      });
+      showSuccess('Columns updated successfully!');
+    } catch (err: any) {
+      showError(err?.message || 'Failed to update columns');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // Danger Zone Actions
   const handleClearTasks = () => {
     if (onClearTasks) {
@@ -161,7 +269,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
           <div>
             <h2 className="text-xl font-bold text-white">Board Settings</h2>
             <p className="text-xs text-slate-400">
-              General configuration and board controls
+              General configuration, workflow columns, and board controls
             </p>
           </div>
         </div>
@@ -178,6 +286,18 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
             }`}
           >
             General
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('columns')}
+            className={`px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center space-x-1.5 ${
+              activeTab === 'columns'
+                ? 'bg-indigo-600 text-white'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            <ColumnsIcon className="w-3.5 h-3.5" />
+            <span>Columns</span>
           </button>
           <button
             type="button"
@@ -212,91 +332,91 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
         {activeTab === 'general' && (
           <form onSubmit={handleSaveGeneral} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Board Title
+              <label className="block text-xs font-medium text-slate-300 mb-1">
+                Board Title *
               </label>
               <input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 required
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950/70 border border-slate-700/80 focus:border-indigo-500 text-white text-xs outline-hidden transition"
+                placeholder="Project title..."
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-medium text-slate-300 mb-1">
                 Description
               </label>
               <textarea
-                rows={2}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition resize-none"
+                rows={3}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950/70 border border-slate-700/80 focus:border-indigo-500 text-white text-xs outline-hidden transition resize-none"
+                placeholder="What is this board for?"
               />
             </div>
 
-
-            {/* Board Icon */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-medium text-slate-300 mb-2">
+                Color Gradient
+              </label>
+              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                {COLOR_OPTIONS.map((c) => (
+                  <button
+                    key={c.label}
+                    type="button"
+                    onClick={() => setColor(c.value)}
+                    className={`h-9 rounded-xl bg-linear-to-br ${c.value} flex items-center justify-center transition-all cursor-pointer ${
+                      color === c.value
+                        ? 'ring-2 ring-white ring-offset-2 ring-offset-slate-900 scale-105 shadow-md'
+                        : 'opacity-70 hover:opacity-100 hover:scale-102'
+                    }`}
+                  >
+                    {color === c.value && <Check className="w-4 h-4 text-white drop-shadow-md" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-2">
                 Board Icon
               </label>
-              <div className="flex flex-wrap gap-2">
-                {ICON_OPTIONS.map((ic) => {
-                  const IconComp = ic.icon;
-                  const isSelected = icon === ic.name;
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                {ICON_OPTIONS.map((item) => {
+                  const IconComp = item.icon;
+                  const isSelected = icon === item.name;
                   return (
                     <button
-                      key={ic.name}
+                      key={item.name}
                       type="button"
-                      onClick={() => setIcon(ic.name)}
-                      className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition cursor-pointer ${
+                      onClick={() => setIcon(item.name)}
+                      className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs font-medium transition cursor-pointer ${
                         isSelected
-                          ? 'bg-indigo-600/30 border-indigo-500 text-white shadow-sm'
-                          : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200'
+                          ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 shadow-sm'
+                          : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
                       }`}
                     >
-                      <IconComp className="w-3.5 h-3.5" />
-                      <span>{ic.label}</span>
+                      <IconComp className="w-4 h-4 mb-1" />
+                      <span className="text-[10px]">{item.label}</span>
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            {/* Board Theme */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Board Theme Color
-              </label>
-              <div className="flex items-center space-x-2.5">
-                {COLOR_OPTIONS.map((c, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setColor(c.value)}
-                    className={`w-8 h-8 rounded-lg bg-linear-to-br ${c.value} transition-all cursor-pointer ${
-                      color === c.value
-                        ? 'ring-2 ring-white scale-110 shadow-lg'
-                        : 'opacity-70 hover:opacity-100'
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Tags */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Tags <span className="text-slate-500 lowercase font-normal">(comma-separated)</span>
+              <label className="block text-xs font-medium text-slate-300 mb-1">
+                Tags (comma separated)
               </label>
               <input
                 type="text"
                 value={tagsInput}
                 onChange={(e) => setTagsInput(e.target.value)}
-                placeholder="e.g. Backend, WebSocket, Priority"
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                placeholder="Product, Design, Sprint 1"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950/70 border border-slate-700/80 focus:border-indigo-500 text-white text-xs outline-hidden transition"
               />
             </div>
 
@@ -320,7 +440,115 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
           </form>
         )}
 
-        {/* TAB 2: DANGER ZONE */}
+        {/* TAB 2: COLUMNS */}
+        {activeTab === 'columns' && (
+          <form onSubmit={handleSaveColumns} className="space-y-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-slate-400">
+                Customize column workflow, reorder, or add custom columns:
+              </p>
+              <button
+                type="button"
+                onClick={handleAddColumn}
+                className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-xs font-semibold transition cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Column</span>
+              </button>
+            </div>
+
+            <div className="space-y-2.5 max-h-75 overflow-y-auto pr-1">
+              {columns.map((col, idx) => (
+                <div
+                  key={col.id || col._id || idx}
+                  className="flex items-center space-x-2.5 p-3 rounded-2xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700/80 transition"
+                >
+                  {/* Position Buttons */}
+                  <div className="flex flex-col space-y-1 shrink-0">
+                    <button
+                      type="button"
+                      disabled={idx === 0}
+                      onClick={() => handleMoveColumn(idx, 'up')}
+                      className="p-1 rounded bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                    >
+                      <ArrowUp className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={idx === columns.length - 1}
+                      onClick={() => handleMoveColumn(idx, 'down')}
+                      className="p-1 rounded bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                    >
+                      <ArrowDown className="w-3 h-3" />
+                    </button>
+                  </div>
+
+                  {/* Color Dot Palette */}
+                  <div className="relative group shrink-0">
+                    <div
+                      title="Select column indicator color"
+                      className={`w-5 h-5 rounded-full ${col.colorDot || 'bg-indigo-400'} cursor-pointer ring-2 ring-slate-800 hover:scale-110 transition`}
+                    />
+                    <div className="absolute left-0 top-7 hidden group-hover:flex items-center space-x-1 p-1.5 bg-slate-900 border border-slate-700 rounded-xl shadow-xl z-20">
+                      {COLUMN_COLOR_OPTIONS.map((c) => (
+                        <button
+                          key={c.label}
+                          type="button"
+                          onClick={() => handleUpdateColumnColor(idx, c.value)}
+                          className={`w-4 h-4 rounded-full ${c.value} hover:scale-125 transition cursor-pointer ${
+                            col.colorDot === c.value ? 'ring-2 ring-white' : ''
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Title Input */}
+                  <div className="flex-1 min-w-0">
+                    <input
+                      type="text"
+                      value={col.title}
+                      onChange={(e) => handleUpdateColumnTitle(idx, e.target.value)}
+                      placeholder="Column name..."
+                      className="w-full px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs outline-hidden focus:border-indigo-500 transition font-medium"
+                    />
+                  </div>
+
+                  {/* Delete Column Button */}
+                  <button
+                    type="button"
+                    disabled={columns.length <= 1}
+                    onClick={() => handleDeleteColumn(idx)}
+                    title={columns.length <= 1 ? 'At least one column is required' : 'Delete column'}
+                    className="p-1.5 rounded-xl text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer shrink-0"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="inline-flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 transition-all active:scale-95 cursor-pointer"
+              >
+                <Check className="w-4 h-4" />
+                <span>{isSaving ? 'Saving...' : 'Save Columns'}</span>
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* TAB 3: DANGER ZONE */}
         {activeTab === 'danger' && (
           <div className="space-y-4">
             {/* Clear Board Tasks */}
@@ -332,7 +560,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
                     <span>Clear All Tasks</span>
                   </h4>
                   <p className="text-[11px] text-slate-400 mt-1">
-                    Delete all tasks across To Do, In Progress, and Done columns on this board.
+                    Delete all tasks across all columns on this board.
                   </p>
                 </div>
                 {!confirmClear ? (

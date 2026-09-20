@@ -96,9 +96,10 @@ export async function updateTask(
  */
 export async function moveTaskStatus(
   taskId: string,
-  newStatus: TaskStatus
+  newStatus: TaskStatus,
+  extra?: { columnId?: string; position?: number; order?: number }
 ): Promise<Task> {
-  return updateTask(taskId, { status: newStatus });
+  return updateTask(taskId, { status: newStatus, ...extra });
 }
 
 /**

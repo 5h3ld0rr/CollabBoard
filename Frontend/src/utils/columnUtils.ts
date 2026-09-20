@@ -20,7 +20,7 @@ export function calculateColumnCounts(tasks: Task[]): ColumnTaskCounts {
 
   for (const task of tasks) {
     if (task.status === 'todo' || task.status === 'in-progress' || task.status === 'done') {
-      counts[task.status] += 1;
+      counts[task.status as keyof ColumnTaskCounts] += 1;
     }
   }
 

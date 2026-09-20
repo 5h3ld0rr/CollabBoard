@@ -181,14 +181,15 @@ export async function updateTask(taskId, updates, userId) {
 /**
  * Move task status within its lifecycle (todo -> doing -> done) with OCC verification
  */
-export async function moveTaskStatus(taskId, newStatus, userId) {
+export async function moveTaskStatus(taskId, newStatus, userId, extraFields = {}) {
   const task = await taskRepo.findById(taskId);
   if (!task) {
     throw new NotFoundError('Task');
   }
 
   await assertBoardAccess(task.boardId, userId);
-  const updated = await taskRepo.update(taskId, { status: newStatus }, task.version);
+  const payload = { status: newStatus, ...extraFields };
+  const updated = await taskRepo.update(taskId, payload, task.version);
   if (!updated) {
     const current = await taskRepo.findById(taskId);
     if (!current) throw new NotFoundError('Task');

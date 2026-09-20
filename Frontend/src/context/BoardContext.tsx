@@ -290,6 +290,12 @@ export interface BoardContextValue {
   updateTask: (task: Task) => Promise<Task>;
   deleteTask: (taskId: string) => Promise<void>;
   moveTaskStatus: (taskId: string, newStatus: TaskStatus) => Promise<void>;
+  reorderTask: (
+    taskId: string,
+    targetStatus: TaskStatus,
+    targetIndex?: number,
+    targetColumnId?: string
+  ) => Promise<void>;
   clearBoardTasks: (boardId: string) => Promise<void>;
   addBoard: (boardInput: Partial<Board> & { title: string }) => Promise<Board>;
   updateBoard: (board: Board) => Promise<Board>;
@@ -556,6 +562,110 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [state.tasks, state.activeBoard, loadBoard]);
 
+  const reorderTask = useCallback(
+    async (
+      taskId: string,
+      targetStatus: TaskStatus,
+      targetIndex?: number,
+      targetColumnId?: string
+    ) => {
+      playCardDropSound();
+      const existing = state.tasks.find((t) => t.id === taskId);
+      if (!existing) return;
+
+      const targetColumnTasks = state.tasks
+        .filter((t) => {
+          if (t.id === taskId) return false;
+          if (targetColumnId && t.columnId === targetColumnId) return true;
+          return t.status === targetStatus;
+        })
+        .sort((a, b) => (a.order ?? a.position ?? 0) - (b.order ?? b.position ?? 0));
+
+      const insertionIndex =
+        typeof targetIndex === 'number'
+          ? Math.max(0, Math.min(targetIndex, targetColumnTasks.length))
+          : targetColumnTasks.length;
+
+      const updatedMovingTask: Task = {
+        ...existing,
+        status: targetStatus,
+        columnId: targetColumnId ?? existing.columnId,
+        order: insertionIndex,
+        position: insertionIndex,
+        updatedAt: new Date().toISOString(),
+      };
+
+      const newColumnList = [...targetColumnTasks];
+      newColumnList.splice(insertionIndex, 0, updatedMovingTask);
+
+      const reindexedTasksMap = new Map<string, Task>();
+      newColumnList.forEach((t, idx) => {
+        reindexedTasksMap.set(t.id, {
+          ...t,
+          order: idx,
+          position: idx,
+        });
+      });
+
+      const newAllTasks = state.tasks.map((t) => {
+        if (reindexedTasksMap.has(t.id)) {
+          return reindexedTasksMap.get(t.id)!;
+        }
+        return t;
+      });
+
+      dispatch({ type: 'SET_TASKS', payload: newAllTasks });
+
+      for (const t of reindexedTasksMap.values()) {
+        await updateCachedTask(t);
+      }
+
+      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+      if (isOffline) {
+        await enqueueMutation({
+          type: 'MOVE_TASK_STATUS',
+          entityId: taskId,
+          payload: {
+            status: targetStatus,
+            columnId: targetColumnId,
+            order: insertionIndex,
+            position: insertionIndex,
+          },
+        });
+        return;
+      }
+
+      try {
+        const updated = await tasksApi.moveTaskStatus(taskId, targetStatus, {
+          columnId: targetColumnId,
+          order: insertionIndex,
+          position: insertionIndex,
+        });
+        dispatch({ type: 'UPDATE_TASK', payload: updated });
+        await updateCachedTask(updated);
+      } catch (err: any) {
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          await enqueueMutation({
+            type: 'MOVE_TASK_STATUS',
+            entityId: taskId,
+            payload: {
+              status: targetStatus,
+              columnId: targetColumnId,
+              order: insertionIndex,
+              position: insertionIndex,
+            },
+          });
+          return;
+        }
+        if (state.activeBoard) {
+          await loadBoard(state.activeBoard.id);
+        }
+        throw err;
+      }
+    },
+    [state.tasks, state.activeBoard, loadBoard]
+  );
+
   const clearBoardTasks = useCallback(async (boardId: string) => {
     dispatch({ type: 'CLEAR_BOARD_TASKS', payload: { boardId } });
     await clearCachedBoardTasks(boardId);
@@ -623,6 +733,9 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       workspaceId: board.workspaceId,
       workspaceName: board.workspaceName,
     };
+    if (board.columns && Array.isArray(board.columns)) {
+      payload.columns = board.columns;
+    }
     if (board.members && Array.isArray(board.members)) {
       payload.members = board.members.map((m: any) =>
         typeof m === 'object' && m !== null
@@ -1039,6 +1152,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updateTask,
         deleteTask,
         moveTaskStatus,
+        reorderTask,
         clearBoardTasks,
         addBoard,
         updateBoard,

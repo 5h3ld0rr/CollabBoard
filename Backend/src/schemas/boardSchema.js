@@ -1,5 +1,14 @@
 import { z } from 'zod';
 
+const columnInputSchema = z.object({
+  id: z.string().optional(),
+  _id: z.string().optional(),
+  title: z.string().trim().min(1, 'Column title is required'),
+  position: z.coerce.number().optional().default(0),
+  statusKey: z.string().trim().optional(),
+  colorDot: z.string().optional(),
+});
+
 /**
  * Validation schema for Board Creation
  */
@@ -7,6 +16,7 @@ export const createBoardSchema = z.object({
   title: z.string().trim().min(3, 'Board title must be at least 3 characters'),
   description: z.string().trim().optional().default(''),
   members: z.array(z.union([z.string(), z.object({ id: z.string() }).passthrough()])).optional().default([]),
+  columns: z.array(columnInputSchema).optional(),
   color: z.string().optional(),
   icon: z.string().optional(),
   tags: z.array(z.string()).optional(),
@@ -23,6 +33,7 @@ export const updateBoardSchema = z.object({
   description: z.string().trim().optional(),
   members: z.array(z.union([z.string(), z.object({ id: z.string() }).passthrough()])).optional(),
   memberRoles: z.record(z.string(), z.string()).optional(),
+  columns: z.array(columnInputSchema).optional(),
   color: z.string().optional(),
   icon: z.string().optional(),
   tags: z.array(z.string()).optional(),

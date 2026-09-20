@@ -10,8 +10,10 @@ export const createTaskSchema = z.object({
   priority: z.enum(['low', 'normal', 'medium', 'high', 'urgent']).default('medium'),
   assignee: z.string().trim().optional().default(''),
   boardId: z.string().trim().min(1, 'boardId is required'),
+  columnId: z.string().optional().nullable(),
   tags: z.array(z.string()).optional().default([]),
   order: z.coerce.number().optional(),
+  position: z.coerce.number().optional(),
   dueDate: z.string().optional(),
 });
 
@@ -25,9 +27,11 @@ export const updateTaskSchema = z.object({
   priority: z.enum(['low', 'normal', 'medium', 'high', 'urgent']).optional(),
   assignee: z.string().trim().optional(),
   boardId: z.string().trim().optional(),
+  columnId: z.string().optional().nullable(),
   tags: z.array(z.string()).optional(),
   order: z.coerce.number().optional(),
-  dueDate: z.string().optional(),
+  position: z.coerce.number().optional(),
+  dueDate: z.string().optional().nullable(),
   version: z.coerce.number().int().nonnegative().optional(),
 });
 
@@ -36,6 +40,9 @@ export const updateTaskSchema = z.object({
  */
 export const moveTaskStatusSchema = z.object({
   status: z.enum(['todo', 'in-progress', 'done']),
+  columnId: z.string().optional().nullable(),
+  position: z.coerce.number().optional(),
+  order: z.coerce.number().optional(),
 });
 
 /**
