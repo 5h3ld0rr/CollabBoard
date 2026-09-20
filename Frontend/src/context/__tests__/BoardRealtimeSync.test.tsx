@@ -32,6 +32,8 @@ vi.mock('../../sync/socketClient', () => {
     subscribeTaskCreated: vi.fn(),
     subscribeTaskUpdated: vi.fn(),
     subscribeTaskDeleted: vi.fn(),
+    subscribeCommentCreated: vi.fn(() => () => {}),
+    subscribeCommentDeleted: vi.fn(() => () => {}),
   };
 });
 

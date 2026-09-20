@@ -42,7 +42,12 @@ import {
   saveBoardToCache,
   enqueueMutation,
 } from '../db';
-import { flushSyncQueue } from '../sync';
+import {
+  flushSyncQueue,
+  joinBoardRoom,
+  subscribeCommentCreated,
+  subscribeCommentDeleted,
+} from '../sync';
 import { useAuth } from '../context/AuthContext';
 import type { Task, Board, TaskStatus, TaskPriority, User, TaskComment } from '../types';
 import { formatRelativeTime, getInitials, getProfileGradient, hasTaskChanged, hasBoardChanged } from '../utils';
@@ -237,6 +242,37 @@ export const TaskDetails: React.FC = () => {
       window.removeEventListener('online', handleOnline);
     };
   }, [id]);
+
+  // Real-time comments sync
+  useEffect(() => {
+    if (!task?.boardId || !task?.id) return;
+
+    joinBoardRoom(task.boardId);
+
+    const unsubCreated = subscribeCommentCreated((payload) => {
+      if (String(payload.taskId) !== String(task.id)) return;
+      if (payload.actorId && authUser?.id && String(payload.actorId) === String(authUser.id)) {
+        return; // Echo prevention: already added optimistically
+      }
+      setComments((prev) => {
+        if (prev.some((c) => c.id === payload.comment.id)) return prev;
+        return [payload.comment, ...prev];
+      });
+    });
+
+    const unsubDeleted = subscribeCommentDeleted((payload) => {
+      if (String(payload.taskId) !== String(task.id)) return;
+      if (payload.actorId && authUser?.id && String(payload.actorId) === String(authUser.id)) {
+        return;
+      }
+      setComments((prev) => prev.filter((c) => c.id !== payload.commentId));
+    });
+
+    return () => {
+      unsubCreated();
+      unsubDeleted();
+    };
+  }, [task?.boardId, task?.id, authUser?.id]);
 
   const priorityInfo = task ? PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium : PRIORITY_CONFIG.medium;
 

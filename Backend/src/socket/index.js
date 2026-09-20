@@ -257,6 +257,40 @@ export function emitTaskDeleted(boardId, taskId, actorId, version = 1) {
 }
 
 /**
+ * Emits comment:created event to board subscribers
+ * @param {string} boardId
+ * @param {string} taskId
+ * @param {object} comment
+ * @param {string} actorId
+ */
+export function emitCommentCreated(boardId, taskId, comment, actorId) {
+  emitToBoard(boardId, 'comment:created', {
+    boardId: String(boardId),
+    taskId: String(taskId),
+    comment,
+    actorId: String(actorId),
+    timestamp: new Date().toISOString(),
+  });
+}
+
+/**
+ * Emits comment:deleted event to board subscribers
+ * @param {string} boardId
+ * @param {string} taskId
+ * @param {string} commentId
+ * @param {string} actorId
+ */
+export function emitCommentDeleted(boardId, taskId, commentId, actorId) {
+  emitToBoard(boardId, 'comment:deleted', {
+    boardId: String(boardId),
+    taskId: String(taskId),
+    commentId: String(commentId),
+    actorId: String(actorId),
+    timestamp: new Date().toISOString(),
+  });
+}
+
+/**
  * Emits a direct personal notification to a specific user across all their sessions
  * @param {string} userId
  * @param {object} notification

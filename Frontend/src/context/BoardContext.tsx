@@ -26,6 +26,8 @@ import {
   subscribeTaskUpdated,
   subscribeTaskDeleted,
   subscribeBoardUpdated,
+  subscribeCommentCreated,
+  subscribeCommentDeleted,
 } from '../sync';
 import type { Board, Task, TaskStatus, User } from '../types';
 import { hasBoardsChanged, hasBoardChanged, hasTasksChanged, playCardDropSound } from '../utils';
@@ -969,11 +971,59 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     });
 
+    // Handle incoming comment:created to increment commentCount on task card
+    const unsubCommentCreated =
+      typeof subscribeCommentCreated === 'function'
+        ? subscribeCommentCreated(async (payload) => {
+            if (String(payload.boardId) !== String(activeBoardId)) return;
+            const targetTask = state.tasks.find(
+              (t) => String(t.id || (t as any)._id || '') === String(payload.taskId)
+            );
+            if (targetTask) {
+              const updatedTask = {
+                ...targetTask,
+                commentCount: (targetTask.commentCount || 0) + 1,
+              };
+              dispatch({ type: 'UPDATE_TASK', payload: updatedTask });
+              try {
+                await updateCachedTask(updatedTask);
+              } catch (err) {
+                console.warn('[BoardContext] Failed to cache task commentCount increment:', err);
+              }
+            }
+          })
+        : () => {};
+
+    // Handle incoming comment:deleted to decrement commentCount on task card
+    const unsubCommentDeleted =
+      typeof subscribeCommentDeleted === 'function'
+        ? subscribeCommentDeleted(async (payload) => {
+            if (String(payload.boardId) !== String(activeBoardId)) return;
+            const targetTask = state.tasks.find(
+              (t) => String(t.id || (t as any)._id || '') === String(payload.taskId)
+            );
+            if (targetTask) {
+              const updatedTask = {
+                ...targetTask,
+                commentCount: Math.max(0, (targetTask.commentCount || 1) - 1),
+              };
+              dispatch({ type: 'UPDATE_TASK', payload: updatedTask });
+              try {
+                await updateCachedTask(updatedTask);
+              } catch (err) {
+                console.warn('[BoardContext] Failed to cache task commentCount decrement:', err);
+              }
+            }
+          })
+        : () => {};
+
     return () => {
       unsubBoard();
       unsubCreated();
       unsubUpdated();
       unsubDeleted();
+      unsubCommentCreated();
+      unsubCommentDeleted();
     };
   }, [state.activeBoard?.id, state.tasks, user?.id, addNotification]);
 

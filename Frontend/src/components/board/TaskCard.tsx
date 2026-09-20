@@ -5,6 +5,8 @@ import {
   CheckCircle2,
   Calendar,
   ExternalLink,
+  Edit2,
+  Trash2,
   MessageSquare,
 } from 'lucide-react';
 import type { Task, TaskPriority, TaskStatus } from '../../types';
@@ -54,6 +56,9 @@ const PRIORITY_BADGES: Record<TaskPriority, { label: string; bg: string; text: s
 
 export const TaskCard: React.FC<TaskCardProps> = memo(({
   task,
+  onEdit,
+  onDelete,
+  onMoveStatus: _onMoveStatus,
   onDragStart,
   readOnly = false,
 }) => {
@@ -65,12 +70,23 @@ export const TaskCard: React.FC<TaskCardProps> = memo(({
     Boolean(task.dueDate) &&
     new Date(task.dueDate!).getTime() < new Date().setHours(0, 0, 0, 0);
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    if (readOnly) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('a') || target.closest('button')) {
+      return;
+    }
+    onEdit?.(task);
+  };
+
   return (
     <div
+      data-testid={`task-card-${task.id}`}
       draggable={!readOnly}
       onDragStart={(e) => !readOnly && onDragStart?.(e, task.id)}
+      onClick={handleCardClick}
       className={`group relative rounded-xl border p-4 transition-all duration-150 shadow-sm select-none ${
-        readOnly ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
+        readOnly ? 'cursor-default' : 'cursor-pointer active:cursor-grabbing'
       } ${
         isDone
           ? 'done bg-slate-800/50 hover:bg-slate-800/70 border-slate-700/40 hover:border-emerald-500/30 opacity-90'
@@ -79,7 +95,7 @@ export const TaskCard: React.FC<TaskCardProps> = memo(({
           : 'bg-slate-800/80 hover:bg-slate-800 border-slate-700/60 hover:border-indigo-500/40 hover:shadow-lg hover:shadow-indigo-950/30'
       }`}
     >
-      {/* Top Strip: Priority / Done Badge & View Details Link */}
+      {/* Top Strip: Priority / Done Badge & Action Links */}
       <div className="flex items-center justify-between gap-2 mb-2.5">
         <div className="flex items-center space-x-2">
           {!readOnly && (
@@ -103,16 +119,47 @@ export const TaskCard: React.FC<TaskCardProps> = memo(({
           )}
         </div>
 
-        {/* View Details Link */}
+        {/* Actions: Edit, Delete & View Details Link */}
         {!readOnly && (
-          <Link
-            to={`/tasks/${task.id}`}
-            onClick={(e) => e.stopPropagation()}
-            className="p-1 rounded-lg hover:bg-slate-700/60 text-slate-400 hover:text-white transition cursor-pointer flex items-center"
-            title="View Details"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-          </Link>
+          <div className="flex items-center space-x-1">
+            {onEdit && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit(task);
+                }}
+                className="p-1 rounded-lg hover:bg-slate-700/60 text-slate-400 hover:text-white transition cursor-pointer flex items-center"
+                title="Edit Task"
+                aria-label="Edit Task"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(task.id);
+                }}
+                className="p-1 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 transition cursor-pointer flex items-center"
+                title="Delete Task"
+                aria-label="Delete Task"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <Link
+              to={`/tasks/${task.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="p-1 rounded-lg hover:bg-slate-700/60 text-slate-400 hover:text-white transition cursor-pointer flex items-center"
+              title="View Details"
+              aria-label="View Details"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </Link>
+          </div>
         )}
       </div>
 
