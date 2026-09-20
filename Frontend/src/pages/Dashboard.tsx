@@ -36,7 +36,6 @@ export const Dashboard: React.FC = () => {
   const {
     state: { boards },
     addBoard,
-    updateBoard,
     toggleFavoriteBoard,
   } = useBoard();
   const { user } = useAuth();
@@ -194,35 +193,27 @@ export const Dashboard: React.FC = () => {
     showToast(`Created board "${newBoard.title}"!`);
   };
 
-  const handleMoveBoardWorkspace = async (boardId: string, newWorkspaceId: string) => {
-    const targetBoard = boards.find((b) => b.id === boardId);
-    if (!targetBoard) return;
-    const targetWs = workspaces.find((w) => w.id === newWorkspaceId);
-    try {
-      await updateBoard({
-        ...targetBoard,
-        workspaceId: newWorkspaceId,
-        workspaceName: targetWs ? targetWs.name : targetBoard.workspaceName,
-      });
-      showToast(`Moved "${targetBoard.title}" to "${targetWs?.name || 'workspace'}"`);
-    } catch (err: any) {
-      showToast(err?.message || 'Failed to move board');
-    }
-  };
 
   // Boards belonging to the currently active workspace
   const currentWorkspaceBoards = useMemo(() => {
-    if (!currentWorkspace) return boards;
-    const wsId = String(currentWorkspace.id);
-    const wsName = currentWorkspace.name.toLowerCase();
+    const targetWsId = workspaceId || (currentWorkspace ? String(currentWorkspace.id) : null);
 
-    return boards.filter((board) => {
-      if (board.workspaceId) return String(board.workspaceId) === wsId;
-      if (board.workspaceName)
-        return board.workspaceName.toLowerCase() === wsName;
-      return true;
-    });
-  }, [boards, currentWorkspace]);
+    if (targetWsId) {
+      return boards.filter((board) => {
+        if (board.workspaceId) return String(board.workspaceId) === targetWsId;
+        if (currentWorkspace?.name && board.workspaceName) {
+          return board.workspaceName.toLowerCase() === currentWorkspace.name.toLowerCase();
+        }
+        return false;
+      });
+    }
+
+    if (isLoadingWorkspaces) {
+      return [];
+    }
+
+    return boards;
+  }, [boards, currentWorkspace, workspaceId, isLoadingWorkspaces]);
 
   // Boards shared with the current user (collaborator on board, not owner)
   const sharedBoards = useMemo(() => {
@@ -437,9 +428,7 @@ export const Dashboard: React.FC = () => {
             <BoardCard
               key={board.id}
               board={board}
-              workspaces={workspaces}
               onToggleFavorite={handleToggleFavorite}
-              onMoveWorkspace={handleMoveBoardWorkspace}
             />
           ))}
         </div>

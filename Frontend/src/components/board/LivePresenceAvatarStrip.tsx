@@ -94,8 +94,10 @@ export const LivePresenceAvatarStrip: React.FC<LivePresenceAvatarStripProps> = (
 
             {/* Active presence status badge */}
             <span
-              className={`absolute -bottom-0.5 -right-0.5 block h-2.5 w-2.5 rounded-full ring-2 ring-slate-950 ${
-                isOnline ? 'bg-emerald-500' : 'bg-slate-600'
+              className={`absolute -bottom-0.5 -right-0.5 block h-3 w-3 rounded-full border-2 border-slate-950 ${
+                isOnline
+                  ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.9)]'
+                  : 'bg-slate-600'
               }`}
             />
           </div>

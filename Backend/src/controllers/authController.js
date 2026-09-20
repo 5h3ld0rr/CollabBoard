@@ -63,3 +63,11 @@ export async function updateProfile(req, res) {
     data: { user: updated },
   });
 }
+
+export async function updatePassword(req, res) {
+  const result = await authService.updatePassword(req.user.id, req.body);
+  res.status(200).json({
+    message: result.message,
+    data: result,
+  });
+}

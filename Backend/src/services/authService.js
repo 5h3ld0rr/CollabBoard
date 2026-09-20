@@ -113,3 +113,25 @@ export async function updateProfile(userId, { name, email, color, subscriptionPl
   const updated = await userRepo.update(userId, updates);
   return updated;
 }
+
+/**
+ * Update authenticated user password
+ */
+export async function updatePassword(userId, { currentPassword, newPassword }) {
+  const user = await userRepo.findById(userId);
+  if (!user) {
+    throw new NotFoundError('User');
+  }
+
+  const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!ok) {
+    throw new AppError('Invalid current password', 400, 'INVALID_CURRENT_PASSWORD');
+  }
+
+  const newHash = await bcrypt.hash(newPassword, 10);
+  await userRepo.updatePassword(userId, newHash);
+
+  return {
+    message: 'Password updated successfully',
+  };
+}
