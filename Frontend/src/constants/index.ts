@@ -10,6 +10,11 @@ export const COLOR_OPTIONS = [
   { label: 'Sky & Cyan', value: 'from-sky-600 to-cyan-600' },
 ];
 
+export function getRandomGradient(): string {
+  const randomIndex = Math.floor(Math.random() * COLOR_OPTIONS.length);
+  return COLOR_OPTIONS[randomIndex].value;
+}
+
 export const STATUS_COLUMNS = [
   { id: 'todo', title: 'To Do', description: 'Upcoming backlog & scheduled work' },
   { id: 'in-progress', title: 'In Progress', description: 'Actively in development' },
@@ -19,7 +24,7 @@ export const STATUS_COLUMNS = [
 export const DEFAULT_USER_PREFERENCES = {
   emailTaskAssignment: true,
   emailWeeklyDigest: false,
-  desktopNotifications: true,
+  desktopNotifications: false,
   soundEffects: true,
   compactBoardView: false,
   offlineAutoSync: true,
@@ -75,3 +80,17 @@ export const SUBSCRIPTION_PLANS = [
     ],
   },
 ];
+
+export const PLAN_LIMITS = {
+  basic: {
+    maxWorkspaces: 3,
+    maxBoardsPerWorkspace: 10,
+    maxCollaboratorsPerBoard: 5,
+  },
+  pro: {
+    maxWorkspaces: Infinity,
+    maxBoardsPerWorkspace: Infinity,
+    maxCollaboratorsPerBoard: Infinity,
+  },
+} as const;
+

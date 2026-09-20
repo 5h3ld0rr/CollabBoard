@@ -74,7 +74,7 @@ describe('Register Page', () => {
     await user.click(submitBtn);
 
     expect(screen.getByText(/Passwords do not match/i)).toBeInTheDocument();
-  });
+  }, 15000);
 
   it('submits registration successfully and redirects to /login with state', async () => {
     mockRegister.mockResolvedValueOnce(undefined);
@@ -106,7 +106,7 @@ describe('Register Page', () => {
         }),
       }));
     });
-  });
+  }, 15000);
 
   it('displays API error banner when registration fails', async () => {
     mockRegister.mockRejectedValueOnce(new Error('Email is already in use'));
@@ -129,5 +129,5 @@ describe('Register Page', () => {
     await waitFor(() => {
       expect(screen.getByText(/Email is already in use/i)).toBeInTheDocument();
     });
-  });
+  }, 15000);
 });

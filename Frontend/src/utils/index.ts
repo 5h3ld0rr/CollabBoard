@@ -1,4 +1,6 @@
 export * from './date';
 export * from './initials';
 export * from './diff';
-export * from './device';
+export * from './columnUtils';
+export * from './avatarUtils';
+export * from './sound';

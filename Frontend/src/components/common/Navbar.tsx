@@ -1,8 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  Search,
-  Bell,
   Wifi,
   WifiOff,
   LogOut,
@@ -10,11 +8,12 @@ import {
   LayoutGrid,
 } from "lucide-react";
 import { Logo } from "./Logo";
+import { NotificationDropdown } from "./NotificationDropdown";
 import { WorkspaceSwitcher } from "../workspace/WorkspaceSwitcher";
 import { GlobalSearch } from "./GlobalSearch";
 import { useAuth } from "../../context";
 import type { Workspace } from "../../types";
-import { getInitials } from "../../utils";
+import { getInitials, getProfileGradient } from "../../utils";
 
 interface NavbarProps {
   workspaces?: Workspace[];
@@ -46,7 +45,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [showNotificationToast, setShowNotificationToast] = useState(false);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isOnline, setIsOnline] = useState<boolean>(
     typeof navigator !== "undefined" ? navigator.onLine : true,
@@ -56,7 +54,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   const displayEmail = user?.email || "alex.chen@collabboard.io";
   const displayInitials = user?.initials || getInitials(displayName, "AC");
 
-  const notificationsRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -75,12 +72,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
-        notificationsRef.current &&
-        !notificationsRef.current.contains(event.target as Node)
-      ) {
-        setShowNotificationToast(false);
-      }
-      if (
         profileRef.current &&
         !profileRef.current.contains(event.target as Node)
       ) {
@@ -88,13 +79,13 @@ export const Navbar: React.FC<NavbarProps> = ({
       }
     };
 
-    if (showNotificationToast || showProfileMenu) {
+    if (showProfileMenu) {
       document.addEventListener("mousedown", handleClickOutside);
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [showNotificationToast, showProfileMenu]);
+  }, [showProfileMenu]);
 
   const isProfileVariant = variant === "profile";
   const shouldHideWorkspace = hideWorkspace || isProfileVariant;
@@ -119,7 +110,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Left Side: Brand Logo & Workspace Switcher */}
         <div className="flex items-center space-x-5 sm:space-x-6">
           <Link
-            to="/dashboard"
+            to={user ? "/dashboard" : "/"}
             className="flex items-center space-x-2 shrink-0"
           >
             <Logo size="sm" />
@@ -144,7 +135,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Middle: Global Search Bar */}
-        {!shouldHideSearch && (
+        {!shouldHideSearch && user && (
           <div className="flex-1 max-w-md hidden md:block">
             <GlobalSearch
               isOpen={isSearchModalOpen}
@@ -189,96 +180,69 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           )}
 
-          {/* Mobile Search Button */}
-          {!shouldHideSearch && (
-            <button
-              onClick={() => setIsSearchModalOpen(true)}
-              aria-label="Search"
-              className="md:hidden p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700 transition cursor-pointer"
-            >
-              <Search className="w-4 h-4" />
-            </button>
-          )}
+          {user ? (
+            <>
+              {/* Notifications Dropdown */}
+              <NotificationDropdown />
 
-          {/* Notifications Button */}
-          <div className="relative" ref={notificationsRef}>
-            <button
-              onClick={() => setShowNotificationToast((prev) => !prev)}
-              aria-label="Notifications"
-              className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700 transition relative cursor-pointer"
-            >
-              <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-indigo-500 ring-2 ring-slate-950" />
-            </button>
-
-            {showNotificationToast && (
-              <div className="absolute right-0 mt-2 w-72 p-3.5 rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black/90 backdrop-blur-xl z-50 ring-1 ring-white/10 animate-in fade-in zoom-in-95 duration-100">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-800 mb-2">
-                  <span className="text-xs font-bold text-white">
-                    Notifications
-                  </span>
-                  <span className="text-[10px] text-indigo-400 font-medium">
-                    1 New
-                  </span>
-                </div>
-                <div className="space-y-2 text-xs">
-                  <div className="p-2 rounded-lg bg-slate-800/60 border border-slate-700/50">
-                    <p className="text-slate-200 font-medium">
-                      Clara moved card to In Progress
-                    </p>
-                    <span className="text-[10px] text-slate-400">
-                      2 minutes ago
-                    </span>
+              {/* User Profile Menu */}
+              <div className="relative" ref={profileRef}>
+                <button
+                  onClick={() => setShowProfileMenu((prev) => !prev)}
+                  aria-label="User profile menu"
+                  className="flex items-center space-x-2 p-1 rounded-xl hover:bg-slate-900 border border-transparent hover:border-slate-800 transition cursor-pointer"
+                >
+                  <div
+                    data-testid="navbar-user-avatar"
+                    className={`w-8 h-8 rounded-lg ${getProfileGradient(user?.color, displayName)} text-white font-bold text-xs flex items-center justify-center shadow-inner transition-all`}
+                  >
+                    {displayInitials}
                   </div>
-                </div>
-              </div>
-            )}
-          </div>
+                </button>
 
-          {/* User Profile Menu */}
-          <div className="relative" ref={profileRef}>
-            <button
-              onClick={() => setShowProfileMenu((prev) => !prev)}
-              aria-label="User profile menu"
-              className="flex items-center space-x-2 p-1 rounded-xl hover:bg-slate-900 border border-transparent hover:border-slate-800 transition cursor-pointer"
-            >
-              <div className="w-8 h-8 rounded-lg bg-linear-to-br from-indigo-600 to-violet-600 text-white font-bold text-xs flex items-center justify-center shadow-inner">
-                {displayInitials}
+                {showProfileMenu && (
+                  <div className="absolute right-0 mt-2 w-52 rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black/90 backdrop-blur-xl p-1.5 z-50 ring-1 ring-white/10 animate-in fade-in zoom-in-95 duration-100">
+                    <div className="px-3 py-2 border-b border-slate-800 mb-1">
+                      <p className="text-xs font-semibold text-white truncate">
+                        {displayName}
+                      </p>
+                      <p className="text-[11px] text-slate-400 truncate">
+                        {displayEmail}
+                      </p>
+                    </div>
+                    <div className="space-y-0.5 text-xs">
+                      <button
+                        onClick={() => {
+                          setShowProfileMenu(false);
+                          navigate("/profile");
+                        }}
+                        className="w-full flex items-center space-x-2 px-3 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition text-left cursor-pointer"
+                      >
+                        <User className="w-3.5 h-3.5" />
+                        <span>Your Profile</span>
+                      </button>
+                      <button
+                        onClick={handleSignOut}
+                        className="w-full flex items-center space-x-2 px-3 py-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition text-left"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>Sign Out</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-            </button>
-
-            {showProfileMenu && (
-              <div className="absolute right-0 mt-2 w-52 rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black/90 backdrop-blur-xl p-1.5 z-50 ring-1 ring-white/10 animate-in fade-in zoom-in-95 duration-100">
-                <div className="px-3 py-2 border-b border-slate-800 mb-1">
-                  <p className="text-xs font-semibold text-white truncate">
-                    {displayName}
-                  </p>
-                  <p className="text-[11px] text-slate-400 truncate">
-                    {displayEmail}
-                  </p>
-                </div>
-                <div className="space-y-0.5 text-xs">
-                  <button
-                    onClick={() => {
-                      setShowProfileMenu(false);
-                      navigate("/profile");
-                    }}
-                    className="w-full flex items-center space-x-2 px-3 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition text-left cursor-pointer"
-                  >
-                    <User className="w-3.5 h-3.5" />
-                    <span>Your Profile</span>
-                  </button>
-                  <button
-                    onClick={handleSignOut}
-                    className="w-full flex items-center space-x-2 px-3 py-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition text-left"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>Sign Out</span>
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+            </>
+          ) : (
+            <div className="flex items-center space-x-2">
+              <Link
+                to="/login"
+                className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-950/40 transition active:scale-95 cursor-pointer"
+              >
+                Log In
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </header>

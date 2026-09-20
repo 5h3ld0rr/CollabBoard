@@ -9,16 +9,25 @@ import TaskDetails from './pages/TaskDetails';
 import NotFound from './pages/NotFound';
 import { ProtectedRoute, PublicRoute, OfflineIndicator } from './components/common';
 import { WorkspaceRedirect } from './components/workspace';
-import { BoardProvider, AuthProvider } from './context';
+import { BoardProvider, AuthProvider, NotificationProvider } from './context';
 
 /** Wraps all routes that need authentication context */
 function AuthLayout() {
   return (
     <AuthProvider>
+      <Outlet />
+    </AuthProvider>
+  );
+}
+
+/** Wraps protected workspace/board routes that require Board and Notification state */
+function ProtectedAppLayout() {
+  return (
+    <NotificationProvider>
       <BoardProvider>
         <Outlet />
       </BoardProvider>
-    </AuthProvider>
+    </NotificationProvider>
   );
 }
 
@@ -27,12 +36,12 @@ function App() {
     <Router>
       <OfflineIndicator />
       <Routes>
-        {/* Public routes — no auth context, no auth/me request */}
-        <Route path="/" element={<Home />} />
+        {/* Public routes */}
         <Route path="*" element={<NotFound />} />
 
         {/* Auth-aware routes — AuthProvider mounts here, triggers auth/me */}
         <Route element={<AuthLayout />}>
+          <Route path="/" element={<Home />} />
           <Route
             path="/login"
             element={
@@ -49,54 +58,58 @@ function App() {
               </PublicRoute>
             }
           />
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <WorkspaceRedirect />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/workspaces"
-            element={
-              <ProtectedRoute>
-                <WorkspaceRedirect />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/workspaces/:workspaceId"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/boards/:id"
-            element={
-              <ProtectedRoute>
-                <BoardView />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/tasks/:id"
-            element={
-              <ProtectedRoute>
-                <TaskDetails />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                <Profile />
-              </ProtectedRoute>
-            }
-          />
+
+          {/* Protected routes — BoardProvider & NotificationProvider mount only here */}
+          <Route element={<ProtectedAppLayout />}>
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <WorkspaceRedirect />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/workspaces"
+              element={
+                <ProtectedRoute>
+                  <WorkspaceRedirect />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/workspaces/:workspaceId"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/boards/:id"
+              element={
+                <ProtectedRoute allowGuestShareToken>
+                  <BoardView />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/tasks/:id"
+              element={
+                <ProtectedRoute>
+                  <TaskDetails />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <Profile />
+                </ProtectedRoute>
+              }
+            />
+          </Route>
         </Route>
       </Routes>
     </Router>

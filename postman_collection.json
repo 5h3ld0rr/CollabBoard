@@ -193,6 +193,174 @@
               "path": ["api", "boards", "b1", "analytics"]
             }
           }
+        },
+        {
+          "name": "PATCH /api/boards/:id",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Board Title\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/boards/b1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "boards", "b1"]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/boards/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/boards/b1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "boards", "b1"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/boards/:id/share-token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/boards/b1/share-token",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "boards", "b1", "share-token"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/boards/:id/share-token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expiresIn\": \"24h\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/boards/b1/share-token",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "boards", "b1", "share-token"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/boards/:id/share-token/reset",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/boards/b1/share-token/reset",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "boards", "b1", "share-token", "reset"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/boards/:id/members",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"user2\",\n  \"role\": \"Editor\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/boards/b1/members",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "boards", "b1", "members"]
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/boards/:id/members/:memberId",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"Admin\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/boards/b1/members/user2",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "boards", "b1", "members", "user2"]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/boards/:id/members/:memberId",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/boards/b1/members/user2",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "boards", "b1", "members", "user2"]
+            }
+          }
         }
       ]
     },
@@ -286,6 +454,33 @@
               "raw": "{{baseUrl}}/api/tasks/t1",
               "host": ["{{baseUrl}}"],
               "path": ["api", "tasks", "t1"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Search",
+      "item": [
+        {
+          "name": "GET /api/search",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/search?q=roadmap&type=all&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "search"],
+              "query": [
+                { "key": "q", "value": "roadmap" },
+                { "key": "type", "value": "all" },
+                { "key": "limit", "value": "10" }
+              ]
             }
           }
         }

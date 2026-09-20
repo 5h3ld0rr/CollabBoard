@@ -1,4 +1,4 @@
-import React from 'react';
+import { memo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   GripVertical,
@@ -8,7 +8,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import type { Task, TaskPriority, TaskStatus } from '../../types';
-import { getInitials } from '../../utils';
+import { getInitials, getProfileGradient } from '../../utils';
 
 interface TaskCardProps {
   task: Task;
@@ -16,6 +16,7 @@ interface TaskCardProps {
   onDelete?: (taskId: string) => void;
   onMoveStatus?: (taskId: string, newStatus: TaskStatus) => void;
   onDragStart?: (e: React.DragEvent, taskId: string) => void;
+  readOnly?: boolean;
 }
 
 const PRIORITY_BADGES: Record<TaskPriority, { label: string; bg: string; text: string; border: string }> = {
@@ -51,9 +52,10 @@ const PRIORITY_BADGES: Record<TaskPriority, { label: string; bg: string; text: s
   },
 };
 
-export const TaskCard: React.FC<TaskCardProps> = React.memo(({
+export const TaskCard: React.FC<TaskCardProps> = memo(({
   task,
   onDragStart,
+  readOnly = false,
 }) => {
   const priorityInfo = PRIORITY_BADGES[task.priority] || PRIORITY_BADGES.medium;
 
@@ -65,9 +67,11 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 
   return (
     <div
-      draggable
-      onDragStart={(e) => onDragStart?.(e, task.id)}
-      className={`group relative rounded-xl border p-4 transition-all duration-150 shadow-sm select-none cursor-grab active:cursor-grabbing ${
+      draggable={!readOnly}
+      onDragStart={(e) => !readOnly && onDragStart?.(e, task.id)}
+      className={`group relative rounded-xl border p-4 transition-all duration-150 shadow-sm select-none ${
+        readOnly ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
+      } ${
         isDone
           ? 'done bg-slate-800/50 hover:bg-slate-800/70 border-slate-700/40 hover:border-emerald-500/30 opacity-90'
           : isOverdue
@@ -78,7 +82,9 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       {/* Top Strip: Priority / Done Badge & View Details Link */}
       <div className="flex items-center justify-between gap-2 mb-2.5">
         <div className="flex items-center space-x-2">
-          <GripVertical className="w-3.5 h-3.5 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+          {!readOnly && (
+            <GripVertical className="w-3.5 h-3.5 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+          )}
           {isDone ? (
             <span className="px-2 py-0.5 rounded text-[10px] font-semibold border bg-emerald-500/15 text-emerald-300 border-emerald-500/30 flex items-center space-x-1">
               <CheckCircle2 className="w-3 h-3 text-emerald-400" />
@@ -98,14 +104,16 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         </div>
 
         {/* View Details Link */}
-        <Link
-          to={`/tasks/${task.id}`}
-          onClick={(e) => e.stopPropagation()}
-          className="p-1 rounded-lg hover:bg-slate-700/60 text-slate-400 hover:text-white transition cursor-pointer flex items-center"
-          title="View Details"
-        >
-          <ExternalLink className="w-3.5 h-3.5" />
-        </Link>
+        {!readOnly && (
+          <Link
+            to={`/tasks/${task.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="p-1 rounded-lg hover:bg-slate-700/60 text-slate-400 hover:text-white transition cursor-pointer flex items-center"
+            title="View Details"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </Link>
+        )}
       </div>
 
       {/* Task Title */}
@@ -151,15 +159,17 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           {task.assignee ? (
             (() => {
               const name = typeof task.assignee === 'object' && task.assignee !== null ? task.assignee.name : String(task.assignee);
-              const initials = getInitials(typeof task.assignee === 'object' && task.assignee?.initials ? task.assignee.initials : name);
-              const color = typeof task.assignee === 'object' && task.assignee?.color ? task.assignee.color : 'bg-indigo-600';
+              const color = typeof task.assignee === 'object' && task.assignee !== null ? task.assignee.color : undefined;
+              const initials = (typeof task.assignee === 'object' && task.assignee !== null && task.assignee.initials)
+                ? task.assignee.initials
+                : getInitials(name);
               const firstName = name.split(' ')[0] || name;
 
               return (
                 <>
                   <div
                     title={name}
-                    className={`w-5 h-5 rounded-full ${color} text-white font-bold text-[9px] flex items-center justify-center ring-1 ring-slate-800`}
+                    className={`w-5 h-5 rounded-full ${getProfileGradient(color, name)} text-white font-bold text-[9px] flex items-center justify-center ring-1 ring-slate-800`}
                   >
                     {initials}
                   </div>

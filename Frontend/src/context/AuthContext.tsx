@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+/* oxlint-disable react/only-export-components */
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import * as authApi from '../api/auth';
 import { getCachedUser, saveCachedUser, clearCachedUser } from '../db';
 import { getInitials } from '../utils';
@@ -12,10 +13,10 @@ interface AuthContextType {
   login: (credentials: authApi.LoginInput) => Promise<void>;
   register: (data: authApi.RegisterInput) => Promise<void>;
   logout: () => Promise<void>;
-  updateUser: (updatedData: Partial<User>) => void;
+  updateUser: (updatedData: Partial<User>) => Promise<User>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -24,47 +25,56 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Sync auth state on mount using HTTP-only cookie + PouchDB cache
   useEffect(() => {
-    // One-time cleanup of any legacy web storage keys
-    try {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      localStorage.removeItem('remember_me');
-      sessionStorage.removeItem('token');
-      sessionStorage.removeItem('user');
-    } catch {
-      // Ignore if storage is inaccessible
-    }
+    // One-time cleanup of legacy web storage keys (preserving active token)
+    localStorage.removeItem('user');
+    localStorage.removeItem('remember_me');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
 
     async function initAuth() {
       // 1. Instantly load cached user from PouchDB if available
-      try {
-        const cachedUser = await getCachedUser();
-        if (cachedUser) {
-          const userWithInitials: User = {
-            ...cachedUser,
-            initials: cachedUser.initials || getInitials(cachedUser.name),
-          };
-          setUser(userWithInitials);
-          setToken('cookie-session');
-        }
-      } catch {
-        // Fallback to network
+      const cachedUserObj = await getCachedUser();
+      if (cachedUserObj) {
+        const userWithInitials: User = {
+          ...cachedUserObj,
+          initials: cachedUserObj.initials || getInitials(cachedUserObj.name),
+          color: cachedUserObj.color || 'from-indigo-600 to-violet-600',
+        };
+        setUser(userWithInitials);
+        const storedToken = localStorage.getItem('token');
+        setToken(storedToken || 'cookie-session');
       }
 
-      // 2. Validate current session against backend via HTTP-only cookie
+      // 2. Validate current session against backend via HTTP-only cookie / Bearer token
       try {
         const currentUser = await authApi.getMe();
         const userWithInitials: User = {
+          ...cachedUserObj,
           ...currentUser,
-          initials: currentUser.initials || getInitials(currentUser.name),
+          initials: currentUser.initials || cachedUserObj?.initials || getInitials(currentUser.name),
+          color: currentUser.color || cachedUserObj?.color || 'from-indigo-600 to-violet-600',
         };
         setUser(userWithInitials);
-        setToken('cookie-session');
+        const storedToken = localStorage.getItem('token');
+        setToken(storedToken || 'cookie-session');
         await saveCachedUser(userWithInitials);
-      } catch {
-        setUser(null);
-        setToken(null);
-        await clearCachedUser();
+      } catch (err: any) {
+        const isAuthError =
+          err?.status === 401 ||
+          err?.status === 404 ||
+          err?.code === 'NOT_FOUND' ||
+          err?.code === 'NO_TOKEN' ||
+          err?.code === 'TOKEN_EXPIRED' ||
+          err?.code === 'BAD_TOKEN' ||
+          err?.message?.includes('expired') ||
+          err?.message?.includes('Unauthorized');
+
+        if (isAuthError || !(await getCachedUser())) {
+          setUser(null);
+          setToken(null);
+          localStorage.removeItem('token');
+          await clearCachedUser();
+        }
       } finally {
         setIsLoading(false);
       }
@@ -72,10 +82,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     initAuth();
 
-    // Central listener for 401 token expiration from client.ts
+    // Central listener for 401 token expiration from client.ts or socketClient.ts
     const handleExpired = () => {
       setUser(null);
       setToken(null);
+      localStorage.removeItem('token');
       clearCachedUser();
     };
 
@@ -85,12 +96,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = async (credentials: authApi.LoginInput) => {
     const result = await authApi.login(credentials);
+    const cachedUserObj = await getCachedUser();
     const userWithInitials: User = {
+      ...cachedUserObj,
       ...result.user,
-      initials: result.user.initials || getInitials(result.user.name),
+      initials: result.user.initials || cachedUserObj?.initials || getInitials(result.user.name),
+      color: result.user.color || cachedUserObj?.color || 'from-indigo-600 to-violet-600',
     };
     setUser(userWithInitials);
-    setToken(result.token || 'cookie-session');
+    const tokenVal = result.token || 'cookie-session';
+    setToken(tokenVal);
+    if (result.token) {
+      localStorage.setItem('token', result.token);
+    }
     await saveCachedUser(userWithInitials);
   };
 
@@ -105,36 +123,55 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } finally {
       setUser(null);
       setToken(null);
+      localStorage.removeItem('token');
       await clearCachedUser();
     }
   };
 
-  const updateUser = (updatedData: Partial<User>) => {
-    setUser((prev) => {
-      const base: User = prev || {
-        id: 'usr-1',
-        name: 'Alex Chen',
-        email: 'alex.chen@collabboard.io',
-        initials: 'AC',
-        color: 'from-indigo-600 to-violet-600',
-      };
+  const updateUser = async (updatedData: Partial<User>): Promise<User> => {
+    let backendUser: User | null = null;
+    const isOnline = typeof navigator === 'undefined' || navigator.onLine;
 
-      const newName = updatedData.name !== undefined ? updatedData.name : base.name;
-      const computedInitials =
-        updatedData.initials ||
-        (newName ? getInitials(newName) : base.initials) ||
-        'AC';
+    if (isOnline) {
+      try {
+        backendUser = await authApi.updateProfile({
+          name: updatedData.name,
+          email: updatedData.email,
+          color: updatedData.color,
+          subscriptionPlan: updatedData.subscriptionPlan,
+          billingCycle: updatedData.billingCycle,
+        });
+      } catch (err) {
+        console.warn('[AuthContext] Failed to update user profile in DB:', err);
+        throw err;
+      }
+    }
 
-      const nextUser: User = {
-        ...base,
-        ...updatedData,
-        name: newName,
-        initials: computedInitials,
-      };
+    const base: User = user || {
+      id: 'usr-1',
+      name: 'User',
+      email: 'user@collabboard.io',
+      initials: 'U',
+      color: 'from-indigo-600 to-violet-600',
+    };
 
-      saveCachedUser(nextUser);
-      return nextUser;
-    });
+    const source = backendUser || updatedData;
+    const newName = source.name !== undefined ? source.name : base.name;
+    const computedInitials =
+      source.initials ||
+      (newName ? getInitials(newName) : base.initials) ||
+      'U';
+
+    const nextUser: User = {
+      ...base,
+      ...source,
+      name: newName,
+      initials: computedInitials,
+    };
+
+    setUser(nextUser);
+    await saveCachedUser(nextUser);
+    return nextUser;
   };
 
   return (

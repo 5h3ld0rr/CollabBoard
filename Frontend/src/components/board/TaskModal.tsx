@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Sparkles, Check, Trash2, Loader2 } from 'lucide-react';
 import type { Task, TaskPriority, TaskStatus, User } from '../../types';
 

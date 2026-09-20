@@ -9,8 +9,14 @@ export interface User {
   initials: string;
   color: string;
   role?: 'Owner' | 'Admin' | 'Member';
-  boardRole?: 'Admin' | 'Editor' | 'Viewer';
+  boardRole?: 'Owner' | 'Admin' | 'Editor' | 'Viewer';
+  createdAt?: string;
+  subscriptionPlan?: 'basic' | 'pro';
+  billingCycle?: 'monthly' | 'yearly';
+  favoriteBoardIds?: string[];
 }
+
+export type BoardMember = User;
 
 export interface TaskComment {
   id: string;
@@ -46,7 +52,9 @@ export interface Board {
   color: string;
   icon: string;
   isFavorite: boolean;
+  ownerId?: string;
   members: User[];
+  memberRoles?: Record<string, string>;
   tags: string[];
   stats: {
     totalTasks: number;
@@ -62,16 +70,18 @@ export interface Workspace {
   id: string;
   name: string;
   description: string;
+  boards?: string[];
+  boardIds?: string[];
   boardCount?: number;
   color?: string;
   memberCount?: number;
+  ownerId?: string;
   role?: 'Owner' | 'Admin' | 'Member';
   members?: User[];
 }
 
 export interface UserProfile {
   name: string;
-  username: string;
   email: string;
   role: string;
   company: string;
@@ -116,6 +126,35 @@ export interface SubscriptionPlanItem {
 export interface ColorOption {
   label: string;
   value: string;
+}
+
+export type NotificationType =
+  | 'task_assigned'
+  | 'task_status'
+  | 'task_comment'
+  | 'board_invite'
+  | 'system'
+  | 'mention';
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  timestamp: string;
+  read: boolean;
+  type: NotificationType;
+  linkUrl?: string;
+  actor?: {
+    name: string;
+    avatar?: string;
+    initials: string;
+    color?: string;
+  };
+  meta?: {
+    taskId?: string;
+    boardId?: string;
+    status?: TaskStatus;
+  };
 }
 
 export interface GlobalSearchResultWorkspace {
@@ -164,3 +203,29 @@ export interface GlobalSearchResults {
   tasks: GlobalSearchResultTask[];
   total: number;
 }
+
+/* ==========================================================================
+   Real-Time Socket & OCC Event Types
+   ========================================================================== */
+
+export interface RealtimeTaskPayload<T = Task> {
+  task: T;
+  boardId: string;
+  actorId: string;
+  version: number;
+  timestamp?: string;
+}
+
+export interface RealtimeTaskDeletedPayload {
+  taskId: string;
+  boardId: string;
+  actorId: string;
+  version: number;
+  timestamp?: string;
+}
+
+export type RealtimeSocketEvent =
+  | { type: 'task:created'; payload: RealtimeTaskPayload }
+  | { type: 'task:updated'; payload: RealtimeTaskPayload }
+  | { type: 'task:deleted'; payload: RealtimeTaskDeletedPayload };
+

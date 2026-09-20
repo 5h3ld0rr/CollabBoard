@@ -57,10 +57,9 @@ export async function getMe(req, res) {
   });
 }
 
-export async function updatePassword(req, res) {
-  const result = await authService.updatePassword(req.user.id, req.body);
+export async function updateProfile(req, res) {
+  const updated = await authService.updateProfile(req.user.id, req.body);
   res.status(200).json({
-    ...result,
-    data: result,
+    data: { user: updated },
   });
 }

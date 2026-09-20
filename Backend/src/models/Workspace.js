@@ -20,6 +20,16 @@ const workspaceSchema = new mongoose.Schema(
       type: String,
       default: 'from-blue-600 to-indigo-600',
     },
+    ownerId: {
+      type: String,
+      default: null,
+      index: true,
+    },
+    boards: {
+      type: [String],
+      default: [],
+      index: true,
+    },
   },
   {
     timestamps: true,
@@ -34,6 +44,9 @@ workspaceSchema.set('toJSON', {
       ret.id = ret._id.toString();
       delete ret._id;
     }
+    const boards = Array.isArray(ret.boards) ? ret.boards.map(String) : [];
+    ret.boards = boards;
+    ret.boardIds = boards;
     return ret;
   },
 });

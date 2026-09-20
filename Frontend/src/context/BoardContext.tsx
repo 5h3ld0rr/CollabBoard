@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
+/* oxlint-disable react/only-export-components */
+import { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
+import { useOptionalNotifications } from './NotificationContext';
 import * as tasksApi from '../api/tasks';
 import * as boardsApi from '../api/boards';
 import {
@@ -15,9 +17,18 @@ import {
   clearCachedBoardTasks,
   enqueueMutation,
 } from '../db';
-import { flushSyncQueue } from '../sync';
+import {
+  flushSyncQueue,
+  getSocketClient,
+  joinBoardRoom,
+  leaveBoardRoom,
+  subscribeTaskCreated,
+  subscribeTaskUpdated,
+  subscribeTaskDeleted,
+  subscribeBoardUpdated,
+} from '../sync';
 import type { Board, Task, TaskStatus, User } from '../types';
-import { hasBoardsChanged, hasBoardChanged, hasTasksChanged } from '../utils';
+import { hasBoardsChanged, hasBoardChanged, hasTasksChanged, playCardDropSound } from '../utils';
 
 /* ==========================================================================
    State & Action Types
@@ -99,11 +110,19 @@ export const boardReducer = (state: BoardState, action: BoardAction): BoardState
         tasks: action.payload,
       };
 
-    case 'ADD_TASK':
+    case 'ADD_TASK': {
+      const exists = state.tasks.some((t) => t.id === action.payload.id);
+      if (exists) {
+        return {
+          ...state,
+          tasks: state.tasks.map((t) => (t.id === action.payload.id ? action.payload : t)),
+        };
+      }
       return {
         ...state,
         tasks: [action.payload, ...state.tasks],
       };
+    }
 
     case 'UPDATE_TASK':
       return {
@@ -263,7 +282,7 @@ export interface BoardContextValue {
   state: BoardState;
   dispatch: React.Dispatch<BoardAction>;
   loadBoards: (forceRefresh?: boolean) => Promise<void>;
-  loadBoard: (boardId: string, forceRefresh?: boolean) => Promise<void>;
+  loadBoard: (boardId: string, forceRefresh?: boolean, shareToken?: string) => Promise<void>;
   setTasks: (tasks: Task[]) => void;
   addTask: (boardId: string, taskInput: Partial<Task> & { title: string }) => Promise<Task>;
   updateTask: (task: Task) => Promise<Task>;
@@ -287,7 +306,9 @@ const BoardContext = createContext<BoardContextValue | undefined>(undefined);
 
 export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(boardReducer, initialState);
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const notificationCtx = useOptionalNotifications();
+  const addNotification = notificationCtx?.addNotification;
 
   const loadBoards = useCallback(async (forceRefresh = false) => {
     // 1. Instant Cache Hydration from PouchDB (0ms delay)
@@ -323,14 +344,14 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, []);
 
-  const loadBoard = useCallback(async (boardId: string, forceRefresh = false) => {
-    // 1. Instant Cache Hydration from PouchDB (0ms delay)
+  const loadBoard = useCallback(async (boardId: string, forceRefresh = false, shareToken?: string) => {
+    // 1. Instant Cache Hydration from PouchDB (0ms delay) - skip if guest with shareToken
     const [cachedBoard, cachedTasks] = await Promise.all([
       getCachedBoard(boardId),
       getCachedTasks(boardId),
     ]);
 
-    if (cachedBoard) {
+    if (cachedBoard && !shareToken) {
       dispatch({
         type: 'SET_ACTIVE_BOARD',
         payload: { board: cachedBoard, tasks: cachedTasks || [] },
@@ -349,25 +370,27 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // 2. Background Revalidation from API
     try {
       const [serverBoard, serverTasks] = await Promise.all([
-        boardsApi.getBoardById(boardId),
-        tasksApi.getBoardTasks(boardId),
+        boardsApi.getBoardById(boardId, shareToken),
+        tasksApi.getBoardTasks(boardId, shareToken ? { shareToken } : undefined),
       ]);
 
       if (serverBoard) {
-        const boardChanged = forceRefresh || hasBoardChanged(cachedBoard, serverBoard);
-        const tasksChanged = forceRefresh || hasTasksChanged(cachedTasks, serverTasks);
+        const boardChanged = forceRefresh || Boolean(shareToken) || hasBoardChanged(cachedBoard, serverBoard);
+        const tasksChanged = forceRefresh || Boolean(shareToken) || hasTasksChanged(cachedTasks, serverTasks);
 
         if (boardChanged || tasksChanged) {
           dispatch({
             type: 'SET_ACTIVE_BOARD',
             payload: { board: serverBoard, tasks: serverTasks },
           });
-          await Promise.all([
-            saveBoardToCache(serverBoard),
-            saveTasksToCache(serverTasks, boardId),
-          ]);
+          if (!shareToken) {
+            await Promise.all([
+              saveBoardToCache(serverBoard),
+              saveTasksToCache(serverTasks, boardId),
+            ]);
+          }
         }
-      } else if (!cachedBoard) {
+      } else if (!cachedBoard || shareToken) {
         dispatch({
           type: 'SET_ACTIVE_BOARD',
           payload: { board: null, tasks: [] },
@@ -490,6 +513,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const moveTaskStatus = useCallback(async (taskId: string, newStatus: TaskStatus) => {
+    playCardDropSound();
     dispatch({ type: 'MOVE_TASK_STATUS', payload: { taskId, newStatus } });
     const existing = state.tasks.find((t) => t.id === taskId);
     if (existing) {
@@ -587,7 +611,30 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return board;
     }
 
-    const updated = await boardsApi.updateBoard(board.id, board);
+    const payload: Partial<Board> = {
+      title: board.title,
+      description: board.description,
+      color: board.color,
+      icon: board.icon,
+      tags: board.tags,
+      isFavorite: board.isFavorite,
+      workspaceId: board.workspaceId,
+      workspaceName: board.workspaceName,
+    };
+    if (board.members && Array.isArray(board.members)) {
+      payload.members = board.members.map((m: any) =>
+        typeof m === 'object' && m !== null
+          ? {
+              id: String(m.id || m.email),
+              name: m.name,
+              email: m.email,
+              boardRole: m.boardRole || m.role,
+            }
+          : String(m)
+      ) as any;
+    }
+
+    const updated = await boardsApi.updateBoard(board.id, payload);
     dispatch({ type: 'UPDATE_BOARD', payload: updated });
     await saveBoardToCache(updated);
     return updated;
@@ -688,6 +735,247 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       window.removeEventListener('offline', handleOffline);
     };
   }, [loadBoards, loadBoard, state.activeBoard]);
+
+  // Socket.io Room Lifecycle (Join / Leave board room)
+  useEffect(() => {
+    if (!token) return;
+
+    getSocketClient(token);
+
+    if (state.activeBoard?.id) {
+      joinBoardRoom(state.activeBoard.id);
+    }
+
+    return () => {
+      if (state.activeBoard?.id) {
+        leaveBoardRoom(state.activeBoard.id);
+      }
+    };
+  }, [token, state.activeBoard?.id]);
+
+  // Real-Time Task & Board Event Subscriptions with OCC Version Guard & Echo Prevention
+  useEffect(() => {
+    if (!state.activeBoard?.id) return;
+
+    const activeBoardId = state.activeBoard.id;
+
+    // Handle incoming board:updated (Slide 15 & 17)
+    const unsubBoard = subscribeBoardUpdated(async (payload) => {
+      if (payload.boardId !== activeBoardId) return;
+
+      // Echo Loop Guard (Slide 17): skip redundant state reload if current user made the change
+      if (payload.actorId && user?.id && String(payload.actorId) === String(user.id)) {
+        return;
+      }
+
+      if (payload.board) {
+        // Preserve active user's local favorite status since isFavorite is per-user
+        const currentFavorite = state.activeBoard?.id === payload.board.id ? state.activeBoard.isFavorite : undefined;
+        const boardWithUserFavorite = currentFavorite !== undefined
+          ? { ...payload.board, isFavorite: currentFavorite }
+          : payload.board;
+
+        dispatch({ type: 'UPDATE_BOARD', payload: boardWithUserFavorite });
+        try {
+          await saveBoardToCache(boardWithUserFavorite);
+        } catch (err) {
+          console.warn('[BoardContext] Failed to cache board:updated:', err);
+        }
+      }
+    });
+
+    // Handle incoming task:created
+    const unsubCreated = subscribeTaskCreated(async (payload) => {
+      if (String(payload.boardId) !== String(activeBoardId)) return;
+
+      // Echo Loop Guard (Slide 17)
+      if (payload.actorId && user?.id && String(payload.actorId) === String(user.id)) {
+        return;
+      }
+
+      const incoming = payload.task;
+      if (!incoming) return;
+      dispatch({ type: 'ADD_TASK', payload: incoming });
+      try {
+        await updateCachedTask(incoming);
+      } catch (err) {
+        console.warn('[BoardContext] Failed to cache task:created:', err);
+      }
+
+      const actor = state.boardMembers.find(
+        (m) => String(m.id || (m as any)._id || '') === String(payload.actorId)
+      );
+      const actorName = actor?.name || 'A teammate';
+
+      if (addNotification) {
+        await addNotification({
+          title: 'New Task Created',
+          message: `${actorName} added "${incoming.title}"`,
+          type: 'task_assigned',
+          linkUrl: `/boards/${payload.boardId}`,
+          actor: actor
+            ? {
+                name: actor.name,
+                initials: actor.initials || actor.name.slice(0, 2).toUpperCase(),
+                color: actor.color,
+              }
+            : undefined,
+          meta: {
+            taskId: incoming.id,
+            boardId: payload.boardId,
+          },
+        });
+      } else {
+        playCardDropSound();
+      }
+    });
+
+    // Handle incoming task:updated with OCC Version Guard
+    const unsubUpdated = subscribeTaskUpdated(async (payload) => {
+      if (String(payload.boardId) !== String(activeBoardId)) return;
+
+      // Echo Loop Guard (Slide 17)
+      if (payload.actorId && user?.id && String(payload.actorId) === String(user.id)) {
+        return;
+      }
+
+      const incoming = payload.task;
+      if (!incoming) return;
+
+      const incomingId = String(incoming.id || (incoming as any)._id || '');
+      const current = state.tasks.find(
+        (t) => String(t.id || (t as any)._id || '') === incomingId
+      );
+
+      // OCC Version Guard: apply if new or version >= current
+      if (!current || Number(incoming.version || 1) >= Number(current.version || 0)) {
+        dispatch({ type: 'UPDATE_TASK', payload: incoming });
+        try {
+          await updateCachedTask(incoming);
+        } catch (err) {
+          console.warn('[BoardContext] Failed to cache task:updated:', err);
+        }
+
+        const isStatusMoved = !current || current.status !== incoming.status;
+        const actor = state.boardMembers.find(
+          (m) => String(m.id || (m as any)._id || '') === String(payload.actorId)
+        );
+        const actorName = actor?.name || 'A teammate';
+
+        if (isStatusMoved) {
+          const statusLabels: Record<string, string> = {
+            todo: 'To Do',
+            'in-progress': 'In Progress',
+            done: 'Completed',
+          };
+          const newStatusLabel = statusLabels[incoming.status] || incoming.status;
+
+          if (addNotification) {
+            await addNotification({
+              title: 'Task Moved',
+              message: `${actorName} moved "${incoming.title}" to ${newStatusLabel}`,
+              type: 'task_status',
+              linkUrl: `/boards/${payload.boardId}`,
+              actor: actor
+                ? {
+                    name: actor.name,
+                    initials: actor.initials || actor.name.slice(0, 2).toUpperCase(),
+                    color: actor.color,
+                  }
+                : undefined,
+              meta: {
+                taskId: incoming.id,
+                boardId: payload.boardId,
+                status: incoming.status,
+              },
+            });
+          } else {
+            playCardDropSound();
+          }
+        } else {
+          // Task content was edited/updated by a teammate
+          if (addNotification) {
+            await addNotification({
+              title: 'Task Updated',
+              message: `${actorName} updated "${incoming.title}"`,
+              type: 'task_status',
+              linkUrl: `/boards/${payload.boardId}`,
+              actor: actor
+                ? {
+                    name: actor.name,
+                    initials: actor.initials || actor.name.slice(0, 2).toUpperCase(),
+                    color: actor.color,
+                  }
+                : undefined,
+              meta: {
+                taskId: incoming.id,
+                boardId: payload.boardId,
+                status: incoming.status,
+              },
+            });
+          } else {
+            playCardDropSound();
+          }
+        }
+      } else {
+        console.warn(
+          `[OCC Guard] Dropped stale/out-of-order task:updated event for task ${incoming.id}: incoming v${incoming.version} <= current v${current.version}`
+        );
+      }
+    });
+
+    // Handle incoming task:deleted for instant column item removal
+    const unsubDeleted = subscribeTaskDeleted(async (payload) => {
+      if (String(payload.boardId) !== String(activeBoardId)) return;
+
+      // Echo Loop Guard (Slide 17)
+      if (payload.actorId && user?.id && String(payload.actorId) === String(user.id)) {
+        return;
+      }
+
+      const existingTask = state.tasks.find(
+        (t) => String(t.id || (t as any)._id || '') === String(payload.taskId)
+      );
+      dispatch({ type: 'DELETE_TASK', payload: { taskId: payload.taskId } });
+      try {
+        await deleteCachedTask(payload.taskId);
+      } catch (err) {
+        console.warn('[BoardContext] Failed to delete cached task from socket event:', err);
+      }
+
+      const actor = state.boardMembers.find(
+        (m) => String(m.id || (m as any)._id || '') === String(payload.actorId)
+      );
+      const actorName = actor?.name || 'A teammate';
+
+      if (addNotification) {
+        await addNotification({
+          title: 'Task Deleted',
+          message: existingTask ? `${actorName} deleted "${existingTask.title}"` : `${actorName} removed a task`,
+          type: 'system',
+          linkUrl: `/boards/${payload.boardId}`,
+          actor: actor
+            ? {
+                name: actor.name,
+                initials: actor.initials || actor.name.slice(0, 2).toUpperCase(),
+                color: actor.color,
+              }
+            : undefined,
+          meta: {
+            taskId: payload.taskId,
+            boardId: payload.boardId,
+          },
+        });
+      }
+    });
+
+    return () => {
+      unsubBoard();
+      unsubCreated();
+      unsubUpdated();
+      unsubDeleted();
+    };
+  }, [state.activeBoard?.id, state.tasks, user?.id, addNotification]);
 
   return (
     <BoardContext.Provider

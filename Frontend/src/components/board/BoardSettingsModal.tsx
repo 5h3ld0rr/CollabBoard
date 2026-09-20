@@ -1,35 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   X,
   Settings,
-  Users,
   AlertTriangle,
   Check,
-  Trash2,
-  UserPlus,
-  Copy,
   Kanban,
   Layers,
   ShieldCheck,
   WifiOff,
   Activity,
   Sparkles,
-  Shield,
-  Edit3,
-  Eye,
   RotateCcw,
 } from 'lucide-react';
-import type { Board, User } from '../../types';
+import type { Board, User, Workspace } from '../../types';
 import { COLOR_OPTIONS } from '../../constants';
 
 interface BoardSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   board: Board;
-  onUpdateBoard: (updatedBoard: Board) => void;
+  onUpdateBoard: (updatedBoard: Board) => void | Promise<void>;
   onDeleteBoard?: (boardId: string) => void;
   onClearTasks?: () => void;
-  initialTab?: 'general' | 'members' | 'danger';
+  initialTab?: 'general' | 'danger' | string;
+  workspaceMembers?: User[];
+  workspaces?: Workspace[];
 }
 
 const ICON_OPTIONS = [
@@ -41,55 +36,6 @@ const ICON_OPTIONS = [
   { name: 'Sparkles', icon: Sparkles, label: 'Sprint' },
 ];
 
-const ROLE_BADGES = {
-  Admin: {
-    label: 'Admin',
-    icon: <Shield className="w-3 h-3 text-amber-400" />,
-    color: 'bg-amber-500/10 text-amber-300 border-amber-500/20',
-  },
-  Editor: {
-    label: 'Editor',
-    icon: <Edit3 className="w-3 h-3 text-indigo-400" />,
-    color: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20',
-  },
-  Viewer: {
-    label: 'Viewer',
-    icon: <Eye className="w-3 h-3 text-slate-400" />,
-    color: 'bg-slate-500/10 text-slate-300 border-slate-500/20',
-  },
-};
-
-const normalizeMember = (m: any, idx: number): User => {
-  if (typeof m === 'object' && m !== null && m.name) {
-    return {
-      ...m,
-      boardRole: m.boardRole || (idx === 0 ? 'Admin' : 'Editor'),
-    };
-  }
-  const id = typeof m === 'object' && m !== null ? m.id : String(m);
-  const name =
-    id === '1' ? 'Alex Chen' :
-    id === '2' ? 'Clara Tanaka' :
-    id === '3' ? 'Elena Rostova' :
-    id === '4' ? 'Marcus Vance' : `User ${id}`;
-  const email =
-    id === '1' ? 'user1@nsbm.lk' :
-    id === '2' ? 'user2@nsbm.lk' :
-    id === '3' ? 'user3@nsbm.lk' :
-    id === '4' ? 'user4@nsbm.lk' : `user${id}@nsbm.lk`;
-  const initials = name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
-  const color = id === '1' ? 'bg-indigo-600' : id === '2' ? 'bg-emerald-600' : 'bg-fuchsia-600';
-
-  return {
-    id: String(id),
-    name,
-    email,
-    initials,
-    color,
-    boardRole: idx === 0 ? 'Admin' : 'Editor',
-  };
-};
-
 export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
   isOpen,
   onClose,
@@ -98,24 +44,19 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
   onDeleteBoard,
   onClearTasks,
   initialTab = 'general',
+  workspaces = [],
 }) => {
-  const [activeTab, setActiveTab] = useState<'general' | 'members' | 'danger'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'general' | 'danger'>(
+    initialTab === 'danger' ? 'danger' : 'general'
+  );
   
   // General Tab States
   const [title, setTitle] = useState(board.title);
   const [description, setDescription] = useState(board.description);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(board.workspaceId || '');
   const [color, setColor] = useState(board.color || COLOR_OPTIONS[0].value);
   const [icon, setIcon] = useState(board.icon || 'Kanban');
-  const [tagsInput, setTagsInput] = useState(board.tags.join(', '));
-
-  // Members Tab States
-  const [members, setMembers] = useState<User[]>(() => {
-    return (board.members || []).map(normalizeMember);
-  });
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [selectedWorkspaceUser, setSelectedWorkspaceUser] = useState<string>('');
-  const [inviteRole, setInviteRole] = useState<'Admin' | 'Editor' | 'Viewer'>('Editor');
-  const [copiedLink, setCopiedLink] = useState(false);
+  const [tagsInput, setTagsInput] = useState(Array.isArray(board.tags) ? board.tags.join(', ') : '');
 
   // Danger Zone States
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -123,19 +64,23 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
 
   // Notifications
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-      setActiveTab(initialTab);
+      setActiveTab(initialTab === 'danger' ? 'danger' : 'general');
       setTitle(board.title);
       setDescription(board.description);
+      setSelectedWorkspaceId(board.workspaceId || '');
       setColor(board.color || COLOR_OPTIONS[0].value);
       setIcon(board.icon || 'Kanban');
-      setTagsInput(board.tags.join(', '));
-      setMembers((board.members || []).map(normalizeMember));
+      setTagsInput(Array.isArray(board.tags) ? board.tags.join(', ') : '');
       setConfirmDelete(false);
       setConfirmClear(false);
       setSuccessMessage(null);
+      setErrorMessage(null);
+      setIsSaving(false);
     }
   }, [isOpen, board, initialTab]);
 
@@ -146,90 +91,40 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
     setTimeout(() => setSuccessMessage(null), 2500);
   };
 
+  const showError = (msg: string) => {
+    setErrorMessage(msg);
+    setTimeout(() => setErrorMessage(null), 3000);
+  };
+
   // General Tab Save
-  const handleSaveGeneral = (e: React.FormEvent) => {
+  const handleSaveGeneral = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanTags = tagsInput
       .split(',')
       .map((t) => t.trim())
       .filter(Boolean);
 
+    const targetWs = workspaces?.find((w) => w.id === selectedWorkspaceId);
     const updated: Board = {
       ...board,
       title: title.trim() || board.title,
       description: description.trim(),
       color,
       icon,
-      tags: cleanTags.length > 0 ? cleanTags : board.tags,
+      tags: cleanTags.length > 0 ? cleanTags : (Array.isArray(board.tags) ? board.tags : []),
+      workspaceId: selectedWorkspaceId || board.workspaceId,
+      workspaceName: targetWs ? targetWs.name : board.workspaceName,
       updatedAt: 'Just now',
     };
 
-    onUpdateBoard(updated);
-    showSuccess('Board general settings updated!');
-  };
-
-  // Member Actions
-  const availableTeammates: User[] = [];
-
-  const handleCopyBoardLink = () => {
-    navigator.clipboard.writeText(window.location.href);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2000);
-  };
-
-  const handleAddMember = (e: React.FormEvent) => {
-    e.preventDefault();
-    let userToAdd: User | null = null;
-
-    if (inviteEmail.trim()) {
-      const email = inviteEmail.trim();
-      const initials = email.slice(0, 2).toUpperCase();
-      userToAdd = {
-        id: `usr-${Date.now()}`,
-        name: email.split('@')[0],
-        email,
-        initials,
-        color: 'bg-indigo-600',
-        boardRole: inviteRole,
-      };
-    }
-
-    if (userToAdd) {
-      const updatedMembers = [...members, userToAdd];
-      setMembers(updatedMembers);
-      onUpdateBoard({
-        ...board,
-        members: updatedMembers,
-      });
-      setInviteEmail('');
-      setSelectedWorkspaceUser('');
-      showSuccess(`Added ${userToAdd.name} as ${inviteRole}!`);
-    }
-  };
-
-  const handleChangeRole = (userId: string, newRole: 'Admin' | 'Editor' | 'Viewer') => {
-    const updatedMembers = members.map((m) =>
-      m.id === userId ? { ...m, boardRole: newRole } : m
-    );
-    setMembers(updatedMembers);
-    onUpdateBoard({
-      ...board,
-      members: updatedMembers,
-    });
-    showSuccess(`Updated member role to ${newRole}`);
-  };
-
-  const handleRemoveMember = (userId: string) => {
-    if (members.length <= 1) return;
-    const target = members.find((m) => m.id === userId);
-    const updatedMembers = members.filter((m) => m.id !== userId);
-    setMembers(updatedMembers);
-    onUpdateBoard({
-      ...board,
-      members: updatedMembers,
-    });
-    if (target) {
-      showSuccess(`Removed ${target.name} from board`);
+    setIsSaving(true);
+    try {
+      await onUpdateBoard(updated);
+      showSuccess('Board general settings updated!');
+    } catch (err: any) {
+      showError(err?.message || 'Failed to update board settings');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -256,7 +151,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
+          className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
@@ -271,7 +166,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
           <div>
             <h2 className="text-xl font-bold text-white">Board Settings</h2>
             <p className="text-xs text-slate-400">
-              General configuration, team members, and board controls
+              General configuration and board controls
             </p>
           </div>
         </div>
@@ -279,8 +174,9 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
         {/* Tabs */}
         <div className="flex items-center space-x-2 border-b border-slate-800 pb-3 mb-6 text-xs font-semibold">
           <button
+            type="button"
             onClick={() => setActiveTab('general')}
-            className={`px-3 py-1.5 rounded-xl transition ${
+            className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
               activeTab === 'general'
                 ? 'bg-indigo-600 text-white'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
@@ -289,19 +185,9 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
             General
           </button>
           <button
-            onClick={() => setActiveTab('members')}
-            className={`px-3 py-1.5 rounded-xl transition flex items-center space-x-1.5 ${
-              activeTab === 'members'
-                ? 'bg-indigo-600 text-white'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-            }`}
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>Members ({members.length})</span>
-          </button>
-          <button
+            type="button"
             onClick={() => setActiveTab('danger')}
-            className={`px-3 py-1.5 rounded-xl transition ${
+            className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
               activeTab === 'danger'
                 ? 'bg-rose-600/20 text-rose-300 border border-rose-500/30'
                 : 'text-slate-400 hover:text-rose-400 hover:bg-rose-500/10'
@@ -316,6 +202,14 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
           <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium flex items-center space-x-2 animate-fade-in">
             <Check className="w-4 h-4 shrink-0" />
             <span>{successMessage}</span>
+          </div>
+        )}
+
+        {/* Error Alert */}
+        {errorMessage && (
+          <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-medium flex items-center space-x-2 animate-fade-in">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>{errorMessage}</span>
           </div>
         )}
 
@@ -347,6 +241,29 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
               />
             </div>
 
+            {/* Workspace Switcher */}
+            {workspaces && workspaces.length > 0 && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                  Workspace
+                </label>
+                <select
+                  value={selectedWorkspaceId}
+                  onChange={(e) => setSelectedWorkspaceId(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition cursor-pointer"
+                >
+                  {workspaces.map((ws) => (
+                    <option key={ws.id} value={ws.id}>
+                      {ws.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Switch or move this board across your workspaces
+                </p>
+              </div>
+            )}
+
             {/* Board Icon */}
             <div>
               <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
@@ -361,7 +278,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
                       key={ic.name}
                       type="button"
                       onClick={() => setIcon(ic.name)}
-                      className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition ${
+                      className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition cursor-pointer ${
                         isSelected
                           ? 'bg-indigo-600/30 border-indigo-500 text-white shadow-sm'
                           : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200'
@@ -386,7 +303,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
                     key={i}
                     type="button"
                     onClick={() => setColor(c.value)}
-                    className={`w-8 h-8 rounded-lg bg-linear-to-br ${c.value} transition-all ${
+                    className={`w-8 h-8 rounded-lg bg-linear-to-br ${c.value} transition-all cursor-pointer ${
                       color === c.value
                         ? 'ring-2 ring-white scale-110 shadow-lg'
                         : 'opacity-70 hover:opacity-100'
@@ -414,191 +331,23 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="inline-flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 transition-all active:scale-95"
+                disabled={isSaving}
+                className="inline-flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 transition-all active:scale-95 cursor-pointer"
               >
                 <Check className="w-4 h-4" />
-                <span>Save Changes</span>
+                <span>{isSaving ? 'Saving...' : 'Save Changes'}</span>
               </button>
             </div>
           </form>
         )}
 
-        {/* TAB 2: MEMBERS */}
-        {activeTab === 'members' && (
-          <div className="space-y-5">
-            {/* Shareable Board Link */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Shareable Board Link
-              </label>
-              <div className="p-2.5 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-2">
-                <span className="text-xs text-slate-400 font-mono truncate">
-                  {window.location.href}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleCopyBoardLink}
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 hover:text-white font-medium transition flex items-center space-x-1.5 shrink-0"
-                >
-                  {copiedLink ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      <span className="text-emerald-400">Copied</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5 text-slate-400" />
-                      <span>Copy Link</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Invite Form */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Invite Collaborator
-              </label>
-              <form onSubmit={handleAddMember} className="space-y-2">
-                <div className="flex flex-col sm:flex-row gap-2">
-                  {availableTeammates.length > 0 ? (
-                    <select
-                      value={selectedWorkspaceUser}
-                      onChange={(e) => {
-                        setSelectedWorkspaceUser(e.target.value);
-                        if (e.target.value) setInviteEmail('');
-                      }}
-                      className="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    >
-                      <option value="">Select teammate or enter email below...</option>
-                      {availableTeammates.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.name} ({u.email})
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="email"
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                      placeholder="teammate@company.com"
-                      className="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    />
-                  )}
-
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={inviteRole}
-                      onChange={(e) => setInviteRole(e.target.value as 'Admin' | 'Editor' | 'Viewer')}
-                      className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 focus:outline-none"
-                    >
-                      <option value="Editor">Editor</option>
-                      <option value="Admin">Admin</option>
-                      <option value="Viewer">Viewer</option>
-                    </select>
-
-                    <button
-                      type="submit"
-                      disabled={!selectedWorkspaceUser && !inviteEmail.trim()}
-                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-md flex items-center space-x-1 shrink-0 transition"
-                    >
-                      <UserPlus className="w-3.5 h-3.5" />
-                      <span>Invite</span>
-                    </button>
-                  </div>
-                </div>
-
-                {availableTeammates.length > 0 && !selectedWorkspaceUser && (
-                  <input
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="Or enter new email address (e.g. alex@collabboard.io)"
-                    className="w-full px-3 py-1.5 rounded-xl bg-slate-950/60 border border-slate-800/80 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
-                )}
-              </form>
-            </div>
-
-            {/* Members List */}
-            <div>
-              <div className="flex items-center justify-between mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                <span>Active Board Members ({members.length})</span>
-              </div>
-
-              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                {members.map((member) => {
-                  const currentRole = member.boardRole || 'Editor';
-                  const badge = ROLE_BADGES[currentRole] || ROLE_BADGES.Editor;
-
-                  return (
-                    <div
-                      key={member.id}
-                      className="flex items-center justify-between p-3 rounded-2xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700/80 transition"
-                    >
-                      <div className="flex items-center space-x-3 truncate">
-                        <div className="relative">
-                          <div
-                            className={`w-8 h-8 rounded-xl ${
-                              member.color || 'bg-indigo-600'
-                            } text-white font-bold text-xs flex items-center justify-center shadow-xs`}
-                          >
-                            {member.initials}
-                          </div>
-                          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-slate-950" />
-                        </div>
-                        <div className="truncate">
-                          <p className="text-xs font-semibold text-white truncate leading-tight">
-                            {member.name}
-                          </p>
-                          <p className="text-[10px] text-slate-400 truncate">{member.email}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center space-x-2 shrink-0">
-                        <select
-                          value={currentRole}
-                          onChange={(e) =>
-                            handleChangeRole(
-                              member.id,
-                              e.target.value as 'Admin' | 'Editor' | 'Viewer'
-                            )
-                          }
-                          className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${badge.color} bg-slate-900 cursor-pointer focus:outline-none`}
-                        >
-                          <option value="Admin">Admin</option>
-                          <option value="Editor">Editor</option>
-                          <option value="Viewer">Viewer</option>
-                        </select>
-
-                        {members.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveMember(member.id)}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
-                            title="Remove member from board"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 3: DANGER ZONE */}
+        {/* TAB 2: DANGER ZONE */}
         {activeTab === 'danger' && (
           <div className="space-y-4">
             {/* Clear Board Tasks */}
@@ -617,7 +366,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setConfirmClear(true)}
-                    className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-semibold transition shrink-0"
+                    className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-semibold transition shrink-0 cursor-pointer"
                   >
                     Clear Tasks
                   </button>
@@ -626,14 +375,14 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setConfirmClear(false)}
-                      className="px-2.5 py-1 rounded-lg bg-slate-800 text-xs text-slate-300"
+                      className="px-2.5 py-1 rounded-lg bg-slate-800 text-xs text-slate-300 cursor-pointer"
                     >
                       Cancel
                     </button>
                     <button
                       type="button"
                       onClick={handleClearTasks}
-                      className="px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold shadow-md"
+                      className="px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold shadow-md cursor-pointer"
                     >
                       Confirm Clear
                     </button>
@@ -649,7 +398,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
                 <div>
                   <h4 className="text-xs font-bold text-rose-300">Delete this Board</h4>
                   <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
-                    Once deleted, all cards, column states, and member permissions associated with &ldquo;{board.title}&rdquo; will be permanently removed.
+                    Once deleted, all cards, column states, and data associated with &ldquo;{board.title}&rdquo; will be permanently removed.
                   </p>
                 </div>
               </div>
@@ -659,7 +408,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setConfirmDelete(true)}
-                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-md transition"
+                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-md transition cursor-pointer"
                   >
                     Delete Board
                   </button>
@@ -669,14 +418,14 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setConfirmDelete(false)}
-                      className="px-3 py-1.5 rounded-xl bg-slate-800 text-xs text-slate-300 hover:text-white"
+                      className="px-3 py-1.5 rounded-xl bg-slate-800 text-xs text-slate-300 hover:text-white cursor-pointer"
                     >
                       Cancel
                     </button>
                     <button
                       type="button"
                       onClick={handleDeleteBoard}
-                      className="px-4 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-md shadow-rose-950/50"
+                      className="px-4 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-md shadow-rose-950/50 cursor-pointer"
                     >
                       Yes, Delete Board
                     </button>

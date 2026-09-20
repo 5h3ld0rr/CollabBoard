@@ -47,8 +47,19 @@ async function toApiError(res: Response): Promise<ApiError> {
  * Universal HTTP client relying on HTTP-only cookies and handling centralized errors & 401 expiration
  */
 export async function request<T = any>(path: string, options: RequestInit = {}): Promise<T> {
+  let token: string | null = null;
+  try {
+    token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null;
+  } catch {
+    // Ignore storage errors
+  }
+
+  const authHeader: Record<string, string> =
+    token && token !== 'cookie-session' ? { Authorization: `Bearer ${token}` } : {};
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    ...authHeader,
     ...((options.headers as Record<string, string>) || {}),
   };
 
@@ -58,8 +69,13 @@ export async function request<T = any>(path: string, options: RequestInit = {}):
     headers,
   });
 
-  if (res.status === 401) {
-    window.dispatchEvent(new Event('auth:expired'));
+  if (res.status === 401 || (res.status === 404 && path.includes('/auth/me'))) {
+    const isShareTokenRequest =
+      path.includes('shareToken=') ||
+      (typeof options.headers === 'object' && options.headers !== null && 'x-share-token' in options.headers);
+    if (!isShareTokenRequest) {
+      window.dispatchEvent(new Event('auth:expired'));
+    }
   }
 
   if (!res.ok) {

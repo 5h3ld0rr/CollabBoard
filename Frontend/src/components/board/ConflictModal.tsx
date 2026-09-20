@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   AlertTriangle,
   X,
@@ -183,7 +183,7 @@ export const ConflictModal: React.FC<ConflictModalProps> = ({
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto pr-1 space-y-3 custom-scrollbar min-h-[220px] max-h-[340px]">
+        <div className="flex-1 overflow-y-auto pr-1 space-y-3 custom-scrollbar min-h-55 max-h-85">
           {activeTab === 'compare' ? (
             <div className="space-y-3">
               {/* Title Field */}
@@ -484,7 +484,7 @@ export const ConflictModal: React.FC<ConflictModalProps> = ({
                 type="button"
                 onClick={handleApplyMerge}
                 disabled={isSubmitting}
-                className="inline-flex items-center space-x-1.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-60 text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 transition-all cursor-pointer"
+                className="inline-flex items-center space-x-1.5 px-5 py-2.5 rounded-xl bg-linear-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-60 text-white text-xs font-semibold shadow-lg shadow-indigo-950/50 transition-all cursor-pointer"
               >
                 {isSubmitting ? (
                   <>

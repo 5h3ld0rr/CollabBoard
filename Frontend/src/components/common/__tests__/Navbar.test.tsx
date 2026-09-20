@@ -1,9 +1,10 @@
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Navbar } from '../Navbar';
 import * as authContextModule from '../../../context/AuthContext';
+import { NotificationProvider } from '../../../context';
 
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
@@ -27,6 +28,16 @@ describe('Navbar component', () => {
     initials: 'AW',
   };
 
+  const renderNavbar = (props: React.ComponentProps<typeof Navbar> = {}) => {
+    return render(
+      <MemoryRouter>
+        <NotificationProvider>
+          <Navbar {...props} />
+        </NotificationProvider>
+      </MemoryRouter>
+    );
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(authContextModule, 'useAuth').mockReturnValue({
@@ -36,11 +47,7 @@ describe('Navbar component', () => {
   });
 
   it('renders global search trigger and opens search overlay on click', async () => {
-    render(
-      <MemoryRouter>
-        <Navbar />
-      </MemoryRouter>
-    );
+    renderNavbar();
 
     const searchTrigger = screen.getByText(/search workspaces, boards, tasks/i);
     expect(searchTrigger).toBeInTheDocument();
@@ -58,11 +65,7 @@ describe('Navbar component', () => {
   });
 
   it('handles keyboard shortcuts (Ctrl+K to open, Escape to close)', async () => {
-    render(
-      <MemoryRouter>
-        <Navbar />
-      </MemoryRouter>
-    );
+    renderNavbar();
 
     act(() => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }));
@@ -80,11 +83,7 @@ describe('Navbar component', () => {
   });
 
   it('updates online / offline badge state on window network events', () => {
-    render(
-      <MemoryRouter>
-        <Navbar />
-      </MemoryRouter>
-    );
+    renderNavbar();
 
     act(() => {
       window.dispatchEvent(new Event('offline'));
@@ -98,16 +97,12 @@ describe('Navbar component', () => {
   });
 
   it('toggles notification toast and profile dropdown', async () => {
-    render(
-      <MemoryRouter>
-        <Navbar />
-      </MemoryRouter>
-    );
+    renderNavbar();
 
     const user = userEvent.setup();
     const notifBtn = screen.getByRole('button', { name: /notifications/i });
-    await user.click(notifBtn);
-    expect(screen.getByText(/Clara moved card to In Progress/i)).toBeInTheDocument();
+    fireEvent.click(notifBtn);
+    expect(await screen.findByText(/no notifications yet|all caught up|clara moved/i)).toBeInTheDocument();
 
     const profileBtn = screen.getByRole('button', { name: /user profile menu/i });
     await user.click(profileBtn);
@@ -121,12 +116,21 @@ describe('Navbar component', () => {
   });
 
   it('hides search and workspace controls when variant="profile"', () => {
-    render(
-      <MemoryRouter>
-        <Navbar variant="profile" />
-      </MemoryRouter>
-    );
+    renderNavbar({ variant: 'profile' });
 
     expect(screen.queryByText(/search workspaces, boards, tasks/i)).not.toBeInTheDocument();
+  });
+
+  it('renders "Log In" button and hides notifications and profile dropdown when user is unauthenticated', () => {
+    vi.spyOn(authContextModule, 'useAuth').mockReturnValue({
+      user: null,
+      logout: mockLogout,
+    } as any);
+
+    renderNavbar();
+
+    expect(screen.getByRole('link', { name: /log in/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /notifications/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /user profile menu/i })).not.toBeInTheDocument();
   });
 });

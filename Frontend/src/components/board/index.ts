@@ -4,3 +4,6 @@ export * from './TaskModal';
 export * from './BoardMembersModal';
 export * from './BoardSettingsModal';
 export * from './ConflictModal';
+export * from './TemporaryLinkGenerator';
+export * from './LivePresenceBadge';
+export * from './LivePresenceAvatarStrip';

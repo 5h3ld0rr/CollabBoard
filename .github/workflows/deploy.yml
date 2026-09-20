@@ -1,0 +1,37 @@
+name: CD - Deploy to VPS
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to VPS via SSH
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            # Navigate to project directory
+            cd CollabBoard
+
+            echo "==> Pulling latest changes from Git..."
+            git pull
+
+            echo "==> Rebuilding and restarting Docker containers..."
+            docker compose up -d --build
+
+            echo "==> Cleaning up dangling images..."
+            docker image prune -f
+
+            echo "==> Deployment completed successfully!"

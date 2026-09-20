@@ -1,4 +1,3 @@
-import React from 'react';
 import { Kanban, Clock, CheckCircle2, Users } from 'lucide-react';
 import type { Board } from '../../types';
 

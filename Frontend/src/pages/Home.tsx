@@ -1,4 +1,3 @@
-import React from "react";
 import { Link } from "react-router-dom";
 import {
   Kanban,
@@ -16,8 +15,10 @@ import {
   CircleDot,
 } from "lucide-react";
 import { AmbientBackground, Button, Logo } from "../components/common";
+import { useAuth } from "../context";
 
 export const Home: React.FC = () => {
+  const { isAuthenticated } = useAuth();
   return (
     <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col selection:bg-indigo-500 selection:text-white font-sans">
       <AmbientBackground variant="default" />
@@ -40,20 +41,33 @@ export const Home: React.FC = () => {
           </nav>
 
           <div className="flex items-center space-x-3">
-            <Link
-              to="/login"
-              className="px-4 py-2 text-sm font-semibold text-slate-300 hover:text-white transition-colors duration-150"
-            >
-              Sign In
-            </Link>
-            <Button
-              to="/register"
-              size="sm"
-              variant="primary"
-              iconRight={<ArrowRight className="w-4 h-4" />}
-            >
-              Get Started
-            </Button>
+            {isAuthenticated ? (
+              <Button
+                to="/dashboard"
+                size="sm"
+                variant="primary"
+                iconRight={<ArrowRight className="w-4 h-4" />}
+              >
+                Dashboard
+              </Button>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="px-4 py-2 text-sm font-semibold text-slate-300 hover:text-white transition-colors duration-150"
+                >
+                  Sign In
+                </Link>
+                <Button
+                  to="/register"
+                  size="sm"
+                  variant="primary"
+                  iconRight={<ArrowRight className="w-4 h-4" />}
+                >
+                  Get Started
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -86,13 +100,13 @@ export const Home: React.FC = () => {
         {/* CTA Button */}
         <div className="mt-8 sm:mt-10 flex items-center justify-center w-full sm:w-auto">
           <Button
-            to="/register"
+            to={isAuthenticated ? "/dashboard" : "/register"}
             size="lg"
             variant="primary"
             className="w-full sm:w-auto shadow-xl shadow-indigo-600/25 hover:shadow-indigo-600/40 transition-all"
             iconRight={<ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />}
           >
-            Create Free Workspace
+            {isAuthenticated ? "Go to Dashboard" : "Create Free Workspace"}
           </Button>
         </div>
 
@@ -529,13 +543,13 @@ export const Home: React.FC = () => {
 
           <div className="mt-8 flex items-center justify-center">
             <Button
-              to="/register"
+              to={isAuthenticated ? "/dashboard" : "/register"}
               size="lg"
               variant="primary"
               className="w-full sm:w-auto shadow-xl shadow-indigo-600/25 hover:shadow-indigo-600/40 transition-all"
               iconRight={<ArrowRight className="w-4 h-4" />}
             >
-              Get Started Now
+              {isAuthenticated ? "Go to Dashboard" : "Get Started Now"}
             </Button>
           </div>
         </div>
@@ -552,12 +566,20 @@ export const Home: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-6">
-            <Link to="/login" className="hover:text-slate-200 transition-colors">
-              Sign In
-            </Link>
-            <Link to="/register" className="hover:text-slate-200 transition-colors">
-              Register
-            </Link>
+            {isAuthenticated ? (
+              <Link to="/dashboard" className="hover:text-slate-200 transition-colors">
+                Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link to="/login" className="hover:text-slate-200 transition-colors">
+                  Sign In
+                </Link>
+                <Link to="/register" className="hover:text-slate-200 transition-colors">
+                  Register
+                </Link>
+              </>
+            )}
             <span>© {new Date().getFullYear()} CollabBoard</span>
           </div>
         </div>

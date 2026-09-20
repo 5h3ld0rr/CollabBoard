@@ -14,6 +14,7 @@ function authHeader(userId = new mongoose.Types.ObjectId().toString(), email = '
   const token = jwt.sign({ sub: userId, email }, config.jwtSecret, { expiresIn: '1h' });
   return {
     userId,
+    email,
     token,
     header: { Authorization: `Bearer ${token}` },
   };
@@ -170,6 +171,50 @@ describe('Board API & Analytics', () => {
       expect(collabAccessRes.status).toBe(200);
     });
 
+    it('allows friend invited by email to list and access the board', async () => {
+      const owner = authHeader();
+      const friendEmail = 'friend-invited@collabboard.io';
+      const friend = authHeader(new mongoose.Types.ObjectId().toString(), friendEmail);
+
+      // Create friend user account
+      await User.create({
+        _id: friend.userId,
+        name: 'Friend User',
+        email: friendEmail,
+        passwordHash: 'dummy',
+      });
+
+      const ws = await Workspace.create({ name: 'Owner WS', ownerId: owner.userId });
+
+      // Owner creates a board and adds friend by email string in members array (via PATCH /api/boards/:id)
+      const board = await Board.create({
+        title: 'Project Shared With Friend',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [owner.userId, friendEmail],
+      });
+
+      // Friend calls GET /api/boards - board must be in the list
+      const listRes = await request(app)
+        .get('/api/boards')
+        .set(friend.header);
+
+      expect(listRes.status).toBe(200);
+      const friendBoards = listRes.body.data || listRes.body;
+      const found = friendBoards.find((b) => String(b.id) === String(board._id));
+      expect(found).toBeDefined();
+      expect(found.title).toBe('Project Shared With Friend');
+
+      // Friend calls GET /api/boards/:id - board access must be permitted
+      const directRes = await request(app)
+        .get(`/api/boards/${board._id}`)
+        .set(friend.header);
+
+      expect(directRes.status).toBe(200);
+      const directBoard = directRes.body.data || directRes.body;
+      expect(directBoard.title).toBe('Project Shared With Friend');
+    });
+
     it('allows owner to remove collaborator', async () => {
       const owner = authHeader();
       const collaboratorId = new mongoose.Types.ObjectId().toString();
@@ -190,6 +235,329 @@ describe('Board API & Analytics', () => {
       const updated = res.body.data || res.body;
       const memberIds = updated.members.map((m) => String(m.id || m));
       expect(memberIds).not.toContain(collaboratorId);
+    });
+
+    it('rejects self role change with 403 Forbidden', async () => {
+      const owner = authHeader();
+      const ws = await Workspace.create({ name: 'Role WS', ownerId: owner.userId });
+      const board = await Board.create({
+        title: 'Role Test Board',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [owner.userId],
+      });
+
+      const res = await request(app)
+        .patch(`/api/boards/${board._id}/members/${owner.userId}`)
+        .set(owner.header)
+        .send({ role: 'Editor' });
+
+      expect(res.status).toBe(403);
+      expect(res.body.code || res.body.error?.code).toBe('FORBIDDEN');
+    });
+
+    it('rejects changing board owner role with 403 Forbidden', async () => {
+      const owner = authHeader();
+      const collaborator = authHeader();
+      const ws = await Workspace.create({ name: 'Owner Role WS', ownerId: owner.userId });
+      const board = await Board.create({
+        title: 'Owner Guard Board',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [collaborator.userId],
+      });
+
+      const res = await request(app)
+        .patch(`/api/boards/${board._id}/members/${owner.userId}`)
+        .set(collaborator.header)
+        .send({ role: 'Viewer' });
+
+      expect(res.status).toBe(403);
+      expect(res.body.code || res.body.error?.code).toBe('FORBIDDEN');
+    });
+
+    it('rejects removing the board owner with 403 Forbidden', async () => {
+      const owner = authHeader();
+      const ws = await Workspace.create({ name: 'Owner Removal WS', ownerId: owner.userId });
+      const board = await Board.create({
+        title: 'Protected Board 1',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [owner.userId],
+      });
+
+      const res = await request(app)
+        .delete(`/api/boards/${board._id}/members/${owner.userId}`)
+        .set(owner.header);
+
+      expect(res.status).toBe(403);
+      expect(res.body.code || res.body.error?.code).toBe('FORBIDDEN');
+    });
+
+    it('allows board owner to update another member role', async () => {
+      const owner = authHeader();
+      const collaborator = authHeader(new mongoose.Types.ObjectId().toString(), 'collab-role@nsbm.lk');
+
+      await User.create({
+        _id: collaborator.userId,
+        name: 'Collaborator',
+        email: collaborator.email,
+        passwordHash: 'dummy',
+      });
+
+      const ws = await Workspace.create({ name: 'Update Collab WS', ownerId: owner.userId });
+      const board = await Board.create({
+        title: 'Collaborator Role Board',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [collaborator.userId],
+      });
+
+      const res = await request(app)
+        .patch(`/api/boards/${board._id}/members/${collaborator.userId}`)
+        .set(owner.header)
+        .send({ role: 'Admin' });
+
+      expect(res.status).toBe(200);
+      const updated = res.body.data || res.body;
+      const targetMember = updated.members.find((m) => String(m.id) === collaborator.userId);
+      expect(targetMember.boardRole).toBe('Admin');
+    });
+
+    it('allows board owner/member to generate a temporary view share token', async () => {
+      const owner = authHeader();
+      const ws = await Workspace.create({ name: 'Share WS', ownerId: owner.userId });
+      const board = await Board.create({
+        title: 'Shareable Board',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [],
+      });
+
+      const res = await request(app)
+        .post(`/api/boards/${board._id}/share-token`)
+        .set(owner.header)
+        .send({ expiresIn: '24h' });
+
+      expect(res.status).toBe(200);
+      const data = res.body.data || res.body;
+      expect(data.token).toBeDefined();
+      expect(data.expiresAt).toBeDefined();
+      expect(data.expiresIn).toBe('24h');
+    });
+
+    it('allows unauthenticated guest to view board using a valid share token', async () => {
+      const owner = authHeader();
+      const ws = await Workspace.create({ name: 'Guest WS', ownerId: owner.userId });
+      const board = await Board.create({
+        title: 'Guest View Board',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [],
+      });
+
+      const tokenRes = await request(app)
+        .post(`/api/boards/${board._id}/share-token`)
+        .set(owner.header)
+        .send({ expiresIn: '1h' });
+
+      const shareToken = tokenRes.body.data.token;
+
+      // Unauthenticated request with ?shareToken
+      const res = await request(app)
+        .get(`/api/boards/${board._id}?shareToken=${shareToken}`);
+
+      expect(res.status).toBe(200);
+      const retrieved = res.body.data || res.body;
+      expect(retrieved.title).toBe('Guest View Board');
+    });
+
+    it('allows generating share token with never expire option', async () => {
+      const owner = authHeader();
+      const ws = await Workspace.create({ name: 'Never WS', ownerId: owner.userId });
+      const board = await Board.create({
+        title: 'Never Expiring Board',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [],
+      });
+
+      const tokenRes = await request(app)
+        .post(`/api/boards/${board._id}/share-token`)
+        .set(owner.header)
+        .send({ expiresIn: 'never' });
+
+      expect(tokenRes.status).toBe(200);
+      expect(tokenRes.body.data.expiresIn).toBe('never');
+      expect(tokenRes.body.data.expiresAt).toBeNull();
+      const token = tokenRes.body.data.token;
+
+      // Access board using never-expiring share token
+      const res = await request(app).get(`/api/boards/${board._id}?shareToken=${token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.title).toBe('Never Expiring Board');
+    });
+
+    it('rejects guest access when share token is expired', async () => {
+      const owner = authHeader();
+      const ws = await Workspace.create({ name: 'Expired WS', ownerId: owner.userId });
+      const board = await Board.create({
+        title: 'Expired Board',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [],
+      });
+
+      // Generate already expired token (-10s)
+      const expiredToken = jwt.sign(
+        {
+          boardId: String(board._id),
+          type: 'board_share_view',
+          role: 'Viewer',
+        },
+        config.jwtSecret,
+        { expiresIn: '-10s' }
+      );
+
+      const res = await request(app)
+        .get(`/api/boards/${board._id}?shareToken=${expiredToken}`);
+
+      expect(res.status).toBe(403);
+    });
+
+    it('rejects guest access when share token is invalid or belongs to another board', async () => {
+      const owner = authHeader();
+      const ws = await Workspace.create({ name: 'Tamper WS', ownerId: owner.userId });
+      const boardA = await Board.create({
+        title: 'Board A',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [],
+      });
+      const boardB = await Board.create({
+        title: 'Board B',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [],
+      });
+
+      const tokenRes = await request(app)
+        .post(`/api/boards/${boardA._id}/share-token`)
+        .set(owner.header)
+        .send({ expiresIn: '1h' });
+
+      const tokenA = tokenRes.body.data.token;
+
+      // Access boardB with token for boardA
+      const res = await request(app)
+        .get(`/api/boards/${boardB._id}?shareToken=${tokenA}`);
+
+      expect(res.status).toBe(403);
+    });
+
+    it('rejects share token generation for non-members', async () => {
+      const owner = authHeader();
+      const stranger = authHeader();
+      const ws = await Workspace.create({ name: 'Private WS', ownerId: owner.userId });
+      const board = await Board.create({
+        title: 'Confidential Board',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [],
+      });
+
+      const res = await request(app)
+        .post(`/api/boards/${board._id}/share-token`)
+        .set(stranger.header)
+        .send({ expiresIn: '24h' });
+
+      expect(res.status).toBe(403);
+    });
+
+    it('allows owner to reset share token and revokes previously generated links', async () => {
+      const owner = authHeader();
+      const ws = await Workspace.create({ name: 'Reset WS', ownerId: owner.userId });
+      const board = await Board.create({
+        title: 'Revokable Board',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [],
+      });
+
+      // 1. Generate token
+      const tokenRes1 = await request(app)
+        .post(`/api/boards/${board._id}/share-token`)
+        .set(owner.header)
+        .send({ expiresIn: '24h' });
+      const token1 = tokenRes1.body.data.token;
+
+      // 2. Token works initially
+      const access1 = await request(app).get(`/api/boards/${board._id}?shareToken=${token1}`);
+      expect(access1.status).toBe(200);
+
+      // 3. Reset share token
+      const resetRes = await request(app)
+        .post(`/api/boards/${board._id}/share-token/reset`)
+        .set(owner.header);
+      expect(resetRes.status).toBe(200);
+
+      // 4. Old token is now revoked and rejected with 403
+      const accessOld = await request(app).get(`/api/boards/${board._id}?shareToken=${token1}`);
+      expect(accessOld.status).toBe(403);
+
+      // 5. Newly generated token works
+      const tokenRes2 = await request(app)
+        .post(`/api/boards/${board._id}/share-token`)
+        .set(owner.header)
+        .send({ expiresIn: '24h' });
+      const token2 = tokenRes2.body.data.token;
+      const accessNew = await request(app).get(`/api/boards/${board._id}?shareToken=${token2}`);
+      expect(accessNew.status).toBe(200);
+    });
+
+    it('returns currently active share token via GET /api/boards/:id/share-token', async () => {
+      const owner = authHeader();
+      const ws = await Workspace.create({ name: 'Active Token WS', ownerId: owner.userId });
+      const board = await Board.create({
+        title: 'Board With Active Link',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [],
+      });
+
+      // Initially no active share token
+      const initialRes = await request(app)
+        .get(`/api/boards/${board._id}/share-token`)
+        .set(owner.header);
+      expect(initialRes.status).toBe(200);
+      expect(initialRes.body.data).toBeNull();
+
+      // Generate a share token
+      const genRes = await request(app)
+        .post(`/api/boards/${board._id}/share-token`)
+        .set(owner.header)
+        .send({ expiresIn: '7d' });
+      expect(genRes.status).toBe(200);
+      const generatedToken = genRes.body.data.token;
+
+      // GET /api/boards/:id/share-token returns the active token
+      const activeRes = await request(app)
+        .get(`/api/boards/${board._id}/share-token`)
+        .set(owner.header);
+      expect(activeRes.status).toBe(200);
+      expect(activeRes.body.data.token).toBe(generatedToken);
+      expect(activeRes.body.data.expiresIn).toBe('7d');
+
+      // Resetting revokes it and clears active token
+      await request(app)
+        .post(`/api/boards/${board._id}/share-token/reset`)
+        .set(owner.header);
+
+      const afterResetRes = await request(app)
+        .get(`/api/boards/${board._id}/share-token`)
+        .set(owner.header);
+      expect(afterResetRes.status).toBe(200);
+      expect(afterResetRes.body.data).toBeNull();
     });
 
     it('rejects board deletion by non-owner with 403 Forbidden', async () => {
@@ -412,6 +780,113 @@ describe('Board API & Analytics', () => {
       expect(res.status).toBe(404);
       const code = res.body.code || res.body.error?.code;
       expect(code).toBe('NOT_FOUND');
+    });
+  });
+
+  describe('Per-User Favorites', () => {
+    it('stores favorite status on User.favoriteBoardIds and isolates it per user', async () => {
+      const userA = authHeader(new mongoose.Types.ObjectId().toString(), 'user-a@nsbm.lk');
+      const userB = authHeader(new mongoose.Types.ObjectId().toString(), 'user-b@nsbm.lk');
+
+      // Create users in DB
+      await User.create([
+        { _id: userA.userId, email: userA.email, name: 'User A', passwordHash: 'hash' },
+        { _id: userB.userId, email: userB.email, name: 'User B', passwordHash: 'hash' },
+      ]);
+
+      const ws = await Workspace.create({ name: 'Shared WS', ownerId: userA.userId, boards: [] });
+      const board = await Board.create({
+        title: 'Collab Board',
+        ownerId: userA.userId,
+        members: [userA.userId, userB.userId],
+      });
+      await Workspace.findByIdAndUpdate(ws._id, { $push: { boards: board._id.toString() } });
+
+      // User A stars the board
+      const starRes = await request(app)
+        .patch(`/api/boards/${board._id}`)
+        .set(userA.header)
+        .send({ isFavorite: true });
+
+      expect(starRes.status).toBe(200);
+      expect(starRes.body.data.isFavorite).toBe(true);
+
+      // Verify User A document in DB has board in favoriteBoardIds
+      const dbUserA = await User.findById(userA.userId).lean();
+      expect(dbUserA.favoriteBoardIds).toContain(board._id.toString());
+
+      // Verify Board document in DB does NOT store isFavorite
+      const rawBoard = await Board.findById(board._id).lean();
+      expect(rawBoard.isFavorite).toBeUndefined();
+
+      // Verify User B sees isFavorite as false
+      const userBGet = await request(app)
+        .get(`/api/boards/${board._id}`)
+        .set(userB.header);
+
+      expect(userBGet.status).toBe(200);
+      expect(userBGet.body.data.isFavorite).toBe(false);
+
+      // User B also stars the board
+      await request(app)
+        .patch(`/api/boards/${board._id}`)
+        .set(userB.header)
+        .send({ isFavorite: true });
+
+      const dbUserB = await User.findById(userB.userId).lean();
+      expect(dbUserB.favoriteBoardIds).toContain(board._id.toString());
+
+      // User A unstars the board
+      const unstarRes = await request(app)
+        .patch(`/api/boards/${board._id}`)
+        .set(userA.header)
+        .send({ isFavorite: false });
+
+      expect(unstarRes.status).toBe(200);
+      expect(unstarRes.body.data.isFavorite).toBe(false);
+
+      const dbUserAAfter = await User.findById(userA.userId).lean();
+      expect(dbUserAAfter.favoriteBoardIds).not.toContain(board._id.toString());
+
+      // User B still has it favorited
+      const dbUserBAfter = await User.findById(userB.userId).lean();
+      expect(dbUserBAfter.favoriteBoardIds).toContain(board._id.toString());
+    });
+
+    it('cleans up favoriteBoardIds when board is deleted', async () => {
+      const user = authHeader(new mongoose.Types.ObjectId().toString(), 'owner-fav@nsbm.lk');
+      await User.create({
+        _id: user.userId,
+        email: user.email,
+        name: 'Owner Fav',
+        passwordHash: 'hash',
+        favoriteBoardIds: [],
+      });
+
+      const board = await Board.create({
+        title: 'Temporary Board',
+        ownerId: user.userId,
+      });
+
+      // Add to favorites
+      await request(app)
+        .patch(`/api/boards/${board._id}`)
+        .set(user.header)
+        .send({ isFavorite: true });
+
+      const beforeDelete = await User.findById(user.userId).lean();
+      expect(beforeDelete.favoriteBoardIds).toContain(board._id.toString());
+
+      // Delete board
+      const delRes = await request(app)
+        .delete(`/api/boards/${board._id}`)
+        .set(user.header);
+
+      expect(delRes.status).toBe(204);
+
+      // Verify board was removed from user's favoriteBoardIds
+      const afterDelete = await User.findById(user.userId).lean();
+      expect(afterDelete.favoriteBoardIds).not.toContain(board._id.toString());
     });
   });
 });
