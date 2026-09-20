@@ -275,3 +275,18 @@ export function subscribePresenceUpdate(
     socket.off('presence:update', callback);
   };
 }
+
+/**
+ * Subscribes to real-time direct personal notifications (notification:direct)
+ * Broadcast to a specific user across all their active sessions
+ */
+export function subscribeDirectNotification(
+  callback: (payload: any) => void
+): () => void {
+  const socket = socketInstance || getSocketClient();
+  socket.on('notification:direct', callback);
+  return () => {
+    socket.off('notification:direct', callback);
+  };
+}
+

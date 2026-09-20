@@ -41,6 +41,11 @@
     color-scheme: dark;
   }
 
+  html {
+    scrollbar-gutter: stable;
+    overflow-y: scroll;
+  }
+
   body {
     background-color: var(--color-surface-bg);
     color: var(--color-surface-text);
@@ -156,4 +161,46 @@
 }
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background-color: #475569;
+}
+
+/* Real-Time Notification Toast Slide In & Out Animations */
+@keyframes toastSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateX(100%) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes toastSlideOut {
+  0% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    max-height: 200px;
+    margin-bottom: 0.75rem;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(115%) scale(0.95);
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-bottom: 0;
+    border-width: 0;
+    border-color: transparent;
+  }
+}
+
+.toast-slide-in {
+  animation: toastSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.toast-slide-out {
+  animation: toastSlideOut 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  pointer-events: none;
 }

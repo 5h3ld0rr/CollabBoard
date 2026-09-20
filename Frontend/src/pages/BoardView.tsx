@@ -96,12 +96,19 @@ export const BoardView: React.FC = () => {
         setOnlineUsers(users);
       });
 
+      const handleBeforeUnload = () => {
+        emitBoardLeave(boardId);
+      };
+      window.addEventListener('beforeunload', handleBeforeUnload);
+
       return () => {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
         emitBoardLeave(boardId);
         unsubPresence();
+        dispatch({ type: 'SET_ACTIVE_BOARD', payload: { board: null, tasks: [] } });
       };
     }
-  }, [boardId, shareToken, loadBoard]);
+  }, [boardId, shareToken, loadBoard, dispatch]);
 
   // URL-Reflected Filter States
   const searchQuery = searchParams.get("search") || searchParams.get("q") || "";

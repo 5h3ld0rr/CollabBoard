@@ -1,6 +1,7 @@
 import * as boardService from '../services/boardService.js';
 import { getBoardAnalytics } from '../services/taskService.js';
-import { emitBoardUpdated } from '../socket/index.js';
+import { emitBoardUpdated, emitDirectNotification } from '../socket/index.js';
+import { userRepo } from '../repos/userRepo.js';
 
 export async function list(req, res) {
   const boards = await boardService.listBoards(req.user.id);
@@ -65,6 +66,29 @@ export async function addMember(req, res) {
     req.user.id
   );
   emitBoardUpdated(board.id, board, req.user.id);
+
+  try {
+    let targetUserId = req.body.userId;
+    if (targetUserId && String(targetUserId).includes('@')) {
+      const u = await userRepo.findByEmail(targetUserId);
+      if (u) targetUserId = String(u.id);
+    }
+    if (targetUserId && String(targetUserId) !== String(req.user.id)) {
+      const actor = await userRepo.findById(req.user.id);
+      const actorName = actor?.name || req.user.email?.split('@')[0] || 'A team member';
+      emitDirectNotification(targetUserId, {
+        title: 'Added to Board',
+        message: `${actorName} added you to board "${board.title}" as ${req.body.role || 'Editor'}`,
+        type: 'board_invite',
+        linkUrl: `/boards/${board.id}`,
+        actor: { id: req.user.id, name: actorName },
+        meta: { boardId: board.id, role: req.body.role || 'Editor' },
+      });
+    }
+  } catch (err) {
+    console.warn('[boardController] Failed to emit direct notification on addMember:', err);
+  }
+
   res.status(200).json({
     data: board,
   });

@@ -24,7 +24,7 @@ export const STATUS_COLUMNS = [
 export const DEFAULT_USER_PREFERENCES = {
   emailTaskAssignment: true,
   emailWeeklyDigest: false,
-  desktopNotifications: true,
+  desktopNotifications: false,
   soundEffects: true,
   compactBoardView: false,
   offlineAutoSync: true,

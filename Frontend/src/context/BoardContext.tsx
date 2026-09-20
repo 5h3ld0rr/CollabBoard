@@ -1,6 +1,7 @@
 /* oxlint-disable react/only-export-components */
 import { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
+import { useOptionalNotifications } from './NotificationContext';
 import * as tasksApi from '../api/tasks';
 import * as boardsApi from '../api/boards';
 import {
@@ -27,7 +28,7 @@ import {
   subscribeBoardUpdated,
 } from '../sync';
 import type { Board, Task, TaskStatus, User } from '../types';
-import { hasBoardsChanged, hasBoardChanged, hasTasksChanged } from '../utils';
+import { hasBoardsChanged, hasBoardChanged, hasTasksChanged, playCardDropSound } from '../utils';
 
 /* ==========================================================================
    State & Action Types
@@ -306,6 +307,8 @@ const BoardContext = createContext<BoardContextValue | undefined>(undefined);
 export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(boardReducer, initialState);
   const { token, user } = useAuth();
+  const notificationCtx = useOptionalNotifications();
+  const addNotification = notificationCtx?.addNotification;
 
   const loadBoards = useCallback(async (forceRefresh = false) => {
     // 1. Instant Cache Hydration from PouchDB (0ms delay)
@@ -510,6 +513,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const moveTaskStatus = useCallback(async (taskId: string, newStatus: TaskStatus) => {
+    playCardDropSound();
     dispatch({ type: 'MOVE_TASK_STATUS', payload: { taskId, newStatus } });
     const existing = state.tasks.find((t) => t.id === taskId);
     if (existing) {
@@ -776,7 +780,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // Handle incoming task:created
     const unsubCreated = subscribeTaskCreated(async (payload) => {
-      if (payload.boardId !== activeBoardId) return;
+      if (String(payload.boardId) !== String(activeBoardId)) return;
 
       // Echo Loop Guard (Slide 17)
       if (payload.actorId && user?.id && String(payload.actorId) === String(user.id)) {
@@ -784,17 +788,45 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
 
       const incoming = payload.task;
+      if (!incoming) return;
       dispatch({ type: 'ADD_TASK', payload: incoming });
       try {
         await updateCachedTask(incoming);
       } catch (err) {
         console.warn('[BoardContext] Failed to cache task:created:', err);
       }
+
+      const actor = state.boardMembers.find(
+        (m) => String(m.id || (m as any)._id || '') === String(payload.actorId)
+      );
+      const actorName = actor?.name || 'A teammate';
+
+      if (addNotification) {
+        await addNotification({
+          title: 'New Task Created',
+          message: `${actorName} added "${incoming.title}"`,
+          type: 'task_assigned',
+          linkUrl: `/boards/${payload.boardId}`,
+          actor: actor
+            ? {
+                name: actor.name,
+                initials: actor.initials || actor.name.slice(0, 2).toUpperCase(),
+                color: actor.color,
+              }
+            : undefined,
+          meta: {
+            taskId: incoming.id,
+            boardId: payload.boardId,
+          },
+        });
+      } else {
+        playCardDropSound();
+      }
     });
 
     // Handle incoming task:updated with OCC Version Guard
     const unsubUpdated = subscribeTaskUpdated(async (payload) => {
-      if (payload.boardId !== activeBoardId) return;
+      if (String(payload.boardId) !== String(activeBoardId)) return;
 
       // Echo Loop Guard (Slide 17)
       if (payload.actorId && user?.id && String(payload.actorId) === String(user.id)) {
@@ -802,15 +834,82 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
 
       const incoming = payload.task;
-      const current = state.tasks.find((t) => t.id === incoming.id);
+      if (!incoming) return;
 
-      // OCC Version Guard: (if (incoming.version > current.version))
-      if (!current || Number(incoming.version || 1) > Number(current.version || 0)) {
+      const incomingId = String(incoming.id || (incoming as any)._id || '');
+      const current = state.tasks.find(
+        (t) => String(t.id || (t as any)._id || '') === incomingId
+      );
+
+      // OCC Version Guard: apply if new or version >= current
+      if (!current || Number(incoming.version || 1) >= Number(current.version || 0)) {
         dispatch({ type: 'UPDATE_TASK', payload: incoming });
         try {
           await updateCachedTask(incoming);
         } catch (err) {
           console.warn('[BoardContext] Failed to cache task:updated:', err);
+        }
+
+        const isStatusMoved = !current || current.status !== incoming.status;
+        const actor = state.boardMembers.find(
+          (m) => String(m.id || (m as any)._id || '') === String(payload.actorId)
+        );
+        const actorName = actor?.name || 'A teammate';
+
+        if (isStatusMoved) {
+          const statusLabels: Record<string, string> = {
+            todo: 'To Do',
+            'in-progress': 'In Progress',
+            done: 'Completed',
+          };
+          const newStatusLabel = statusLabels[incoming.status] || incoming.status;
+
+          if (addNotification) {
+            await addNotification({
+              title: 'Task Moved',
+              message: `${actorName} moved "${incoming.title}" to ${newStatusLabel}`,
+              type: 'task_status',
+              linkUrl: `/boards/${payload.boardId}`,
+              actor: actor
+                ? {
+                    name: actor.name,
+                    initials: actor.initials || actor.name.slice(0, 2).toUpperCase(),
+                    color: actor.color,
+                  }
+                : undefined,
+              meta: {
+                taskId: incoming.id,
+                boardId: payload.boardId,
+                status: incoming.status,
+              },
+            });
+          } else {
+            playCardDropSound();
+          }
+        } else {
+          // Task content was edited/updated by a teammate
+          if (addNotification) {
+            await addNotification({
+              title: 'Task Updated',
+              message: `${actorName} updated "${incoming.title}"`,
+              type: 'task_status',
+              linkUrl: `/boards/${payload.boardId}`,
+              actor: actor
+                ? {
+                    name: actor.name,
+                    initials: actor.initials || actor.name.slice(0, 2).toUpperCase(),
+                    color: actor.color,
+                  }
+                : undefined,
+              meta: {
+                taskId: incoming.id,
+                boardId: payload.boardId,
+                status: incoming.status,
+              },
+            });
+          } else {
+            playCardDropSound();
+          }
         }
       } else {
         console.warn(
@@ -821,18 +920,46 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // Handle incoming task:deleted for instant column item removal
     const unsubDeleted = subscribeTaskDeleted(async (payload) => {
-      if (payload.boardId !== activeBoardId) return;
+      if (String(payload.boardId) !== String(activeBoardId)) return;
 
       // Echo Loop Guard (Slide 17)
       if (payload.actorId && user?.id && String(payload.actorId) === String(user.id)) {
         return;
       }
 
+      const existingTask = state.tasks.find(
+        (t) => String(t.id || (t as any)._id || '') === String(payload.taskId)
+      );
       dispatch({ type: 'DELETE_TASK', payload: { taskId: payload.taskId } });
       try {
         await deleteCachedTask(payload.taskId);
       } catch (err) {
         console.warn('[BoardContext] Failed to delete cached task from socket event:', err);
+      }
+
+      const actor = state.boardMembers.find(
+        (m) => String(m.id || (m as any)._id || '') === String(payload.actorId)
+      );
+      const actorName = actor?.name || 'A teammate';
+
+      if (addNotification) {
+        await addNotification({
+          title: 'Task Deleted',
+          message: existingTask ? `${actorName} deleted "${existingTask.title}"` : `${actorName} removed a task`,
+          type: 'system',
+          linkUrl: `/boards/${payload.boardId}`,
+          actor: actor
+            ? {
+                name: actor.name,
+                initials: actor.initials || actor.name.slice(0, 2).toUpperCase(),
+                color: actor.color,
+              }
+            : undefined,
+          meta: {
+            taskId: payload.taskId,
+            boardId: payload.boardId,
+          },
+        });
       }
     });
 
@@ -842,7 +969,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       unsubUpdated();
       unsubDeleted();
     };
-  }, [state.activeBoard?.id, state.tasks, user?.id]);
+  }, [state.activeBoard?.id, state.tasks, user?.id, addNotification]);
 
   return (
     <BoardContext.Provider

@@ -13,6 +13,7 @@ import {
   subscribeTaskUpdated,
   subscribeBoardUpdated,
   subscribePresenceUpdate,
+  subscribeDirectNotification,
 } from '../socketClient';
 
 vi.mock('socket.io-client', () => {
@@ -101,6 +102,15 @@ describe('Member 3: Shamika Madushan - Socket Client & Reconnection Resilience S
     expect(mockSocket.on).toHaveBeenCalledWith('presence:update', callback);
     unsub();
     expect(mockSocket.off).toHaveBeenCalledWith('presence:update', callback);
+  });
+
+  it('subscribes to and unregisters notification:direct events', () => {
+    const callback = vi.fn();
+    const unsub = subscribeDirectNotification(callback);
+
+    expect(mockSocket.on).toHaveBeenCalledWith('notification:direct', callback);
+    unsub();
+    expect(mockSocket.off).toHaveBeenCalledWith('notification:direct', callback);
   });
 
   it('re-joins active board room on reconnect', () => {

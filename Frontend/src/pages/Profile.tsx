@@ -43,7 +43,7 @@ import {
 } from "../constants";
 import { saveCachedProfileDetails, getCachedProfileDetails } from "../db";
 import type { Task, TaskStatus, Workspace, User } from "../types";
-import { getInitials as extractInitials, getProfileGradient } from "../utils";
+import { getInitials as extractInitials, getProfileGradient, playNotificationSound } from "../utils";
 
 type ProfileTab =
   | "workspaces"
@@ -115,29 +115,19 @@ export const Profile: React.FC = () => {
     "security",
   ];
 
-  // Active tab state - reads ?tab= from URL on load
-  const [activeTab, setActiveTab] = useState<ProfileTab>(() => {
-    const tabParam = new URLSearchParams(window.location.search).get("tab") as ProfileTab | null;
-    return tabParam && validTabs.includes(tabParam) ? tabParam : "workspaces";
-  });
-
-  // Sync activeTab if ?tab= changes in URL
-  useEffect(() => {
-    const tabParam = searchParams.get("tab") as ProfileTab | null;
-    if (tabParam && validTabs.includes(tabParam) && tabParam !== activeTab) {
-      setActiveTab(tabParam);
-    }
-  }, [searchParams, activeTab]);
+  // Derive active tab from ?tab= query parameter, defaulting to "workspaces"
+  const tabParam = searchParams.get("tab") as ProfileTab | null;
+  const activeTab: ProfileTab =
+    tabParam && validTabs.includes(tabParam) ? tabParam : "workspaces";
 
   const handleTabChange = (tab: ProfileTab) => {
-    setActiveTab(tab);
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
         next.set("tab", tab);
         return next;
       },
-      { replace: true },
+      { replace: true, preventScrollReset: true },
     );
   };
 
@@ -169,6 +159,9 @@ export const Profile: React.FC = () => {
     newPlan: "basic" | "pro",
     cycle?: "monthly" | "yearly",
   ) => {
+    if (newPlan === "pro") {
+      return;
+    }
     const nextCycle = cycle || billingCycle;
     setSubscriptionPlan(newPlan);
     if (cycle) setBillingCycle(cycle);
@@ -186,12 +179,7 @@ export const Profile: React.FC = () => {
         subscriptionPlan: newPlan,
         billingCycle: nextCycle,
       });
-      showToast(
-        newPlan === "pro"
-          ? "Upgraded to Pro Plan successfully!"
-          : "Switched to Basic Plan",
-        "success",
-      );
+      showToast("Switched to Basic Plan", "success");
     } catch (err: any) {
       showToast(err.message || "Failed to update subscription", "info");
     }
@@ -320,8 +308,77 @@ export const Profile: React.FC = () => {
     }
   }, [authUser?.color]);
 
-  // Preferences state
-  const [preferences, setPreferences] = useState(DEFAULT_USER_PREFERENCES);
+  // Preferences state - persisted to localStorage
+  const [preferences, setPreferences] = useState(() => {
+    try {
+      const stored = localStorage.getItem("user_profile_preferences");
+      if (stored) {
+        return { ...DEFAULT_USER_PREFERENCES, ...JSON.parse(stored) };
+      }
+    } catch {
+      // fallback
+    }
+    return DEFAULT_USER_PREFERENCES;
+  });
+
+  const handlePreferenceToggle = async (key: keyof typeof preferences) => {
+    const nextVal = !preferences[key];
+
+    if (key === "desktopNotifications") {
+      if (nextVal) {
+        if (!("Notification" in window)) {
+          showToast("Desktop notifications are not supported in this browser", "error");
+          return;
+        }
+
+        if (Notification.permission === "denied") {
+          showToast(
+            "Notifications are blocked in your browser settings. Please enable them in your address bar.",
+            "error",
+          );
+          return;
+        }
+
+        if (Notification.permission !== "granted") {
+          const permission = await Notification.requestPermission();
+          if (permission !== "granted") {
+            showToast("Desktop notification permission was not granted", "info");
+            return;
+          }
+        }
+
+        try {
+          new window.Notification("CollabBoard", {
+            body: "Desktop push notifications are enabled!",
+            icon: "/favicon.ico",
+          });
+        } catch {
+          // Ignore
+        }
+        showToast("Desktop push notifications enabled!", "success");
+      } else {
+        showToast("Desktop push notifications disabled", "info");
+      }
+    }
+
+    if (key === "soundEffects") {
+      if (nextVal) {
+        playNotificationSound();
+        showToast("Sound cues enabled", "success");
+      } else {
+        showToast("Sound cues muted", "info");
+      }
+    }
+
+    const updated = { ...preferences, [key]: nextVal };
+    setPreferences(updated);
+    try {
+      localStorage.setItem("user_profile_preferences", JSON.stringify(updated));
+    } catch {
+      // Ignore
+    }
+  };
+
 
   // Workspaces state
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -369,19 +426,6 @@ export const Profile: React.FC = () => {
     setTimeout(() => {
       setToastMessage(null);
     }, 3200);
-  };
-
-  const handlePreferenceToggle = (key: keyof typeof preferences) => {
-    setPreferences((prev) => {
-      const next = { ...prev, [key]: !prev[key] };
-      showToast(
-        `Preference updated: ${String(key)
-          .replace(/([A-Z])/g, " $1")
-          .toLowerCase()}`,
-        "info",
-      );
-      return next;
-    });
   };
 
   const handlePasswordUpdate = (e: React.FormEvent) => {
@@ -622,7 +666,7 @@ export const Profile: React.FC = () => {
 
           <button
             onClick={() => handleTabChange("workspaces")}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 whitespace-nowrap cursor-pointer ${
               activeTab === "workspaces"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-950/60"
                 : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
@@ -634,7 +678,7 @@ export const Profile: React.FC = () => {
 
           <button
             onClick={() => handleTabChange("subscription")}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 whitespace-nowrap cursor-pointer ${
               activeTab === "subscription"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-950/60"
                 : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
@@ -646,7 +690,7 @@ export const Profile: React.FC = () => {
 
           <button
             onClick={() => handleTabChange("tasks")}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 whitespace-nowrap cursor-pointer ${
               activeTab === "tasks"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-950/60"
                 : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
@@ -658,7 +702,7 @@ export const Profile: React.FC = () => {
 
           <button
             onClick={() => handleTabChange("preferences")}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 whitespace-nowrap cursor-pointer ${
               activeTab === "preferences"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-950/60"
                 : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
@@ -670,7 +714,7 @@ export const Profile: React.FC = () => {
 
           <button
             onClick={() => handleTabChange("security")}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 whitespace-nowrap cursor-pointer ${
               activeTab === "security"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-950/60"
                 : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
@@ -681,8 +725,8 @@ export const Profile: React.FC = () => {
           </button>
         </div>
 
-
-
+        {/* Tab Content Panels (min-h prevents layout shift/jump) */}
+        <div className="min-h-125">
         {/* Tab: Subscription & Plans */}
         {activeTab === "subscription" && (
           <div className="space-y-6">
@@ -884,6 +928,7 @@ export const Profile: React.FC = () => {
                         <Button
                           type="button"
                           variant="primary"
+                          disabled
                           className="w-full shadow-xl shadow-indigo-950/60"
                           icon={<Sparkles className="w-4 h-4" />}
                           onClick={() => handleSelectPlan("pro", billingCycle)}
@@ -1208,64 +1253,6 @@ export const Profile: React.FC = () => {
               </div>
 
               <div className="space-y-4">
-                <div className="flex items-center justify-between py-2">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-200">
-                      Email task assignments
-                    </p>
-                    <p className="text-[11px] text-slate-400">
-                      Receive an email when you are assigned or mentioned in a
-                      card
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handlePreferenceToggle("emailTaskAssignment")
-                    }
-                    className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
-                      preferences.emailTaskAssignment
-                        ? "bg-indigo-600"
-                        : "bg-slate-800"
-                    }`}
-                  >
-                    <div
-                      className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                        preferences.emailTaskAssignment
-                          ? "translate-x-5"
-                          : "translate-x-0"
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between py-2">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-200">
-                      Weekly activity summary digest
-                    </p>
-                    <p className="text-[11px] text-slate-400">
-                      Receive weekly email roundup of workspace velocity
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handlePreferenceToggle("emailWeeklyDigest")}
-                    className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
-                      preferences.emailWeeklyDigest
-                        ? "bg-indigo-600"
-                        : "bg-slate-800"
-                    }`}
-                  >
-                    <div
-                      className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                        preferences.emailWeeklyDigest
-                          ? "translate-x-5"
-                          : "translate-x-0"
-                      }`}
-                    />
-                  </button>
-                </div>
 
                 <div className="flex items-center justify-between py-2">
                   <div>
@@ -1324,76 +1311,7 @@ export const Profile: React.FC = () => {
                     />
                   </button>
                 </div>
-              </div>
-            </div>
 
-            <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-6">
-              <div className="pb-3 border-b border-slate-800">
-                <h2 className="text-sm font-bold text-white">
-                  Board Display & Sync
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Customize your board viewing experience and offline behavior
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex items-center justify-between py-2">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-200">
-                      Compact Kanban density
-                    </p>
-                    <p className="text-[11px] text-slate-400">
-                      Reduce task card padding to fit more items on screen
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handlePreferenceToggle("compactBoardView")}
-                    className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
-                      preferences.compactBoardView
-                        ? "bg-indigo-600"
-                        : "bg-slate-800"
-                    }`}
-                  >
-                    <div
-                      className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                        preferences.compactBoardView
-                          ? "translate-x-5"
-                          : "translate-x-0"
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between py-2">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-200">
-                      Offline Automatic Sync
-                    </p>
-                    <p className="text-[11px] text-slate-400">
-                      Queue mutations in IndexedDB when disconnected and flush
-                      on reconnect
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handlePreferenceToggle("offlineAutoSync")}
-                    className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
-                      preferences.offlineAutoSync
-                        ? "bg-indigo-600"
-                        : "bg-slate-800"
-                    }`}
-                  >
-                    <div
-                      className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                        preferences.offlineAutoSync
-                          ? "translate-x-5"
-                          : "translate-x-0"
-                      }`}
-                    />
-                  </button>
-                </div>
               </div>
             </div>
           </div>
@@ -1469,24 +1387,6 @@ export const Profile: React.FC = () => {
               </div>
             </form>
 
-            {/* Two Factor Authentication Card */}
-            <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-sm font-bold text-white">
-                    Two-Factor Authentication (2FA)
-                  </h2>
-                  <p className="text-xs text-slate-400">
-                    Protect your CollabBoard workspaces with hardware or
-                    app-based 2FA
-                  </p>
-                </div>
-                <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Active & Protected</span>
-                </span>
-              </div>
-            </div>
 
             {/* Active Sessions */}
             <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-4">
@@ -1563,6 +1463,7 @@ export const Profile: React.FC = () => {
             </div>
           </div>
         )}
+        </div>
       </main>
 
       {/* Manage Workspace Settings Modal */}

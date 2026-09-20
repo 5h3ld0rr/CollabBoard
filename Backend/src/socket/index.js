@@ -103,10 +103,12 @@ export function initSocket(httpServer, options = {}) {
       if (!boardId || typeof boardId !== 'string' || !boardId.trim()) return;
       const bId = String(boardId).trim();
       const roomName = `board:${bId}`;
+
+      const isAlreadyInRoom = socket.rooms.has(roomName);
       socket.join(roomName);
 
-      // Track presence
-      if (userId) {
+      // Track presence: only increment if this socket wasn't already in the room
+      if (userId && !isAlreadyInRoom) {
         presenceTracker.addConnection(bId, userId);
         announcePresence(bId);
       }
@@ -119,10 +121,12 @@ export function initSocket(httpServer, options = {}) {
       if (!boardId) return;
       const bId = String(boardId).trim();
       const roomName = `board:${bId}`;
+
+      const wasInRoom = socket.rooms.has(roomName);
       socket.leave(roomName);
 
-      // Remove from presence
-      if (userId) {
+      // Remove from presence: only decrement if socket was actually in the room
+      if (userId && wasInRoom) {
         presenceTracker.removeConnection(bId, userId);
         announcePresence(bId);
       }
@@ -249,6 +253,25 @@ export function emitTaskDeleted(boardId, taskId, actorId, version = 1) {
     actorId: String(actorId),
     version: Number(version),
     timestamp: new Date().toISOString(),
+  });
+}
+
+/**
+ * Emits a direct personal notification to a specific user across all their sessions
+ * @param {string} userId
+ * @param {object} notification
+ */
+export function emitDirectNotification(userId, notification) {
+  if (!io || !userId) return;
+  io.to(`user:${String(userId)}`).emit('notification:direct', {
+    id: notification.id || `notif_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    title: notification.title,
+    message: notification.message,
+    type: notification.type || 'system',
+    linkUrl: notification.linkUrl,
+    actor: notification.actor,
+    meta: notification.meta,
+    timestamp: notification.timestamp || new Date().toISOString(),
   });
 }
 

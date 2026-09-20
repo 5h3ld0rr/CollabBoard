@@ -23,11 +23,11 @@ function AuthLayout() {
 /** Wraps protected workspace/board routes that require Board and Notification state */
 function ProtectedAppLayout() {
   return (
-    <BoardProvider>
-      <NotificationProvider>
+    <NotificationProvider>
+      <BoardProvider>
         <Outlet />
-      </NotificationProvider>
-    </BoardProvider>
+      </BoardProvider>
+    </NotificationProvider>
   );
 }
 
