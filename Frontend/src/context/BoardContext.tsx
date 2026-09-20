@@ -769,9 +769,15 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
 
       if (payload.board) {
-        dispatch({ type: 'UPDATE_BOARD', payload: payload.board });
+        // Preserve active user's local favorite status since isFavorite is per-user
+        const currentFavorite = state.activeBoard?.id === payload.board.id ? state.activeBoard.isFavorite : undefined;
+        const boardWithUserFavorite = currentFavorite !== undefined
+          ? { ...payload.board, isFavorite: currentFavorite }
+          : payload.board;
+
+        dispatch({ type: 'UPDATE_BOARD', payload: boardWithUserFavorite });
         try {
-          await saveBoardToCache(payload.board);
+          await saveBoardToCache(boardWithUserFavorite);
         } catch (err) {
           console.warn('[BoardContext] Failed to cache board:updated:', err);
         }

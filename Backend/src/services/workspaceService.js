@@ -4,15 +4,17 @@ import { userRepo } from '../repos/userRepo.js';
 import { NotFoundError, ForbiddenError, AppError } from '../utils/AppError.js';
 
 /**
- * Calculates live stats for a workspace (board count)
+ * Calculates live stats for a workspace (board IDs array and live count)
  */
 async function enrichWorkspace(workspace, userId) {
   if (!workspace) return null;
-  const boardCount = await boardRepo.countByWorkspaceId(workspace.id, userId);
+  const boardIds = Array.isArray(workspace.boards) ? workspace.boards.map(String) : [];
 
   return {
     ...workspace,
-    boardCount,
+    boards: boardIds,
+    boardIds,
+    boardCount: boardIds.length,
   };
 }
 

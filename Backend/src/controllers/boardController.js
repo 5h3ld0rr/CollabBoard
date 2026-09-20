@@ -46,8 +46,39 @@ export async function create(req, res) {
 }
 
 export async function update(req, res) {
+  const previousBoard = await boardService.getBoard(req.params.id, req.user.id).catch(() => null);
   const board = await boardService.updateBoard(req.params.id, req.body, req.user.id);
   emitBoardUpdated(board.id, board, req.user.id);
+
+  if (Array.isArray(req.body.members)) {
+    try {
+      const prevMemberIds = new Set(
+        (previousBoard?.members || []).map((m) => String(m.id || m.email || m).toLowerCase())
+      );
+      const actor = await userRepo.findById(req.user.id);
+      const actorName = actor?.name || req.user.email?.split('@')[0] || 'A team member';
+
+      for (const m of board.members) {
+        const memberId = String(m.id || '');
+        const memberEmail = m.email ? String(m.email).toLowerCase() : '';
+        const wasPresent = prevMemberIds.has(memberId.toLowerCase()) || (memberEmail && prevMemberIds.has(memberEmail));
+
+        if (!wasPresent && memberId && memberId !== String(req.user.id)) {
+          emitDirectNotification(memberId, {
+            title: 'Added to Board',
+            message: `${actorName} added you to board "${board.title}"`,
+            type: 'board_invite',
+            linkUrl: `/boards/${board.id}`,
+            actor: { id: req.user.id, name: actorName },
+            meta: { boardId: board.id, role: m.boardRole || 'Editor' },
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('[boardController] Failed to emit direct notification on update members:', err);
+    }
+  }
+
   res.status(200).json({
     data: board,
   });

@@ -28,7 +28,7 @@ export async function register({ email, password, name }) {
   if (existingWs.length === 0) {
     await workspaceRepo.create({
       name: 'My Workspace',
-      description: 'Personal workspace for sprint boards and tasks',
+      description: '',
       color: 'from-indigo-600 to-violet-600',
     });
   }

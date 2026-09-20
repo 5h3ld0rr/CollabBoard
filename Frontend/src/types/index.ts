@@ -13,6 +13,7 @@ export interface User {
   createdAt?: string;
   subscriptionPlan?: 'basic' | 'pro';
   billingCycle?: 'monthly' | 'yearly';
+  favoriteBoardIds?: string[];
 }
 
 export type BoardMember = User;
@@ -69,6 +70,8 @@ export interface Workspace {
   id: string;
   name: string;
   description: string;
+  boards?: string[];
+  boardIds?: string[];
   boardCount?: number;
   color?: string;
   memberCount?: number;

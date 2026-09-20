@@ -1,6 +1,7 @@
 import { workspaceRepo } from '../repos/workspaceRepo.js';
 import { boardRepo } from '../repos/boardRepo.js';
 import { taskRepo } from '../repos/taskRepo.js';
+import { userRepo } from '../repos/userRepo.js';
 
 /**
  * Global search across all workspaces, boards, and tasks accessible to the user
@@ -19,16 +20,30 @@ export async function searchAll(userId, queryParams = {}) {
     };
   }
 
-  // 1. Fetch user accessible workspaces & boards
-  const [allWorkspaces, userBoards] = await Promise.all([
+  // 1. Fetch user accessible workspaces & boards & user profile
+  const [allWorkspaces, userBoards, currentUser] = await Promise.all([
     workspaceRepo.listByUserId(userId),
     boardRepo.listByUserId(userId),
+    userId ? userRepo.findById(userId) : null,
   ]);
+
+  const favoriteIds = new Set(
+    Array.isArray(currentUser?.favoriteBoardIds) ? currentUser.favoriteBoardIds.map(String) : []
+  );
 
   // Create lookup maps for fast enrichment
   const workspaceMap = new Map(allWorkspaces.map((ws) => [String(ws.id), ws]));
   const boardMap = new Map(userBoards.map((b) => [String(b.id), b]));
   const accessibleBoardIds = new Set(userBoards.map((b) => String(b.id)));
+
+  const boardToWorkspaceMap = new Map();
+  for (const ws of allWorkspaces) {
+    if (Array.isArray(ws.boards)) {
+      for (const bId of ws.boards) {
+        boardToWorkspaceMap.set(String(bId), ws);
+      }
+    }
+  }
 
   const results = {
     workspaces: [],
@@ -47,7 +62,7 @@ export async function searchAll(userId, queryParams = {}) {
 
     // Enrich with live board count for the user
     results.workspaces = matchedWorkspaces.slice(0, limit).map((ws) => {
-      const boardCount = userBoards.filter((b) => String(b.workspaceId) === String(ws.id)).length;
+      const boardCount = (ws.boards || []).filter((bid) => accessibleBoardIds.has(String(bid))).length;
       return {
         id: String(ws.id),
         name: ws.name,
@@ -68,15 +83,15 @@ export async function searchAll(userId, queryParams = {}) {
     });
 
     results.boards = matchedBoards.slice(0, limit).map((b) => {
-      const ws = b.workspaceId ? workspaceMap.get(String(b.workspaceId)) : null;
+      const ws = boardToWorkspaceMap.get(String(b.id)) || (b.workspaceId ? workspaceMap.get(String(b.workspaceId)) : null);
       return {
         id: String(b.id),
         title: b.title,
         description: b.description || '',
-        workspaceId: b.workspaceId ? String(b.workspaceId) : '',
+        workspaceId: ws ? String(ws.id) : (b.workspaceId ? String(b.workspaceId) : ''),
         workspaceName: ws?.name || 'My Workspace',
         tags: b.tags || [],
-        isFavorite: Boolean(b.isFavorite),
+        isFavorite: favoriteIds.has(String(b.id)),
         stats: b.stats || { totalTasks: 0, todoCount: 0, inProgressCount: 0, doneCount: 0 },
         createdAt: b.createdAt,
       };
@@ -101,7 +116,7 @@ export async function searchAll(userId, queryParams = {}) {
 
     results.tasks = matchedTasks.slice(0, limit).map((t) => {
       const board = boardMap.get(String(t.boardId));
-      const ws = board?.workspaceId ? workspaceMap.get(String(board.workspaceId)) : null;
+      const ws = board ? (boardToWorkspaceMap.get(String(board.id)) || (board.workspaceId ? workspaceMap.get(String(board.workspaceId)) : null)) : null;
 
       return {
         id: String(t.id),
@@ -111,7 +126,7 @@ export async function searchAll(userId, queryParams = {}) {
         priority: t.priority,
         boardId: String(t.boardId),
         boardTitle: board?.title || 'Unknown Board',
-        workspaceId: board?.workspaceId ? String(board.workspaceId) : '',
+        workspaceId: ws ? String(ws.id) : (board?.workspaceId ? String(board.workspaceId) : ''),
         workspaceName: ws?.name || 'My Workspace',
         tags: t.tags || [],
         dueDate: t.dueDate,

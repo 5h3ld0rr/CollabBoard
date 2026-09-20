@@ -12,7 +12,7 @@ import {
   Sparkles,
   RotateCcw,
 } from 'lucide-react';
-import type { Board, User } from '../../types';
+import type { Board, User, Workspace } from '../../types';
 import { COLOR_OPTIONS } from '../../constants';
 
 interface BoardSettingsModalProps {
@@ -24,6 +24,7 @@ interface BoardSettingsModalProps {
   onClearTasks?: () => void;
   initialTab?: 'general' | 'danger' | string;
   workspaceMembers?: User[];
+  workspaces?: Workspace[];
 }
 
 const ICON_OPTIONS = [
@@ -43,6 +44,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
   onDeleteBoard,
   onClearTasks,
   initialTab = 'general',
+  workspaces = [],
 }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'danger'>(
     initialTab === 'danger' ? 'danger' : 'general'
@@ -51,6 +53,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
   // General Tab States
   const [title, setTitle] = useState(board.title);
   const [description, setDescription] = useState(board.description);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(board.workspaceId || '');
   const [color, setColor] = useState(board.color || COLOR_OPTIONS[0].value);
   const [icon, setIcon] = useState(board.icon || 'Kanban');
   const [tagsInput, setTagsInput] = useState(Array.isArray(board.tags) ? board.tags.join(', ') : '');
@@ -69,6 +72,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
       setActiveTab(initialTab === 'danger' ? 'danger' : 'general');
       setTitle(board.title);
       setDescription(board.description);
+      setSelectedWorkspaceId(board.workspaceId || '');
       setColor(board.color || COLOR_OPTIONS[0].value);
       setIcon(board.icon || 'Kanban');
       setTagsInput(Array.isArray(board.tags) ? board.tags.join(', ') : '');
@@ -100,6 +104,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
       .map((t) => t.trim())
       .filter(Boolean);
 
+    const targetWs = workspaces?.find((w) => w.id === selectedWorkspaceId);
     const updated: Board = {
       ...board,
       title: title.trim() || board.title,
@@ -107,6 +112,8 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
       color,
       icon,
       tags: cleanTags.length > 0 ? cleanTags : (Array.isArray(board.tags) ? board.tags : []),
+      workspaceId: selectedWorkspaceId || board.workspaceId,
+      workspaceName: targetWs ? targetWs.name : board.workspaceName,
       updatedAt: 'Just now',
     };
 
@@ -233,6 +240,29 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition resize-none"
               />
             </div>
+
+            {/* Workspace Switcher */}
+            {workspaces && workspaces.length > 0 && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                  Workspace
+                </label>
+                <select
+                  value={selectedWorkspaceId}
+                  onChange={(e) => setSelectedWorkspaceId(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition cursor-pointer"
+                >
+                  {workspaces.map((ws) => (
+                    <option key={ws.id} value={ws.id}>
+                      {ws.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Switch or move this board across your workspaces
+                </p>
+              </div>
+            )}
 
             {/* Board Icon */}
             <div>

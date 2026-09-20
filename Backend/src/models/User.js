@@ -44,6 +44,10 @@ const userSchema = new mongoose.Schema(
       enum: ['monthly', 'yearly'],
       default: 'monthly',
     },
+    favoriteBoardIds: {
+      type: [String],
+      default: [],
+    },
     passwordHash: {
       type: String,
       required: [true, 'Password hash is required'],

@@ -54,7 +54,7 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({
     const newWorkspace: Workspace = {
       id: `ws-${Date.now()}`,
       name: name.trim(),
-      description: description.trim() || 'No description provided.',
+      description: description.trim(),
       boardCount: 0,
       color: selectedColor,
     };

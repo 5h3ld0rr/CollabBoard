@@ -6,6 +6,7 @@ import {
   Sparkles,
   Star,
   CheckCircle2,
+  Users,
 } from "lucide-react";
 import { Navbar, AmbientBackground } from "../components/common";
 import { WorkspaceStats } from "../components/dashboard/WorkspaceStats";
@@ -35,6 +36,7 @@ export const Dashboard: React.FC = () => {
   const {
     state: { boards },
     addBoard,
+    updateBoard,
     toggleFavoriteBoard,
   } = useBoard();
   const { user } = useAuth();
@@ -45,7 +47,7 @@ export const Dashboard: React.FC = () => {
   const [managingWorkspace, setManagingWorkspace] = useState<Workspace | null>(
     null
   );
-  const [activeTab, setActiveTab] = useState<"all" | "starred">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "shared" | "starred">("all");
   const [sortBy, setSortBy] = useState<"updated" | "tasks" | "title">("updated");
 
   // Modals state
@@ -192,6 +194,22 @@ export const Dashboard: React.FC = () => {
     showToast(`Created board "${newBoard.title}"!`);
   };
 
+  const handleMoveBoardWorkspace = async (boardId: string, newWorkspaceId: string) => {
+    const targetBoard = boards.find((b) => b.id === boardId);
+    if (!targetBoard) return;
+    const targetWs = workspaces.find((w) => w.id === newWorkspaceId);
+    try {
+      await updateBoard({
+        ...targetBoard,
+        workspaceId: newWorkspaceId,
+        workspaceName: targetWs ? targetWs.name : targetBoard.workspaceName,
+      });
+      showToast(`Moved "${targetBoard.title}" to "${targetWs?.name || 'workspace'}"`);
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to move board');
+    }
+  };
+
   // Boards belonging to the currently active workspace
   const currentWorkspaceBoards = useMemo(() => {
     if (!currentWorkspace) return boards;
@@ -206,14 +224,58 @@ export const Dashboard: React.FC = () => {
     });
   }, [boards, currentWorkspace]);
 
+  // Boards shared with the current user (collaborator on board, not owner)
+  const sharedBoards = useMemo(() => {
+    if (!user) return [];
+    const uid = String(user.id);
+    const userEmail = user.email?.toLowerCase().trim();
+
+    return boards.filter((board) => {
+      const isOwner = board.ownerId && String(board.ownerId) === uid;
+      if (isOwner) return false;
+
+      const isMember = Array.isArray(board.members) && board.members.some((m) => {
+        if (typeof m === 'object' && m !== null) {
+          const mId = String(m.id || '');
+          const mEmail = m.email ? String(m.email).toLowerCase().trim() : '';
+          return mId === uid || (userEmail && (mEmail === userEmail || mId.toLowerCase() === userEmail));
+        }
+        const str = String(m).toLowerCase().trim();
+        return str === uid || (userEmail && str === userEmail);
+      });
+
+      return isMember;
+    });
+  }, [boards, user]);
+
+  // Combined boards for "All Boards"
+  const allBoards = useMemo(() => {
+    const seen = new Set<string>();
+    const combined: Board[] = [];
+    for (const b of [...currentWorkspaceBoards, ...sharedBoards]) {
+      if (!seen.has(b.id)) {
+        seen.add(b.id);
+        combined.push(b);
+      }
+    }
+    return combined;
+  }, [currentWorkspaceBoards, sharedBoards]);
+
   const starredBoardsCount = useMemo(
-    () => currentWorkspaceBoards.filter((b) => b.isFavorite).length,
-    [currentWorkspaceBoards]
+    () => allBoards.filter((b) => b.isFavorite).length,
+    [allBoards]
   );
 
   // Filter and Sort Logic
   const filteredBoards = useMemo(() => {
-    return currentWorkspaceBoards
+    let source = allBoards;
+    if (activeTab === "shared") {
+      source = sharedBoards;
+    } else if (activeTab === "starred") {
+      source = allBoards.filter((b) => b.isFavorite);
+    }
+
+    return source
       .filter((board) => {
         if (activeTab === "starred" && !board.isFavorite) {
           return false;
@@ -234,7 +296,7 @@ export const Dashboard: React.FC = () => {
         }
         return 0;
       });
-  }, [currentWorkspaceBoards, activeTab, sortBy]);
+  }, [allBoards, sharedBoards, activeTab, sortBy]);
 
   // Display skeleton loader while initial data loads or while redirecting from an invalid workspace ID
   if (isLoadingWorkspaces || (workspaces.length > 0 && !currentWorkspace)) {
@@ -286,7 +348,7 @@ export const Dashboard: React.FC = () => {
 
         {/* Workspace Stat Metrics */}
         <WorkspaceStats
-          boards={currentWorkspaceBoards}
+          boards={allBoards}
           workspaceCount={workspaces.length}
           workspaceName={currentWorkspace?.name}
         />
@@ -297,18 +359,30 @@ export const Dashboard: React.FC = () => {
           <div className="flex items-center space-x-1.5 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
             <button
               onClick={() => setActiveTab("all")}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === "all"
                   ? "bg-indigo-600 text-white shadow-md"
                   : "bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800"
               }`}
             >
-              All Boards ({currentWorkspaceBoards.length})
+              All Boards ({allBoards.length})
+            </button>
+
+            <button
+              onClick={() => setActiveTab("shared")}
+              className={`inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+                activeTab === "shared"
+                  ? "bg-sky-600 text-white shadow-md"
+                  : "bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800"
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Shared with Me ({sharedBoards.length})</span>
             </button>
 
             <button
               onClick={() => setActiveTab("starred")}
-              className={`inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+              className={`inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === "starred"
                   ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-md"
                   : "bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800"
@@ -339,32 +413,49 @@ export const Dashboard: React.FC = () => {
         {/* Board Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Action Card: Create New Board */}
-          <button
-            onClick={() => setIsCreateBoardModalOpen(true)}
-            className="group rounded-2xl border-2 border-dashed border-slate-800 hover:border-indigo-500/60 bg-slate-900/20 hover:bg-slate-900/50 p-6 flex flex-col items-center justify-center text-center space-y-3 min-h-65 transition-all duration-200 cursor-pointer"
-          >
-            <div className="w-12 h-12 rounded-2xl bg-indigo-600/10 group-hover:bg-indigo-600/20 border border-indigo-500/20 group-hover:border-indigo-500/40 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
-              <Plus className="w-6 h-6" />
-            </div>
-            <div>
-              <h4 className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors">
-                Create New Board
-              </h4>
-              <p className="text-xs text-slate-400 mt-1 max-w-50">
-                Add a new sprint, feature roadmap, or team board
-              </p>
-            </div>
-          </button>
+          {activeTab !== "shared" && (
+            <button
+              onClick={() => setIsCreateBoardModalOpen(true)}
+              className="group rounded-2xl border-2 border-dashed border-slate-800 hover:border-indigo-500/60 bg-slate-900/20 hover:bg-slate-900/50 p-6 flex flex-col items-center justify-center text-center space-y-3 min-h-65 transition-all duration-200 cursor-pointer"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-indigo-600/10 group-hover:bg-indigo-600/20 border border-indigo-500/20 group-hover:border-indigo-500/40 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
+                <Plus className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors">
+                  Create New Board
+                </h4>
+                <p className="text-xs text-slate-400 mt-1 max-w-50">
+                  Add a new sprint, feature roadmap, or team board
+                </p>
+              </div>
+            </button>
+          )}
 
           {/* Render Board Cards */}
           {filteredBoards.map((board) => (
             <BoardCard
               key={board.id}
               board={board}
+              workspaces={workspaces}
               onToggleFavorite={handleToggleFavorite}
+              onMoveWorkspace={handleMoveBoardWorkspace}
             />
           ))}
         </div>
+
+        {/* Empty state for Shared with Me */}
+        {activeTab === "shared" && filteredBoards.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-4">
+              <Users className="w-6 h-6" />
+            </div>
+            <h3 className="text-sm font-semibold text-white">No Shared Boards</h3>
+            <p className="text-xs text-slate-400 mt-1 max-w-sm">
+              When teammates invite you to collaborate on their boards, they will appear here.
+            </p>
+          </div>
+        )}
       </main>
 
       {/* Create Board Modal */}

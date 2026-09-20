@@ -171,6 +171,50 @@ describe('Board API & Analytics', () => {
       expect(collabAccessRes.status).toBe(200);
     });
 
+    it('allows friend invited by email to list and access the board', async () => {
+      const owner = authHeader();
+      const friendEmail = 'friend-invited@collabboard.io';
+      const friend = authHeader(new mongoose.Types.ObjectId().toString(), friendEmail);
+
+      // Create friend user account
+      await User.create({
+        _id: friend.userId,
+        name: 'Friend User',
+        email: friendEmail,
+        passwordHash: 'dummy',
+      });
+
+      const ws = await Workspace.create({ name: 'Owner WS', ownerId: owner.userId });
+
+      // Owner creates a board and adds friend by email string in members array (via PATCH /api/boards/:id)
+      const board = await Board.create({
+        title: 'Project Shared With Friend',
+        workspaceId: ws._id.toString(),
+        ownerId: owner.userId,
+        members: [owner.userId, friendEmail],
+      });
+
+      // Friend calls GET /api/boards - board must be in the list
+      const listRes = await request(app)
+        .get('/api/boards')
+        .set(friend.header);
+
+      expect(listRes.status).toBe(200);
+      const friendBoards = listRes.body.data || listRes.body;
+      const found = friendBoards.find((b) => String(b.id) === String(board._id));
+      expect(found).toBeDefined();
+      expect(found.title).toBe('Project Shared With Friend');
+
+      // Friend calls GET /api/boards/:id - board access must be permitted
+      const directRes = await request(app)
+        .get(`/api/boards/${board._id}`)
+        .set(friend.header);
+
+      expect(directRes.status).toBe(200);
+      const directBoard = directRes.body.data || directRes.body;
+      expect(directBoard.title).toBe('Project Shared With Friend');
+    });
+
     it('allows owner to remove collaborator', async () => {
       const owner = authHeader();
       const collaboratorId = new mongoose.Types.ObjectId().toString();
@@ -736,6 +780,113 @@ describe('Board API & Analytics', () => {
       expect(res.status).toBe(404);
       const code = res.body.code || res.body.error?.code;
       expect(code).toBe('NOT_FOUND');
+    });
+  });
+
+  describe('Per-User Favorites', () => {
+    it('stores favorite status on User.favoriteBoardIds and isolates it per user', async () => {
+      const userA = authHeader(new mongoose.Types.ObjectId().toString(), 'user-a@nsbm.lk');
+      const userB = authHeader(new mongoose.Types.ObjectId().toString(), 'user-b@nsbm.lk');
+
+      // Create users in DB
+      await User.create([
+        { _id: userA.userId, email: userA.email, name: 'User A', passwordHash: 'hash' },
+        { _id: userB.userId, email: userB.email, name: 'User B', passwordHash: 'hash' },
+      ]);
+
+      const ws = await Workspace.create({ name: 'Shared WS', ownerId: userA.userId, boards: [] });
+      const board = await Board.create({
+        title: 'Collab Board',
+        ownerId: userA.userId,
+        members: [userA.userId, userB.userId],
+      });
+      await Workspace.findByIdAndUpdate(ws._id, { $push: { boards: board._id.toString() } });
+
+      // User A stars the board
+      const starRes = await request(app)
+        .patch(`/api/boards/${board._id}`)
+        .set(userA.header)
+        .send({ isFavorite: true });
+
+      expect(starRes.status).toBe(200);
+      expect(starRes.body.data.isFavorite).toBe(true);
+
+      // Verify User A document in DB has board in favoriteBoardIds
+      const dbUserA = await User.findById(userA.userId).lean();
+      expect(dbUserA.favoriteBoardIds).toContain(board._id.toString());
+
+      // Verify Board document in DB does NOT store isFavorite
+      const rawBoard = await Board.findById(board._id).lean();
+      expect(rawBoard.isFavorite).toBeUndefined();
+
+      // Verify User B sees isFavorite as false
+      const userBGet = await request(app)
+        .get(`/api/boards/${board._id}`)
+        .set(userB.header);
+
+      expect(userBGet.status).toBe(200);
+      expect(userBGet.body.data.isFavorite).toBe(false);
+
+      // User B also stars the board
+      await request(app)
+        .patch(`/api/boards/${board._id}`)
+        .set(userB.header)
+        .send({ isFavorite: true });
+
+      const dbUserB = await User.findById(userB.userId).lean();
+      expect(dbUserB.favoriteBoardIds).toContain(board._id.toString());
+
+      // User A unstars the board
+      const unstarRes = await request(app)
+        .patch(`/api/boards/${board._id}`)
+        .set(userA.header)
+        .send({ isFavorite: false });
+
+      expect(unstarRes.status).toBe(200);
+      expect(unstarRes.body.data.isFavorite).toBe(false);
+
+      const dbUserAAfter = await User.findById(userA.userId).lean();
+      expect(dbUserAAfter.favoriteBoardIds).not.toContain(board._id.toString());
+
+      // User B still has it favorited
+      const dbUserBAfter = await User.findById(userB.userId).lean();
+      expect(dbUserBAfter.favoriteBoardIds).toContain(board._id.toString());
+    });
+
+    it('cleans up favoriteBoardIds when board is deleted', async () => {
+      const user = authHeader(new mongoose.Types.ObjectId().toString(), 'owner-fav@nsbm.lk');
+      await User.create({
+        _id: user.userId,
+        email: user.email,
+        name: 'Owner Fav',
+        passwordHash: 'hash',
+        favoriteBoardIds: [],
+      });
+
+      const board = await Board.create({
+        title: 'Temporary Board',
+        ownerId: user.userId,
+      });
+
+      // Add to favorites
+      await request(app)
+        .patch(`/api/boards/${board._id}`)
+        .set(user.header)
+        .send({ isFavorite: true });
+
+      const beforeDelete = await User.findById(user.userId).lean();
+      expect(beforeDelete.favoriteBoardIds).toContain(board._id.toString());
+
+      // Delete board
+      const delRes = await request(app)
+        .delete(`/api/boards/${board._id}`)
+        .set(user.header);
+
+      expect(delRes.status).toBe(204);
+
+      // Verify board was removed from user's favoriteBoardIds
+      const afterDelete = await User.findById(user.userId).lean();
+      expect(afterDelete.favoriteBoardIds).not.toContain(board._id.toString());
     });
   });
 });

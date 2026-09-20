@@ -6,10 +6,13 @@ function formatWorkspace(doc) {
   if (!doc) return null;
   const obj = typeof doc.toObject === 'function' ? doc.toObject({ virtuals: true }) : { ...doc };
   const { _id, __v, ...rest } = obj;
+  const boards = Array.isArray(obj.boards) ? obj.boards.map(String) : [];
   return {
     ...rest,
     id: String(obj.id || _id),
     ownerId: obj.ownerId ? String(obj.ownerId) : null,
+    boards,
+    boardIds: boards,
   };
 }
 
@@ -29,13 +32,16 @@ export const workspaceRepo = {
     });
     if (unowned.length > 0) {
       for (const ws of unowned) {
-        const userBoardInWs = await Board.findOne({
-          workspaceId: String(ws._id),
-          $or: [{ ownerId: uid }, { members: uid }],
-        });
-        if (userBoardInWs) {
-          ws.ownerId = uid;
-          await ws.save();
+        const boardIds = Array.isArray(ws.boards) ? ws.boards : [];
+        if (boardIds.length > 0) {
+          const userBoardInWs = await Board.findOne({
+            _id: { $in: boardIds },
+            $or: [{ ownerId: uid }, { members: uid }],
+          });
+          if (userBoardInWs) {
+            ws.ownerId = uid;
+            await ws.save();
+          }
         }
       }
     }
@@ -57,7 +63,7 @@ export const workspaceRepo = {
 
       const defaultWs = await this.create({
         name: 'My Workspace',
-        description: 'Personal workspace for sprint boards and tasks',
+        description: '',
         color: 'from-indigo-600 to-violet-600',
         ownerId: uid,
       });
@@ -77,6 +83,13 @@ export const workspaceRepo = {
       return null;
     }
     const doc = await Workspace.findById(workspaceId);
+    return formatWorkspace(doc);
+  },
+
+  async findByBoardId(boardId) {
+    if (!boardId) return null;
+    const bid = String(boardId);
+    const doc = await Workspace.findOne({ boards: bid });
     return formatWorkspace(doc);
   },
 
@@ -103,15 +116,45 @@ export const workspaceRepo = {
       return null;
     }
 
-    const allowed = ['name', 'description', 'color'];
+    const allowed = ['name', 'description', 'color', 'boards'];
     const payload = {};
     for (const key of allowed) {
       if (updates[key] !== undefined) {
-        payload[key] = typeof updates[key] === 'string' ? updates[key].trim() : updates[key];
+        if (key === 'boards' && Array.isArray(updates[key])) {
+          payload.boards = updates[key].map(String);
+        } else {
+          payload[key] = typeof updates[key] === 'string' ? updates[key].trim() : updates[key];
+        }
       }
     }
 
-    const doc = await Workspace.findByIdAndUpdate(workspaceId, payload, { new: true });
+    const doc = await Workspace.findByIdAndUpdate(workspaceId, payload, { returnDocument: 'after' });
+    return formatWorkspace(doc);
+  },
+
+  async addBoard(workspaceId, boardId) {
+    if (!workspaceId || !boardId || !mongoose.Types.ObjectId.isValid(workspaceId)) {
+      return null;
+    }
+    const bid = String(boardId);
+    const doc = await Workspace.findByIdAndUpdate(
+      workspaceId,
+      { $addToSet: { boards: bid } },
+      { returnDocument: 'after' }
+    );
+    return formatWorkspace(doc);
+  },
+
+  async removeBoard(workspaceId, boardId) {
+    if (!workspaceId || !boardId || !mongoose.Types.ObjectId.isValid(workspaceId)) {
+      return null;
+    }
+    const bid = String(boardId);
+    const doc = await Workspace.findByIdAndUpdate(
+      workspaceId,
+      { $pull: { boards: bid } },
+      { returnDocument: 'after' }
+    );
     return formatWorkspace(doc);
   },
 

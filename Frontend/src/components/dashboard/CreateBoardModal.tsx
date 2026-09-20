@@ -88,7 +88,7 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
     const newBoard: Board = {
       id: `board-${Date.now()}`,
       title: title.trim(),
-      description: description.trim() || 'No description provided.',
+      description: description.trim(),
       workspaceId,
       workspaceName: selectedWorkspace ? selectedWorkspace.name : 'Engineering',
       color: selectedColor,

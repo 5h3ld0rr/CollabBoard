@@ -8,18 +8,22 @@ import {
   Layers,
   ShieldCheck,
 } from 'lucide-react';
-import type { Board } from '../../types';
+import type { Board, Workspace } from '../../types';
 import { AuthContext } from '../../context/AuthContext';
 import { formatRelativeTime, getInitials, getProfileGradient } from '../../utils';
 
 interface BoardCardProps {
   board: Board;
   onToggleFavorite: (id: string) => void;
+  workspaces?: Workspace[];
+  onMoveWorkspace?: (boardId: string, newWorkspaceId: string) => Promise<void>;
 }
 
 export const BoardCard: React.FC<BoardCardProps> = memo(({
   board,
   onToggleFavorite,
+  workspaces,
+  onMoveWorkspace,
 }) => {
   const navigate = useNavigate();
   const auth = useContext(AuthContext);
@@ -57,6 +61,10 @@ export const BoardCard: React.FC<BoardCardProps> = memo(({
     onToggleFavorite(board.id);
   };
 
+  const isShared = Boolean(
+    currentUser?.id && board.ownerId && String(board.ownerId) !== String(currentUser.id)
+  );
+
   return (
     <div
       onClick={handleCardClick}
@@ -72,9 +80,35 @@ export const BoardCard: React.FC<BoardCardProps> = memo(({
               {renderIcon(board.icon)}
             </div>
             <div>
-              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-                {workspaceName}
-              </span>
+              <div className="flex items-center space-x-1.5 mb-0.5">
+                {!isShared && workspaces && workspaces.length > 1 && onMoveWorkspace ? (
+                  <select
+                    value={board.workspaceId}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      onMoveWorkspace(board.id, e.target.value);
+                    }}
+                    title="Switch workspace for this board"
+                    className="text-[11px] font-semibold text-slate-400 hover:text-indigo-400 uppercase tracking-wider bg-transparent border border-slate-800/80 hover:border-slate-700 rounded px-1.5 py-0.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
+                  >
+                    {workspaces.map((ws) => (
+                      <option key={ws.id} value={ws.id} className="bg-slate-900 text-white normal-case">
+                        {ws.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                    {workspaceName}
+                  </span>
+                )}
+                {isShared && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                    Shared
+                  </span>
+                )}
+              </div>
               <h3 className="text-base font-bold text-white group-hover:text-indigo-300 transition-colors leading-snug line-clamp-1">
                 {board.title}
               </h3>

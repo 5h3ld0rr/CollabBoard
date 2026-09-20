@@ -24,6 +24,7 @@ export function publicUser(user) {
     initials: userObj.initials || getInitials(safeUser.name),
     color: userObj.color || getRandomColor(),
     ...safeUser,
+    favoriteBoardIds: Array.isArray(userObj.favoriteBoardIds) ? userObj.favoriteBoardIds.map(String) : [],
     createdAt: (() => {
       if (userObj.createdAt) return new Date(userObj.createdAt).toISOString();
       if (mongoose.Types.ObjectId.isValid(id)) {
@@ -91,6 +92,37 @@ export const userRepo = {
       doc = await User.collection.findOne({ _id: String(id) });
     }
     return publicUser(doc);
+  },
+
+  async addFavoriteBoard(userId, boardId) {
+    if (!userId || !boardId) return;
+    const uid = String(userId);
+    const bid = String(boardId);
+    if (mongoose.Types.ObjectId.isValid(uid)) {
+      await User.findByIdAndUpdate(uid, { $addToSet: { favoriteBoardIds: bid } });
+    } else {
+      await User.collection.updateOne({ _id: uid }, { $addToSet: { favoriteBoardIds: bid } });
+    }
+  },
+
+  async removeFavoriteBoard(userId, boardId) {
+    if (!userId || !boardId) return;
+    const uid = String(userId);
+    const bid = String(boardId);
+    if (mongoose.Types.ObjectId.isValid(uid)) {
+      await User.findByIdAndUpdate(uid, { $pull: { favoriteBoardIds: bid } });
+    } else {
+      await User.collection.updateOne({ _id: uid }, { $pull: { favoriteBoardIds: bid } });
+    }
+  },
+
+  async removeBoardFromAllFavorites(boardId) {
+    if (!boardId) return;
+    const bid = String(boardId);
+    await User.updateMany(
+      { favoriteBoardIds: bid },
+      { $pull: { favoriteBoardIds: bid } }
+    );
   },
 
   async list() {
