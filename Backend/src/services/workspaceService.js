@@ -1,7 +1,7 @@
 import { workspaceRepo } from '../repos/workspaceRepo.js';
 import { boardRepo } from '../repos/boardRepo.js';
 import { userRepo } from '../repos/userRepo.js';
-import { NotFoundError, AppError } from '../utils/AppError.js';
+import { NotFoundError, ForbiddenError, AppError } from '../utils/AppError.js';
 
 /**
  * Calculates live stats for a workspace (board count)
@@ -17,13 +17,21 @@ async function enrichWorkspace(workspace, userId) {
 }
 
 /**
- * Asserts workspace exists.
+ * Asserts workspace exists and that the user has permission to access it.
  */
-export async function assertWorkspaceAccess(workspaceId) {
+export async function assertWorkspaceAccess(workspaceId, userId) {
   const workspace = await workspaceRepo.findById(workspaceId);
   if (!workspace) {
     throw new NotFoundError('Workspace');
   }
+
+  if (userId && workspace.ownerId) {
+    const uid = String(userId);
+    if (String(workspace.ownerId) !== uid) {
+      throw new ForbiddenError('You do not have access to this workspace');
+    }
+  }
+
   return workspace;
 }
 
@@ -39,7 +47,7 @@ export async function listWorkspaces(userId) {
  * Get single workspace
  */
 export async function getWorkspace(workspaceId, userId) {
-  const workspace = await assertWorkspaceAccess(workspaceId);
+  const workspace = await assertWorkspaceAccess(workspaceId, userId);
   return enrichWorkspace(workspace, userId);
 }
 
@@ -62,7 +70,12 @@ export async function createWorkspace(data, userId) {
     }
   }
 
-  const created = await workspaceRepo.create(data);
+  const payload = {
+    ...data,
+    ownerId: userId ? String(userId) : null,
+  };
+
+  const created = await workspaceRepo.create(payload);
   return enrichWorkspace(created, userId);
 }
 
@@ -70,7 +83,7 @@ export async function createWorkspace(data, userId) {
  * Update an existing workspace
  */
 export async function updateWorkspace(workspaceId, updates, userId) {
-  await assertWorkspaceAccess(workspaceId);
+  await assertWorkspaceAccess(workspaceId, userId);
   const updated = await workspaceRepo.update(workspaceId, updates);
   return enrichWorkspace(updated, userId);
 }
@@ -78,8 +91,11 @@ export async function updateWorkspace(workspaceId, updates, userId) {
 /**
  * Delete a workspace
  */
-export async function deleteWorkspace(workspaceId) {
-  await assertWorkspaceAccess(workspaceId);
+export async function deleteWorkspace(workspaceId, userId) {
+  const workspace = await assertWorkspaceAccess(workspaceId, userId);
+  if (userId && workspace.ownerId && String(workspace.ownerId) !== String(userId)) {
+    throw new ForbiddenError('Only the workspace owner can delete this workspace');
+  }
   await workspaceRepo.delete(workspaceId);
   return true;
 }

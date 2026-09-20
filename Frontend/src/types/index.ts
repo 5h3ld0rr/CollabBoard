@@ -72,6 +72,7 @@ export interface Workspace {
   boardCount?: number;
   color?: string;
   memberCount?: number;
+  ownerId?: string;
   role?: 'Owner' | 'Admin' | 'Member';
   members?: User[];
 }

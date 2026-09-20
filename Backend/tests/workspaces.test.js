@@ -69,6 +69,28 @@ describe('Workspace API', () => {
         expect.arrayContaining(['Engineering', 'Design'])
       );
     });
+
+    it('does not return workspaces belonging to another user', async () => {
+      const user1 = authHeader();
+      const user2 = authHeader();
+
+      await request(app)
+        .post('/api/workspaces')
+        .set(user1.header)
+        .send({
+          name: "User 1's Private Workspace",
+          description: 'Secret projects',
+        });
+
+      const res = await request(app)
+        .get('/api/workspaces')
+        .set(user2.header);
+
+      expect(res.status).toBe(200);
+      const workspaces = res.body.data || res.body;
+      const names = workspaces.map((w) => w.name);
+      expect(names).not.toContain("User 1's Private Workspace");
+    });
   });
 
   describe('POST /api/workspaces', () => {

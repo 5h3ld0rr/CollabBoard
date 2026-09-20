@@ -61,6 +61,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } catch (err: any) {
         const isAuthError =
           err?.status === 401 ||
+          err?.status === 404 ||
+          err?.code === 'NOT_FOUND' ||
           err?.code === 'NO_TOKEN' ||
           err?.code === 'TOKEN_EXPIRED' ||
           err?.code === 'BAD_TOKEN' ||

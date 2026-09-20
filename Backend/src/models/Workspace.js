@@ -20,6 +20,11 @@ const workspaceSchema = new mongoose.Schema(
       type: String,
       default: 'from-blue-600 to-indigo-600',
     },
+    ownerId: {
+      type: String,
+      default: null,
+      index: true,
+    },
   },
   {
     timestamps: true,
