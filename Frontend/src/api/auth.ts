@@ -20,6 +20,25 @@ export interface LoginInput {
   rememberMe?: boolean;
 }
 
+export interface UpdateProfileInput {
+  name?: string;
+  email?: string;
+  color?: string;
+  subscriptionPlan?: 'basic' | 'pro';
+  billingCycle?: 'monthly' | 'yearly';
+}
+
+/**
+ * Update authenticated user profile
+ */
+export async function updateProfile(input: UpdateProfileInput): Promise<User> {
+  const res = await request<{ data: { user: User } }>('/api/auth/profile', {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+  return res.data.user;
+}
+
 /**
  * Register a new user account
  */

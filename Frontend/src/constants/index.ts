@@ -10,6 +10,11 @@ export const COLOR_OPTIONS = [
   { label: 'Sky & Cyan', value: 'from-sky-600 to-cyan-600' },
 ];
 
+export function getRandomGradient(): string {
+  const randomIndex = Math.floor(Math.random() * COLOR_OPTIONS.length);
+  return COLOR_OPTIONS[randomIndex].value;
+}
+
 export const STATUS_COLUMNS = [
   { id: 'todo', title: 'To Do', description: 'Upcoming backlog & scheduled work' },
   { id: 'in-progress', title: 'In Progress', description: 'Actively in development' },

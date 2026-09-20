@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { User } from '../models/User.js';
+import { User, getRandomColor } from '../models/User.js';
 
 function getInitials(name) {
   if (!name || typeof name !== 'string') return 'U';
@@ -22,7 +22,19 @@ export function publicUser(user) {
   return {
     id,
     initials: userObj.initials || getInitials(safeUser.name),
+    color: userObj.color || getRandomColor(),
     ...safeUser,
+    createdAt: (() => {
+      if (userObj.createdAt) return new Date(userObj.createdAt).toISOString();
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        try {
+          return new mongoose.Types.ObjectId(id).getTimestamp().toISOString();
+        } catch {
+          // fallback
+        }
+      }
+      return undefined;
+    })(),
   };
 }
 
@@ -48,14 +60,37 @@ export const userRepo = {
     return { ...raw, id: String(raw._id) };
   },
 
-  async create({ email, passwordHash, name = 'User' }) {
+  async create({ email, passwordHash, name = 'User', color }) {
     const doc = await User.create({
       name: name.trim(),
       email: email.toLowerCase().trim(),
       passwordHash,
+      color: color || getRandomColor(),
     });
     const obj = doc.toObject({ virtuals: true });
     return { ...obj, id: String(obj.id || obj._id) };
+  },
+
+  async update(id, updates) {
+    if (!id) return null;
+    const sanitized = { ...updates };
+    delete sanitized.passwordHash;
+    delete sanitized._id;
+    delete sanitized.id;
+
+    if (sanitized.email) {
+      sanitized.email = sanitized.email.toLowerCase().trim();
+    }
+
+    let doc = null;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      doc = await User.findByIdAndUpdate(id, sanitized, { returnDocument: 'after' });
+    }
+    if (!doc) {
+      await User.collection.updateOne({ _id: String(id) }, { $set: sanitized });
+      doc = await User.collection.findOne({ _id: String(id) });
+    }
+    return publicUser(doc);
   },
 
   async list() {

@@ -10,6 +10,9 @@ export interface User {
   color: string;
   role?: 'Owner' | 'Admin' | 'Member';
   boardRole?: 'Owner' | 'Admin' | 'Editor' | 'Viewer';
+  createdAt?: string;
+  subscriptionPlan?: 'basic' | 'pro';
+  billingCycle?: 'monthly' | 'yearly';
 }
 
 export type BoardMember = User;
@@ -75,7 +78,6 @@ export interface Workspace {
 
 export interface UserProfile {
   name: string;
-  username: string;
   email: string;
   role: string;
   company: string;

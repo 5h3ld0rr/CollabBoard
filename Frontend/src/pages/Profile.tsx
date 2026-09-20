@@ -1,9 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  User as UserIcon,
   Mail,
-  MapPin,
   Building2,
   CheckCircle2,
   ShieldCheck,
@@ -12,7 +10,6 @@ import {
   Laptop,
   Smartphone,
   Sparkles,
-  Save,
   Calendar,
   Check,
   ExternalLink,
@@ -22,6 +19,8 @@ import {
   Crown,
   CreditCard,
   Settings,
+  Pencil,
+  X,
 } from "lucide-react";
 import {
   Navbar,
@@ -37,7 +36,7 @@ import {
   deleteWorkspace as apiDeleteWorkspace,
 } from "../api";
 import {
-  COLOR_OPTIONS,
+  getRandomGradient,
   DEFAULT_USER_PREFERENCES,
   DEFAULT_ACTIVE_SESSIONS,
   SUBSCRIPTION_PLANS,
@@ -47,7 +46,6 @@ import type { Task, TaskStatus, Workspace, User } from "../types";
 import { getInitials as extractInitials, getProfileGradient } from "../utils";
 
 type ProfileTab =
-  | "overview"
   | "workspaces"
   | "subscription"
   | "tasks"
@@ -56,14 +54,42 @@ type ProfileTab =
 
 interface UserProfileDetails {
   name: string;
-  username: string;
   email: string;
-  role: string;
-  company: string;
-  location: string;
-  bio: string;
   memberSince: string;
   color?: string;
+  subscriptionPlan?: "basic" | "pro";
+  billingCycle?: "monthly" | "yearly";
+}
+
+function formatMemberSince(createdAt?: string | Date, userId?: string): string {
+  if (createdAt) {
+    try {
+      const d = new Date(createdAt);
+      if (!isNaN(d.getTime())) {
+        const month = d.toLocaleString("en-US", { month: "short" });
+        const year = d.getFullYear();
+        return `Member since ${month} ${year}`;
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  if (userId && /^[0-9a-fA-F]{24}$/.test(userId)) {
+    try {
+      const timestamp = parseInt(userId.substring(0, 8), 16) * 1000;
+      const d = new Date(timestamp);
+      if (!isNaN(d.getTime())) {
+        const month = d.toLocaleString("en-US", { month: "short" });
+        const year = d.getFullYear();
+        return `Member since ${month} ${year}`;
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  return "Member since Oct 2024";
 }
 
 export const Profile: React.FC = () => {
@@ -77,40 +103,126 @@ export const Profile: React.FC = () => {
     email: "user1@nsbm.lk",
     initials: "AC",
     color: "from-indigo-600 to-violet-600",
+    createdAt: "2024-10-15T00:00:00.000Z",
   };
 
   // Active tab state
-  const [activeTab, setActiveTab] = useState<ProfileTab>("overview");
+  const [activeTab, setActiveTab] = useState<ProfileTab>("workspaces");
 
   // Saved & Form State
-  const [savedProfile, setSavedProfile] = useState<UserProfileDetails>({
-    name: currentUser.name,
-    username: currentUser.email ? currentUser.email.split("@")[0] : "alex.chen",
-    email: currentUser.email,
-    role: "Lead Full-Stack Engineer",
-    company: "CollabBoard Labs",
-    location: "San Francisco, CA",
-    bio: "Specializing in real-time collaborative systems, CRDT state sync, and high-performance WebGL & React interfaces.",
-    memberSince: "Member since Oct 2024",
-    color: currentUser.color || "from-indigo-600 to-violet-600",
+  const [savedProfile, setSavedProfile] = useState<UserProfileDetails>(() => {
+    const initialColor = currentUser.color || getRandomGradient();
+    return {
+      name: currentUser.name,
+      email: currentUser.email,
+      memberSince: formatMemberSince(currentUser.createdAt, currentUser.id),
+      color: initialColor,
+    };
   });
 
   const [name, setName] = useState(savedProfile.name);
-  const [username, setUsername] = useState(savedProfile.username);
   const [email, setEmail] = useState(savedProfile.email);
-  const [role, setRole] = useState(savedProfile.role);
-  const [company, setCompany] = useState(savedProfile.company);
-  const [location, setLocation] = useState(savedProfile.location);
-  const [bio, setBio] = useState(savedProfile.bio);
   const [selectedColor, setSelectedColor] = useState<string>(
-    currentUser.color || "from-indigo-600 to-violet-600",
+    savedProfile.color || getRandomGradient(),
   );
   const [subscriptionPlan, setSubscriptionPlan] = useState<"basic" | "pro">(
-    "pro",
+    authUser?.subscriptionPlan || "pro",
   );
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">(
-    "monthly",
+    authUser?.billingCycle || "monthly",
   );
+
+  // Plan and billing cycle persistence handlers
+  const handleSelectPlan = async (
+    newPlan: "basic" | "pro",
+    cycle?: "monthly" | "yearly",
+  ) => {
+    const nextCycle = cycle || billingCycle;
+    setSubscriptionPlan(newPlan);
+    if (cycle) setBillingCycle(cycle);
+
+    const updated: UserProfileDetails = {
+      ...savedProfile,
+      subscriptionPlan: newPlan,
+      billingCycle: nextCycle,
+    };
+    setSavedProfile(updated);
+    saveCachedProfileDetails(updated);
+
+    try {
+      await updateUser({
+        subscriptionPlan: newPlan,
+        billingCycle: nextCycle,
+      });
+      showToast(
+        newPlan === "pro"
+          ? "Upgraded to Pro Plan successfully!"
+          : "Switched to Basic Plan",
+        "success",
+      );
+    } catch (err: any) {
+      showToast(err.message || "Failed to update subscription", "info");
+    }
+  };
+
+  const handleSelectBillingCycle = async (newCycle: "monthly" | "yearly") => {
+    setBillingCycle(newCycle);
+    const updated: UserProfileDetails = {
+      ...savedProfile,
+      subscriptionPlan,
+      billingCycle: newCycle,
+    };
+    setSavedProfile(updated);
+    saveCachedProfileDetails(updated);
+    try {
+      await updateUser({
+        subscriptionPlan,
+        billingCycle: newCycle,
+      });
+    } catch {
+      // Ignored
+    }
+  };
+
+  // Inline name editing state in hero banner
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [tempName, setTempName] = useState(savedProfile.name);
+  const [isSavingName, setIsSavingName] = useState(false);
+
+  const handleSaveInlineName = async () => {
+    const trimmed = tempName.trim();
+    if (!trimmed) {
+      showToast("Name cannot be empty", "error");
+      return;
+    }
+    if (trimmed === name) {
+      setIsEditingName(false);
+      return;
+    }
+
+    setIsSavingName(true);
+    try {
+      setName(trimmed);
+      const updated = {
+        ...savedProfile,
+        name: trimmed,
+      };
+      setSavedProfile(updated);
+      saveCachedProfileDetails(updated);
+      await updateUser({ name: trimmed });
+      showToast(`Name updated to "${trimmed}"!`, "success");
+      setIsEditingName(false);
+    } catch (err: any) {
+      showToast(err.message || "Failed to update name", "info");
+    } finally {
+      setIsSavingName(false);
+    }
+  };
+
+  const handleCancelInlineName = () => {
+    setTempName(name);
+    setIsEditingName(false);
+  };
 
   // Load cached profile from PouchDB and keep synced with authUser
   useEffect(() => {
@@ -118,21 +230,27 @@ export const Profile: React.FC = () => {
       try {
         const cached = await getCachedProfileDetails();
         if (cached) {
-          const merged = {
+          const effectiveCreatedAt = authUser?.createdAt || cached.createdAt || currentUser.createdAt;
+          const memberDate = formatMemberSince(effectiveCreatedAt, authUser?.id || currentUser.id);
+          const activePlan = authUser?.subscriptionPlan || cached.subscriptionPlan || "pro";
+          const activeCycle = authUser?.billingCycle || cached.billingCycle || "monthly";
+          const merged: UserProfileDetails = {
             ...cached,
             name: authUser?.name || cached.name,
             email: authUser?.email || cached.email,
+            memberSince: memberDate,
+            subscriptionPlan: activePlan,
+            billingCycle: activeCycle,
           };
           setSavedProfile(merged);
           setName(merged.name);
-          setUsername(merged.username);
+          setTempName(merged.name);
           setEmail(merged.email);
-          if (merged.role) setRole(merged.role);
-          if (merged.company) setCompany(merged.company);
-          if (merged.location) setLocation(merged.location);
-          if (merged.bio) setBio(merged.bio);
-          if (authUser?.color || merged.color) {
-            setSelectedColor(authUser?.color || merged.color);
+          setSubscriptionPlan(activePlan);
+          setBillingCycle(activeCycle);
+          const resolvedColor = authUser?.color || merged.color;
+          if (resolvedColor) {
+            setSelectedColor(resolvedColor);
           }
           return;
         }
@@ -142,38 +260,33 @@ export const Profile: React.FC = () => {
 
       if (authUser) {
         setName(authUser.name);
+        setTempName(authUser.name);
         setEmail(authUser.email);
-        if (authUser.color) {
-          setSelectedColor(authUser.color);
-        }
+        const userColor = authUser.color || getRandomGradient();
+        setSelectedColor(userColor);
+        const activePlan = authUser.subscriptionPlan || "pro";
+        const activeCycle = authUser.billingCycle || "monthly";
+        setSubscriptionPlan(activePlan);
+        setBillingCycle(activeCycle);
         setSavedProfile((prev) => ({
           ...prev,
           name: authUser.name,
           email: authUser.email,
-          username: authUser.email ? authUser.email.split("@")[0] : prev.username,
-          color: authUser.color || prev.color,
+          memberSince: formatMemberSince(authUser.createdAt, authUser.id),
+          color: userColor,
+          subscriptionPlan: activePlan,
+          billingCycle: activeCycle,
         }));
       }
     }
     loadPouchProfile();
-  }, [authUser]);
+  }, [authUser, currentUser.createdAt, currentUser.id]);
 
   useEffect(() => {
     if (authUser?.color) {
       setSelectedColor(authUser.color);
     }
   }, [authUser?.color]);
-
-  // Check if any personal info field has unsaved changes
-  const isProfileDirty =
-    name !== savedProfile.name ||
-    username !== savedProfile.username ||
-    email !== savedProfile.email ||
-    role !== savedProfile.role ||
-    company !== savedProfile.company ||
-    location !== savedProfile.location ||
-    bio !== savedProfile.bio ||
-    selectedColor !== (savedProfile.color || currentUser.color);
 
   // Preferences state
   const [preferences, setPreferences] = useState(DEFAULT_USER_PREFERENCES);
@@ -202,7 +315,7 @@ export const Profile: React.FC = () => {
   // Toast feedback state
   const [toastMessage, setToastMessage] = useState<{
     text: string;
-    type: "success" | "info";
+    type: "success" | "info" | "error";
   } | null>(null);
 
   // User tasks state
@@ -211,75 +324,19 @@ export const Profile: React.FC = () => {
     allTasksList.filter(
       (t) =>
         t.assignee?.id === currentUser.id ||
-        t.assignee?.name === currentUser.name,
+        t.assignee?.name?.toLowerCase() === currentUser.name.toLowerCase(),
     ),
   );
+
   const [taskFilter, setTaskFilter] = useState<
     "all" | "in-progress" | "todo" | "done"
   >("all");
 
-  const showToast = (text: string, type: "success" | "info" = "success") => {
+  const showToast = (text: string, type: "success" | "info" | "error" = "success") => {
     setToastMessage({ text, type });
     setTimeout(() => {
       setToastMessage(null);
     }, 3200);
-  };
-
-  const handleSelectGradient = (colorValue: string) => {
-    setSelectedColor(colorValue);
-    setSavedProfile((prev) => ({ ...prev, color: colorValue }));
-    saveCachedProfileDetails({
-      ...savedProfile,
-      color: colorValue,
-    });
-    updateUser({ color: colorValue });
-    const option = COLOR_OPTIONS.find((c) => c.value === colorValue);
-    showToast(
-      option
-        ? `Preferred gradient set to ${option.label}!`
-        : "Preferred color gradient updated!",
-      "success",
-    );
-  };
-
-  const handleSaveProfile = (e: React.FormEvent) => {
-    e.preventDefault();
-    const updated = {
-      name,
-      username,
-      email,
-      role,
-      company,
-      location,
-      bio,
-      memberSince: savedProfile.memberSince,
-      color: selectedColor,
-    };
-    setSavedProfile(updated);
-    saveCachedProfileDetails(updated);
-
-    // Update global AuthContext user
-    updateUser({
-      name,
-      email,
-      color: selectedColor,
-    });
-
-    showToast("Profile details updated successfully!");
-  };
-
-  const handleCancelProfile = () => {
-    setName(savedProfile.name);
-    setUsername(savedProfile.username);
-    setEmail(savedProfile.email);
-    setRole(savedProfile.role);
-    setCompany(savedProfile.company);
-    setLocation(savedProfile.location);
-    setBio(savedProfile.bio);
-    setSelectedColor(
-      savedProfile.color || currentUser.color || "from-indigo-600 to-violet-600",
-    );
-    showToast("Changes discarded", "info");
   };
 
   const handlePreferenceToggle = (key: keyof typeof preferences) => {
@@ -353,7 +410,9 @@ export const Profile: React.FC = () => {
             className={`w-2 h-2 rounded-full ${
               toastMessage.type === "success"
                 ? "bg-emerald-400 animate-pulse"
-                : "bg-indigo-400"
+                : toastMessage.type === "error"
+                  ? "bg-rose-400"
+                  : "bg-indigo-400"
             }`}
           />
           <span className="text-xs font-medium text-slate-200">
@@ -376,9 +435,8 @@ export const Profile: React.FC = () => {
 
           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
-              {/* Avatar with Preferred Color Gradient selector */}
               {/* Profile Avatar */}
-              <div className="flex flex-col items-center sm:items-start gap-2.5">
+              <div className="flex flex-col items-center sm:items-start gap-2">
                 <div className="relative group">
                   <div
                     data-testid="profile-avatar-hero"
@@ -396,20 +454,70 @@ export const Profile: React.FC = () => {
               {/* Name & Basic Info */}
               <div className="space-y-1.5">
                 <div className="flex flex-wrap items-center gap-2.5">
-                  <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-                    {name}
-                  </h1>
-                  <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
-                    <Sparkles className="w-3 h-3 text-indigo-400" />
-                    <span>Workspace Owner</span>
-                  </span>
+                  {isEditingName ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={tempName}
+                        onChange={(e) => setTempName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleSaveInlineName();
+                          } else if (e.key === "Escape") {
+                            handleCancelInlineName();
+                          }
+                        }}
+                        autoFocus
+                        disabled={isSavingName}
+                        className="text-lg sm:text-2xl font-bold text-white bg-slate-950/90 border border-indigo-500 rounded-xl px-3 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 shadow-inner"
+                        placeholder="Enter full name"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSaveInlineName}
+                        disabled={isSavingName}
+                        className="p-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition disabled:opacity-50 cursor-pointer"
+                        title="Save name (Enter)"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelInlineName}
+                        disabled={isSavingName}
+                        className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
+                        title="Cancel (Esc)"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="group flex items-center gap-2">
+                      <h1
+                        onClick={() => {
+                          setTempName(name);
+                          setIsEditingName(true);
+                        }}
+                        className="text-xl sm:text-2xl font-bold text-white tracking-tight cursor-pointer hover:text-indigo-200 transition"
+                        title="Click to edit name"
+                      >
+                        {name}
+                      </h1>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTempName(name);
+                          setIsEditingName(true);
+                        }}
+                        className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition opacity-80 group-hover:opacity-100 cursor-pointer"
+                        title="Edit name"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
-
-                <p className="text-xs sm:text-sm text-slate-300 font-medium flex items-center space-x-2">
-                  <span>{role}</span>
-                  <span className="text-slate-600">•</span>
-                  <span className="text-slate-400">{company}</span>
-                </p>
 
                 <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400 pt-1">
                   <span className="flex items-center space-x-1.5">
@@ -417,12 +525,8 @@ export const Profile: React.FC = () => {
                     <span>{email}</span>
                   </span>
                   <span className="flex items-center space-x-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                    <span>{location}</span>
-                  </span>
-                  <span className="flex items-center space-x-1.5">
                     <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Member since Oct 2024</span>
+                    <span>{savedProfile.memberSince || formatMemberSince(authUser?.createdAt || currentUser.createdAt)}</span>
                   </span>
                 </div>
               </div>
@@ -483,17 +587,6 @@ export const Profile: React.FC = () => {
 
         {/* Tab Navigation Pill Bar */}
         <div className="flex items-center space-x-1.5 p-1 rounded-2xl bg-slate-900/90 border border-slate-800/80 backdrop-blur-md overflow-x-auto">
-          <button
-            onClick={() => setActiveTab("overview")}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === "overview"
-                ? "bg-indigo-600 text-white shadow-md shadow-indigo-950/60"
-                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
-            }`}
-          >
-            <UserIcon className="w-3.5 h-3.5" />
-            <span>Personal Info</span>
-          </button>
 
           <button
             onClick={() => setActiveTab("workspaces")}
@@ -556,189 +649,7 @@ export const Profile: React.FC = () => {
           </button>
         </div>
 
-        {/* Tab 1: Overview & Personal Info */}
-        {activeTab === "overview" && (
-          <form onSubmit={handleSaveProfile} className="space-y-6">
-            {/* General Information Card */}
-            <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl space-y-5">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                <div>
-                  <h2 className="text-sm font-bold text-white">
-                    General Information
-                  </h2>
-                  <p className="text-xs text-slate-400">
-                    Update your public identity and profile details
-                  </p>
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">
-                    Full Name
-                  </label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">
-                    Username / Handle
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-500">
-                      @
-                    </span>
-                    <input
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      required
-                      className="w-full pl-8 pr-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">
-                    Primary Email
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">
-                    Job Title / Role
-                  </label>
-                  <input
-                    type="text"
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">
-                    Company / Organization
-                  </label>
-                  <input
-                    type="text"
-                    value={company}
-                    onChange={(e) => setCompany(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">
-                    Location / Timezone
-                  </label>
-                  <input
-                    type="text"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-300">
-                  Bio / About Me
-                </label>
-                <textarea
-                  rows={3}
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition resize-none"
-                />
-              </div>
-
-              {/* Preferred Avatar Color Gradient */}
-              <div className="space-y-2.5 pt-4 border-t border-slate-800/80">
-                <div>
-                  <label className="text-xs font-semibold text-slate-200">
-                    Preferred Color Gradient
-                  </label>
-                  <p className="text-[11px] text-slate-400">
-                    Your personal signature gradient used on boards, avatar presence, and collaborator badges
-                  </p>
-                </div>
-
-                <div
-                  data-testid="profile-form-gradient-options"
-                  className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 pt-1"
-                >
-                  {COLOR_OPTIONS.map((c) => {
-                    const isSelected = selectedColor === c.value;
-                    return (
-                      <button
-                        key={c.value}
-                        type="button"
-                        onClick={() => handleSelectGradient(c.value)}
-                        aria-label={`Select ${c.label} gradient`}
-                        className={`group flex items-center space-x-2.5 p-2.5 rounded-2xl border transition-all text-left cursor-pointer ${
-                          isSelected
-                            ? "bg-slate-800/90 border-slate-600 ring-2 ring-indigo-500/50 shadow-lg shadow-indigo-950/20"
-                            : "bg-slate-950/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900/60"
-                        }`}
-                      >
-                        <div
-                          className={`w-5 h-5 rounded-full bg-linear-to-br ${c.value} shadow-xs flex items-center justify-center shrink-0 transition-transform group-hover:scale-110`}
-                        >
-                          {isSelected && (
-                            <Check className="w-3 h-3 text-white stroke-3" />
-                          )}
-                        </div>
-                        <span
-                          className={`text-xs font-medium truncate ${
-                            isSelected
-                              ? "text-white font-semibold"
-                              : "text-slate-400 group-hover:text-slate-200"
-                          }`}
-                        >
-                          {c.label}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Save & Cancel Buttons - Visible only when form is modified */}
-            {isProfileDirty && (
-              <div className="flex items-center justify-end space-x-3 pt-4 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={handleCancelProfile}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  icon={<Save className="w-4 h-4" />}
-                >
-                  Save Profile Changes
-                </Button>
-              </div>
-            )}
-          </form>
-        )}
 
         {/* Tab: Subscription & Plans */}
         {activeTab === "subscription" && (
@@ -830,10 +741,7 @@ export const Profile: React.FC = () => {
                           type="button"
                           variant="secondary"
                           className="w-full"
-                          onClick={() => {
-                            setSubscriptionPlan("basic");
-                            showToast("Switched to Basic Plan", "info");
-                          }}
+                          onClick={() => handleSelectPlan("basic")}
                         >
                           Downgrade to Basic
                         </Button>
@@ -891,7 +799,7 @@ export const Profile: React.FC = () => {
                         <div className="flex items-center space-x-1 p-1 rounded-2xl bg-slate-950/90 border border-slate-800 shrink-0 self-start sm:self-auto">
                           <button
                             type="button"
-                            onClick={() => setBillingCycle("monthly")}
+                            onClick={() => handleSelectBillingCycle("monthly")}
                             className={`px-3 py-1 rounded-xl text-xs font-semibold transition cursor-pointer ${
                               billingCycle === "monthly"
                                 ? "bg-indigo-600 text-white shadow-xs"
@@ -902,7 +810,7 @@ export const Profile: React.FC = () => {
                           </button>
                           <button
                             type="button"
-                            onClick={() => setBillingCycle("yearly")}
+                            onClick={() => handleSelectBillingCycle("yearly")}
                             className={`flex items-center space-x-1.5 px-3 py-1 rounded-xl text-xs font-semibold transition cursor-pointer ${
                               billingCycle === "yearly"
                                 ? "bg-indigo-600 text-white shadow-xs"
@@ -946,10 +854,7 @@ export const Profile: React.FC = () => {
                           variant="primary"
                           className="w-full shadow-xl shadow-indigo-950/60"
                           icon={<Sparkles className="w-4 h-4" />}
-                          onClick={() => {
-                            setSubscriptionPlan("pro");
-                            showToast("Upgraded to Pro Plan!");
-                          }}
+                          onClick={() => handleSelectPlan("pro", billingCycle)}
                         >
                           Upgrade to Pro (
                           {billingCycle === "yearly" ? "$115.20/yr" : "$12/mo"})

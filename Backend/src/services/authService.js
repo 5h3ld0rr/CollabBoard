@@ -4,6 +4,7 @@ import { config } from '../config.js';
 import { AppError, NotFoundError } from '../utils/AppError.js';
 import { userRepo, publicUser } from '../repos/userRepo.js';
 import { workspaceRepo } from '../repos/workspaceRepo.js';
+import { User, getRandomColor } from '../models/User.js';
 
 /**
  * Register a new user with hashed password and return auth token
@@ -19,6 +20,7 @@ export async function register({ email, password, name }) {
     email,
     passwordHash,
     name: name || 'User',
+    color: getRandomColor(),
   });
 
   // Automatically provision a default workspace on the backend if none exists
@@ -73,4 +75,41 @@ export async function getMe(userId) {
     throw new NotFoundError('User');
   }
   return publicUser(user);
+}
+
+/**
+ * Update authenticated user profile
+ */
+export async function updateProfile(userId, { name, email, color, subscriptionPlan, billingCycle }) {
+  const user = await userRepo.findById(userId);
+  if (!user) {
+    throw new NotFoundError('User');
+  }
+
+  const updates = {};
+  if (name !== undefined) {
+    updates.name = name.trim();
+  }
+  if (color !== undefined) {
+    updates.color = color;
+  }
+  if (subscriptionPlan !== undefined) {
+    updates.subscriptionPlan = subscriptionPlan;
+  }
+  if (billingCycle !== undefined) {
+    updates.billingCycle = billingCycle;
+  }
+  if (email !== undefined) {
+    const normalizedEmail = email.toLowerCase().trim();
+    if (normalizedEmail !== user.email) {
+      const existing = await userRepo.findByEmail(normalizedEmail);
+      if (existing && String(existing.id) !== String(userId)) {
+        throw new AppError('Email already registered', 409, 'EMAIL_EXISTS');
+      }
+      updates.email = normalizedEmail;
+    }
+  }
+
+  const updated = await userRepo.update(userId, updates);
+  return updated;
 }
