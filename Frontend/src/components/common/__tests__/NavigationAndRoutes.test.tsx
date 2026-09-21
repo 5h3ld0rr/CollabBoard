@@ -1,3 +1,4 @@
+import '@testing-library/jest-dom/vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -19,21 +20,26 @@ describe('common navigation and route components', () => {
   });
 
   describe('BackButton & Logo & AmbientBackground', () => {
-    it('renders BackButton with default and custom label and link', () => {
+    it('renders BackButton with default and custom label and handles clicks', () => {
       render(
         <MemoryRouter>
           <BackButton />
         </MemoryRouter>
       );
-      expect(screen.getByText('Back to Home')).toBeInTheDocument();
-      expect(screen.getByRole('link')).toHaveAttribute('href', '/');
+      expect(screen.getByText('Back')).toBeInTheDocument();
+      const btn = screen.getByRole('button', { name: 'Back' });
+      expect(btn).toBeInTheDocument();
 
+      const handleClick = vi.fn();
       render(
         <MemoryRouter>
-          <BackButton to="/dashboard" label="Return" />
+          <BackButton to="/dashboard" label="Return" onClick={handleClick} />
         </MemoryRouter>
       );
-      expect(screen.getByText('Return')).toBeInTheDocument();
+      const returnBtn = screen.getByRole('button', { name: 'Return' });
+      expect(returnBtn).toBeInTheDocument();
+      fireEvent.click(returnBtn);
+      expect(handleClick).toHaveBeenCalledTimes(1);
     });
 
     it('renders Logo with various sizes and text toggle', () => {

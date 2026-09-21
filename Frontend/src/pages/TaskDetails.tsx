@@ -47,6 +47,7 @@ import {
   joinBoardRoom,
   subscribeCommentCreated,
   subscribeCommentDeleted,
+  subscribeBoardUpdated,
 } from '../sync';
 import { useAuth } from '../context/AuthContext';
 import type { Task, Board, TaskStatus, TaskPriority, User, TaskComment } from '../types';
@@ -273,6 +274,24 @@ export const TaskDetails: React.FC = () => {
       unsubDeleted();
     };
   }, [task?.boardId, task?.id, authUser?.id]);
+
+  // Real-time board metadata sync (e.g. board title / tooltip updates)
+  useEffect(() => {
+    if (!task?.boardId) return;
+
+    const unsubBoard = subscribeBoardUpdated((payload) => {
+      if (String(payload.boardId) === String(task.boardId) && payload.board) {
+        setBoard((prev) => (prev ? { ...prev, ...payload.board } : payload.board));
+        if (payload.board.members) {
+          setBoardMembers(payload.board.members);
+        }
+      }
+    });
+
+    return () => {
+      unsubBoard();
+    };
+  }, [task?.boardId]);
 
   const priorityInfo = task ? PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium : PRIORITY_CONFIG.medium;
 
@@ -524,7 +543,16 @@ export const TaskDetails: React.FC = () => {
                 <span>Go to Dashboard</span>
               </Link>
               <button
-                onClick={() => navigate(-1)}
+                type="button"
+                onClick={() => {
+                  if (window.history.state?.idx > 0 || window.history.length > 1) {
+                    navigate(-1);
+                  } else if (board) {
+                    navigate(`/boards/${board.id}`);
+                  } else {
+                    navigate('/dashboard');
+                  }
+                }}
                 className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white text-xs font-semibold transition cursor-pointer"
               >
                 Go Back
@@ -538,9 +566,19 @@ export const TaskDetails: React.FC = () => {
             <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
               <nav aria-label="Breadcrumb" className="flex items-center gap-2 flex-wrap">
                 <button
-                  onClick={() => (board ? navigate(`/boards/${board.id}`) : navigate('/dashboard'))}
+                  type="button"
+                  onClick={() => {
+                    if (window.history.state?.idx > 0 || window.history.length > 1) {
+                      navigate(-1);
+                    } else if (board) {
+                      navigate(`/boards/${board.id}`);
+                    } else {
+                      navigate('/dashboard');
+                    }
+                  }}
                   className="p-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800/80 hover:border-slate-700 text-slate-400 hover:text-white shadow-xs transition-all duration-150 flex items-center justify-center shrink-0 cursor-pointer group active:scale-95"
-                  title="Back to board"
+                  title="Go back"
+                  aria-label="Go back"
                 >
                   <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5 text-slate-400 group-hover:text-indigo-400" />
                 </button>

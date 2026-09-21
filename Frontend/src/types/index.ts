@@ -103,12 +103,8 @@ export interface UserProfile {
 }
 
 export interface UserPreferences {
-  emailTaskAssignment: boolean;
-  emailWeeklyDigest: boolean;
   desktopNotifications: boolean;
   soundEffects: boolean;
-  compactBoardView: boolean;
-  offlineAutoSync: boolean;
 }
 
 export interface ActiveSession {

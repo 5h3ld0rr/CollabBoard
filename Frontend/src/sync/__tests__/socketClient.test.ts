@@ -114,7 +114,7 @@ describe('Member 3: Shamika Madushan - Socket Client & Reconnection Resilience S
   });
 
   it('re-joins active board room on reconnect', () => {
-    let connectCallback: (() => void) | null = null;
+    let connectCallback: any;
     mockSocket.on.mockImplementation((event: string, cb: any) => {
       if (event === 'connect') {
         connectCallback = cb;
@@ -146,7 +146,7 @@ describe('Member 3: Shamika Madushan - Socket Client & Reconnection Resilience S
   });
 
   it('handles connect_error and notifies onSocketAuthError listeners on BAD_TOKEN / NO_TOKEN', () => {
-    let connectErrorCallback: ((err: any) => void) | null = null;
+    let connectErrorCallback: any;
     mockSocket.on.mockImplementation((event: string, cb: any) => {
       if (event === 'connect_error') {
         connectErrorCallback = cb;
@@ -170,8 +170,8 @@ describe('Member 3: Shamika Madushan - Socket Client & Reconnection Resilience S
   });
 
   it('subscribes to connect and disconnect lifecycle with manual restart on io server disconnect', () => {
-    let connectCb: (() => void) | null = null;
-    let disconnectCb: ((reason: string) => void) | null = null;
+    let connectCb: any;
+    let disconnectCb: any;
 
     mockSocket.on.mockImplementation((event: string, cb: any) => {
       if (event === 'connect') connectCb = cb;

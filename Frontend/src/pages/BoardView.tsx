@@ -163,6 +163,16 @@ export const BoardView: React.FC = () => {
     }
   }, [boardId, shareToken, loadBoard, dispatch]);
 
+  // Dynamically update document title (browser tab title and tooltip)
+  useEffect(() => {
+    if (boardData?.title) {
+      document.title = `${boardData.title} | CollabBoard`;
+    }
+    return () => {
+      document.title = "CollabBoard";
+    };
+  }, [boardData?.title]);
+
   // URL-Reflected Filter States
   const searchQuery = searchParams.get("search") || searchParams.get("q") || "";
   const selectedAssignee = searchParams.get("assignee") || "all";
@@ -779,7 +789,14 @@ export const BoardView: React.FC = () => {
                 <span>{isGuestView ? "Back to Home" : "Go to Dashboard"}</span>
               </Link>
               <button
-                onClick={() => navigate(-1)}
+                type="button"
+                onClick={() => {
+                  if (window.history.state?.idx > 0 || window.history.length > 1) {
+                    navigate(-1);
+                  } else {
+                    navigate(isGuestView ? "/" : "/dashboard");
+                  }
+                }}
                 className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white text-xs font-semibold transition cursor-pointer"
               >
                 Go Back
@@ -820,7 +837,7 @@ export const BoardView: React.FC = () => {
             )}
 
             {/* Board Header Bar */}
-            <div className="relative z-40 flex flex-col md:flex-row md:items-end justify-between gap-4 pb-6 border-b border-slate-800/80 mb-6">
+            <div className="relative z-20 flex flex-col md:flex-row md:items-end justify-between gap-4 pb-6 border-b border-slate-800/80 mb-6">
               <div className="space-y-2">
                 {/* Modern Glassmorphic Breadcrumb Navigation */}
                 <nav
@@ -829,7 +846,13 @@ export const BoardView: React.FC = () => {
                 >
                   <button
                     type="button"
-                    onClick={() => navigate(-1)}
+                    onClick={() => {
+                      if (window.history.state?.idx > 0 || window.history.length > 1) {
+                        navigate(-1);
+                      } else {
+                        navigate(isGuestView ? "/" : "/dashboard");
+                      }
+                    }}
                     className="p-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800/80 hover:border-slate-700 text-slate-400 hover:text-white shadow-xs transition-all duration-150 flex items-center justify-center shrink-0 cursor-pointer group active:scale-95"
                     title="Go back"
                     aria-label="Go back"
@@ -977,7 +1000,10 @@ export const BoardView: React.FC = () => {
                     )}
 
                     <ChevronRight className="w-3 h-3 text-slate-600 shrink-0" />
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg font-semibold text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 max-w-36 sm:max-w-xs truncate shadow-xs">
+                    <span
+                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg font-semibold text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 max-w-36 sm:max-w-xs truncate shadow-xs cursor-default"
+                      title={boardData.title}
+                    >
                       <Kanban className="w-3 h-3 text-indigo-400 shrink-0" />
                       <span className="truncate">{boardData.title}</span>
                     </span>
@@ -986,7 +1012,10 @@ export const BoardView: React.FC = () => {
 
                 {/* Board Title & Optional Description */}
                 <div>
-                  <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                  <h1
+                    className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight"
+                    title={boardData.title}
+                  >
                     {boardData.title}
                   </h1>
                   {boardData.description &&
@@ -1057,7 +1086,7 @@ export const BoardView: React.FC = () => {
             </div>
 
             {/* Board Search & Filter Controls Strip */}
-            <div className="relative z-30 space-y-3 mb-6">
+            <div className="relative z-10 space-y-3 mb-6">
               {/* Main Filter Bar */}
               <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-slate-900/90 border border-slate-800 backdrop-blur-xl">
                 {/* Left Controls: Title Search & Dropdowns */}
@@ -1408,8 +1437,8 @@ export const BoardView: React.FC = () => {
               )}
             </div>
 
-            {/* Empty Search/Filter State Banner if 0 cards match */}
-            {filteredTasks.length === 0 && (
+            {/* Empty Search/Filter State Banner if 0 cards match active filters */}
+            {hasActiveFilters && filteredTasks.length === 0 && (
               <div className="p-8 mb-6 text-center rounded-2xl bg-slate-900/40 border border-slate-800/80 flex flex-col items-center justify-center space-y-3 animate-in fade-in duration-200">
                 <div className="w-10 h-10 rounded-xl bg-slate-800/70 border border-slate-700/60 flex items-center justify-center text-slate-400">
                   <Search className="w-5 h-5" />

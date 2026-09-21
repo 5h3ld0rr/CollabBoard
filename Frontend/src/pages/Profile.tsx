@@ -607,7 +607,7 @@ export const Profile: React.FC = () => {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         {/* Back Navigation Button */}
         <div>
-          <BackButton to="/dashboard" label="Back to Boards" />
+          <BackButton to="/dashboard" label="Back" />
         </div>
 
         {/* Profile Header Hero Card */}

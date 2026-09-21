@@ -88,7 +88,10 @@ export const BoardCard: React.FC<BoardCardProps> = memo(({
                   </span>
                 )}
               </div>
-              <h3 className="text-base font-bold text-white group-hover:text-indigo-300 transition-colors leading-snug line-clamp-1">
+              <h3
+                className="text-base font-bold text-white group-hover:text-indigo-300 transition-colors leading-snug line-clamp-1"
+                title={board.title}
+              >
                 {board.title}
               </h3>
             </div>
