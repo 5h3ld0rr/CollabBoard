@@ -138,6 +138,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           name: updatedData.name,
           email: updatedData.email,
           color: updatedData.color,
+          avatar: updatedData.avatar,
           subscriptionPlan: updatedData.subscriptionPlan,
           billingCycle: updatedData.billingCycle,
         });

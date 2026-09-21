@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Mail,
@@ -21,6 +21,8 @@ import {
   Settings,
   Pencil,
   X,
+  Camera,
+  Trash2,
   Loader2,
 } from "lucide-react";
 import {
@@ -65,9 +67,47 @@ interface UserProfileDetails {
   name: string;
   email: string;
   memberSince: string;
+  avatar?: string;
   color?: string;
   subscriptionPlan?: "basic" | "pro";
   billingCycle?: "monthly" | "yearly";
+}
+
+function resizeImageToBase64(file: File, maxSize: number = 320, quality: number = 0.85): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let { width, height } = img;
+        if (width > height) {
+          if (width > maxSize) {
+            height = Math.round((height * maxSize) / width);
+            width = maxSize;
+          }
+        } else {
+          if (height > maxSize) {
+            width = Math.round((width * maxSize) / height);
+            height = maxSize;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Unable to process image canvas context"));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = () => reject(new Error("Failed to load image file"));
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => reject(new Error("Failed to read image file"));
+    reader.readAsDataURL(file);
+  });
 }
 
 function formatMemberSince(createdAt?: string | Date, userId?: string): string {
@@ -146,6 +186,7 @@ export const Profile: React.FC = () => {
     return {
       name: currentUser.name,
       email: currentUser.email,
+      avatar: currentUser.avatar || "",
       memberSince: formatMemberSince(currentUser.createdAt, currentUser.id),
       color: initialColor,
     };
@@ -267,6 +308,7 @@ export const Profile: React.FC = () => {
             ...cached,
             name: authUser?.name || cached.name,
             email: authUser?.email || cached.email,
+            avatar: authUser?.avatar !== undefined ? authUser.avatar : cached.avatar,
             memberSince: memberDate,
             subscriptionPlan: activePlan,
             billingCycle: activeCycle,
@@ -301,6 +343,7 @@ export const Profile: React.FC = () => {
           ...prev,
           name: authUser.name,
           email: authUser.email,
+          avatar: authUser.avatar || "",
           memberSince: formatMemberSince(authUser.createdAt, authUser.id),
           color: userColor,
           subscriptionPlan: activePlan,
@@ -316,6 +359,73 @@ export const Profile: React.FC = () => {
       setSelectedColor(authUser.color);
     }
   }, [authUser?.color]);
+
+  useEffect(() => {
+    if (authUser?.avatar !== undefined) {
+      setSavedProfile((prev) => ({ ...prev, avatar: authUser.avatar }));
+    }
+  }, [authUser?.avatar]);
+
+  // Profile picture upload / removal
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+
+  const handleAvatarFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    e.target.value = "";
+
+    if (!file.type.startsWith("image/")) {
+      showToast("Please select a valid image file (PNG, JPG, WebP)", "error");
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      showToast("Image size must be less than 10MB", "error");
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    try {
+      const resizedBase64 = await resizeImageToBase64(file, 320, 0.85);
+      const updated: UserProfileDetails = {
+        ...savedProfile,
+        avatar: resizedBase64,
+      };
+      setSavedProfile(updated);
+      saveCachedProfileDetails(updated);
+
+      await updateUser({ avatar: resizedBase64 });
+      showToast("Profile picture updated successfully!", "success");
+    } catch (err: any) {
+      console.error("Failed to upload profile picture:", err);
+      showToast(err.message || "Failed to update profile picture", "error");
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (!savedProfile.avatar) return;
+    setIsUploadingAvatar(true);
+    try {
+      const updated: UserProfileDetails = {
+        ...savedProfile,
+        avatar: "",
+      };
+      setSavedProfile(updated);
+      saveCachedProfileDetails(updated);
+
+      await updateUser({ avatar: "" });
+      showToast("Profile picture removed", "success");
+    } catch (err: any) {
+      console.error("Failed to remove profile picture:", err);
+      showToast(err.message || "Failed to remove profile picture", "error");
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
 
   // Preferences state - persisted to localStorage
   const [preferences, setPreferences] = useState(() => {
@@ -620,14 +730,84 @@ export const Profile: React.FC = () => {
                 <div className="relative group">
                   <div
                     data-testid="profile-avatar-hero"
-                    className={`w-20 h-20 sm:w-24 sm:h-24 rounded-2xl ${getProfileGradient(selectedColor || currentUser.color, name)} flex items-center justify-center text-white font-black text-2xl sm:text-3xl shadow-xl shadow-indigo-950/40 ring-4 ring-slate-800/80 transition-all duration-300 group-hover:scale-105`}
+                    className={`w-20 h-20 sm:w-24 sm:h-24 rounded-2xl ${
+                      savedProfile.avatar
+                        ? "bg-slate-900 ring-2 ring-indigo-500/30"
+                        : getProfileGradient(selectedColor || currentUser.color, name)
+                    } flex items-center justify-center text-white font-black text-2xl sm:text-3xl shadow-xl shadow-indigo-950/40 ring-4 ring-slate-800/80 transition-all duration-300 group-hover:scale-105 overflow-hidden relative`}
                   >
-                    {getInitials(name)}
+                    {savedProfile.avatar ? (
+                      <img
+                        src={savedProfile.avatar}
+                        alt={name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      getInitials(name)
+                    )}
+
+                    {/* Loading spinner overlay */}
+                    {isUploadingAvatar && (
+                      <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center z-10">
+                        <Loader2 className="w-6 h-6 text-indigo-400 animate-spin" />
+                      </div>
+                    )}
+
+                    {/* Hover Change Button Overlay */}
+                    {!isUploadingAvatar && (
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-1 text-white transition-opacity duration-200 cursor-pointer backdrop-blur-[2px] z-10"
+                        title="Change profile picture"
+                        aria-label="Change profile picture"
+                      >
+                        <Camera className="w-5 h-5 text-white drop-shadow" />
+                        <span className="text-[10px] font-semibold tracking-tight">Change</span>
+                      </button>
+                    )}
                   </div>
+
+                  {/* Online indicator */}
                   <span
                     title="Online"
-                    className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 ring-4 ring-slate-900"
+                    className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 ring-4 ring-slate-900 pointer-events-none z-20"
                   />
+
+                  {/* Hidden file input */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/jpg"
+                    className="hidden"
+                    onChange={handleAvatarFileSelect}
+                  />
+                </div>
+
+                {/* Avatar action buttons below */}
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadingAvatar}
+                    className="flex items-center gap-1.5 text-[11px] font-medium text-slate-300 hover:text-indigo-300 bg-slate-800/70 hover:bg-slate-800 px-2 py-1 rounded-lg border border-slate-700/60 transition cursor-pointer disabled:opacity-50"
+                  >
+                    <Camera className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>{savedProfile.avatar ? "Change" : "Upload photo"}</span>
+                  </button>
+
+                  {savedProfile.avatar && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveAvatar}
+                      disabled={isUploadingAvatar}
+                      title="Remove profile picture"
+                      aria-label="Remove profile picture"
+                      className="p-1 text-slate-400 hover:text-rose-400 bg-slate-800/70 hover:bg-slate-800 rounded-lg border border-slate-700/60 transition cursor-pointer disabled:opacity-50"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
 

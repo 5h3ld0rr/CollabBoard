@@ -194,21 +194,38 @@ export const Navbar: React.FC<NavbarProps> = ({
                 >
                   <div
                     data-testid="navbar-user-avatar"
-                    className={`w-8 h-8 rounded-lg ${getProfileGradient(user?.color, displayName)} text-white font-bold text-xs flex items-center justify-center shadow-inner transition-all`}
+                    className={`w-8 h-8 rounded-lg ${user?.avatar ? '' : getProfileGradient(user?.color, displayName)} text-white font-bold text-xs flex items-center justify-center shadow-inner transition-all overflow-hidden`}
                   >
-                    {displayInitials}
+                    {user?.avatar ? (
+                      <img
+                        src={user.avatar}
+                        alt={displayName}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      displayInitials
+                    )}
                   </div>
                 </button>
 
                 {showProfileMenu && (
                   <div className="absolute right-0 mt-2 w-52 rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black/90 backdrop-blur-xl p-1.5 z-50 ring-1 ring-white/10 animate-in fade-in zoom-in-95 duration-100">
-                    <div className="px-3 py-2 border-b border-slate-800 mb-1">
-                      <p className="text-xs font-semibold text-white truncate">
-                        {displayName}
-                      </p>
-                      <p className="text-[11px] text-slate-400 truncate">
-                        {displayEmail}
-                      </p>
+                    <div className="px-3 py-2 border-b border-slate-800 mb-1 flex items-center gap-2.5">
+                      <div className={`w-8 h-8 rounded-lg shrink-0 ${user?.avatar ? '' : getProfileGradient(user?.color, displayName)} text-white font-bold text-xs flex items-center justify-center overflow-hidden`}>
+                        {user?.avatar ? (
+                          <img src={user.avatar} alt={displayName} className="w-full h-full object-cover" />
+                        ) : (
+                          displayInitials
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-white truncate">
+                          {displayName}
+                        </p>
+                        <p className="text-[11px] text-slate-400 truncate">
+                          {displayEmail}
+                        </p>
+                      </div>
                     </div>
                     <div className="space-y-0.5 text-xs">
                       <button
