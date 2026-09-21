@@ -16,6 +16,7 @@ import {
   ArrowUp,
   ArrowDown,
   Columns as ColumnsIcon,
+  Palette,
 } from 'lucide-react';
 import type { Board, BoardColumn, User } from '../../types';
 import { COLOR_OPTIONS } from '../../constants';
@@ -40,16 +41,41 @@ const ICON_OPTIONS = [
   { name: 'Sparkles', icon: Sparkles, label: 'Sprint' },
 ];
 
-const COLUMN_COLOR_OPTIONS = [
-  { label: 'Slate', value: 'bg-slate-400' },
-  { label: 'Indigo', value: 'bg-indigo-400' },
-  { label: 'Emerald', value: 'bg-emerald-400' },
-  { label: 'Amber', value: 'bg-amber-400' },
-  { label: 'Rose', value: 'bg-rose-400' },
-  { label: 'Purple', value: 'bg-purple-400' },
-  { label: 'Cyan', value: 'bg-cyan-400' },
-  { label: 'Sky', value: 'bg-sky-400' },
-];
+
+const TAILWIND_COLOR_MAP: Record<string, string> = {
+  'bg-slate-400': '#94a3b8',
+  'bg-indigo-400': '#818cf8',
+  'bg-emerald-400': '#34d399',
+  'bg-amber-400': '#fbbf24',
+  'bg-orange-400': '#fb923c',
+  'bg-rose-400': '#fb7185',
+  'bg-purple-400': '#c084fc',
+  'bg-cyan-400': '#22d3ee',
+  'bg-sky-400': '#38bdf8',
+  'bg-teal-400': '#2dd4bf',
+  'bg-violet-400': '#a78bfa',
+  'bg-pink-400': '#f472b6',
+  'bg-yellow-400': '#facc15',
+  'bg-lime-400': '#a3e635',
+  'bg-red-400': '#f87171',
+};
+
+const isCustomColor = (color?: string): boolean => {
+  if (!color) return false;
+  return color.startsWith('#') || color.startsWith('rgb') || color.startsWith('hsl');
+};
+
+const toHexColor = (color?: string): string => {
+  if (!color) return '#818cf8';
+  if (color.startsWith('#')) {
+    if (/^#[0-9A-Fa-f]{6}$/.test(color)) return color;
+    if (/^#[0-9A-Fa-f]{3}$/.test(color)) {
+      return `#${color[1]}${color[1]}${color[2]}${color[2]}${color[3]}${color[3]}`;
+    }
+  }
+  if (TAILWIND_COLOR_MAP[color]) return TAILWIND_COLOR_MAP[color];
+  return '#818cf8';
+};
 
 export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
   isOpen,
@@ -470,6 +496,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
                       disabled={idx === 0}
                       onClick={() => handleMoveColumn(idx, 'up')}
                       className="p-1 rounded bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                      title="Move column up"
                     >
                       <ArrowUp className="w-3 h-3" />
                     </button>
@@ -478,30 +505,27 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
                       disabled={idx === columns.length - 1}
                       onClick={() => handleMoveColumn(idx, 'down')}
                       className="p-1 rounded bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                      title="Move column down"
                     >
                       <ArrowDown className="w-3 h-3" />
                     </button>
                   </div>
 
-                  {/* Color Dot Palette */}
-                  <div className="relative group shrink-0">
-                    <div
-                      title="Select column indicator color"
-                      className={`w-5 h-5 rounded-full ${col.colorDot || 'bg-indigo-400'} cursor-pointer ring-2 ring-slate-800 hover:scale-110 transition`}
+                  {/* Direct Color Figure Picker */}
+                  <label
+                    className="relative w-6 h-6 rounded-full shrink-0 cursor-pointer ring-2 ring-slate-700/90 hover:ring-white hover:scale-110 transition-all shadow-md overflow-hidden flex items-center justify-center group"
+                    style={{ backgroundColor: toHexColor(col.colorDot) }}
+                    title="Click to pick any color"
+                  >
+                    <input
+                      type="color"
+                      value={toHexColor(col.colorDot)}
+                      onChange={(e) => handleUpdateColumnColor(idx, e.target.value)}
+                      className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10"
+                      aria-label={`Change color for ${col.title || 'column'}`}
                     />
-                    <div className="absolute left-0 top-7 hidden group-hover:flex items-center space-x-1 p-1.5 bg-slate-900 border border-slate-700 rounded-xl shadow-xl z-20">
-                      {COLUMN_COLOR_OPTIONS.map((c) => (
-                        <button
-                          key={c.label}
-                          type="button"
-                          onClick={() => handleUpdateColumnColor(idx, c.value)}
-                          className={`w-4 h-4 rounded-full ${c.value} hover:scale-125 transition cursor-pointer ${
-                            col.colorDot === c.value ? 'ring-2 ring-white' : ''
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  </div>
+                    <Palette className="w-3 h-3 text-white/90 drop-shadow-sm opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                  </label>
 
                   {/* Title Input */}
                   <div className="flex-1 min-w-0">

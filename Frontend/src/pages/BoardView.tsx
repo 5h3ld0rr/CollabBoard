@@ -1510,20 +1510,6 @@ export const BoardView: React.FC = () => {
                   />
                 );
               })}
-
-              {!isReadOnly && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSettingsModalTab('columns');
-                    setIsSettingsModalOpen(true);
-                  }}
-                  className="h-32 min-w-60 rounded-2xl border-2 border-dashed border-slate-800/80 hover:border-indigo-500/50 hover:bg-slate-900/40 flex flex-col items-center justify-center space-y-1.5 text-slate-500 hover:text-indigo-400 transition cursor-pointer text-xs font-semibold shrink-0 p-4"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Manage / Add Column</span>
-                </button>
-              )}
             </div>
           </>
         )}

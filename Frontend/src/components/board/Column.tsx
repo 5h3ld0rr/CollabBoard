@@ -102,7 +102,16 @@ export const Column: React.FC<ColumnProps> = ({
       {/* Column Header */}
       <div className="flex items-center justify-between pb-3.5 mb-3.5 border-b border-slate-800/80">
         <div className="flex items-center space-x-2.5">
-          <div className={`w-2.5 h-2.5 rounded-full ${colorDot}`} />
+          <div
+            className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+              !colorDot?.startsWith('#') && !colorDot?.startsWith('rgb') ? colorDot : ''
+            }`}
+            style={
+              colorDot?.startsWith('#') || colorDot?.startsWith('rgb')
+                ? { backgroundColor: colorDot }
+                : undefined
+            }
+          />
           <h3 data-testid={`column-header-${status}`} className="font-bold text-xs uppercase tracking-wider text-slate-200">
             {title}
           </h3>
