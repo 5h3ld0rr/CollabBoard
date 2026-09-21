@@ -5,10 +5,10 @@ describe('utils/device', () => {
   it('detects Windows and Chrome correctly', () => {
     const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
     const info = detectCurrentDevice(ua);
-    expect(info.os).toBe('Windows 11 / 10');
+    expect(info.os).toBe('Windows');
     expect(info.browser).toBe('Chrome');
     expect(info.iconType).toBe('laptop');
-    expect(info.device).toBe('Windows 11 / 10 • Chrome');
+    expect(info.device).toBe('Windows • Chrome');
   });
 
   it('detects macOS and Safari correctly', () => {

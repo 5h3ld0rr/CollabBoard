@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Mail,
@@ -21,6 +21,7 @@ import {
   Settings,
   Pencil,
   X,
+  Loader2,
 } from "lucide-react";
 import {
   Navbar,
@@ -35,6 +36,9 @@ import {
   updateWorkspace as apiUpdateWorkspace,
   deleteWorkspace as apiDeleteWorkspace,
   updatePassword as apiUpdatePassword,
+  getActiveSessions,
+  revokeSession as apiRevokeSession,
+  revokeOtherSessions as apiRevokeOtherSessions,
 } from "../api";
 import {
   getRandomGradient,
@@ -407,7 +411,7 @@ export const Profile: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
-  // Active device sessions state with dynamic device detection & localStorage persistence
+  // Active device sessions state backed by real backend sessions
   const [activeSessions, setActiveSessions] = useState<ActiveSession[]>(() => {
     const current = detectCurrentDevice();
     const isLocal =
@@ -415,67 +419,45 @@ export const Profile: React.FC = () => {
       (window.location.hostname === "localhost" ||
         window.location.hostname === "127.0.0.1");
 
-    const currentSession: ActiveSession = {
-      id: "current-session",
-      device: current.device,
-      browser: current.browser,
-      ip: isLocal ? "127.0.0.1" : "Client IP",
-      location: "Local Network",
-      lastActive: "Active Now",
-      isCurrent: true,
-      iconType: current.iconType,
-    };
-
-    if (typeof localStorage !== "undefined") {
-      const stored = localStorage.getItem("collabboard_active_sessions");
-      if (stored) {
-        try {
-          const parsed: ActiveSession[] = JSON.parse(stored);
-          const others = parsed.filter((s) => !s.isCurrent);
-          return [currentSession, ...others];
-        } catch {
-          // ignore corrupted data
-        }
-      }
-    }
-
-    // Realistic secondary sessions for interactive testing and management
     return [
-      currentSession,
       {
-        id: "sess-mobile-ios",
-        device: "iOS • Safari Mobile",
-        browser: "Safari Mobile",
-        ip: "192.168.1.104",
-        location: "Mobile Device",
-        lastActive: "2 hours ago",
-        isCurrent: false,
-        iconType: "smartphone",
-      },
-      {
-        id: "sess-macos-chrome",
-        device: "macOS • Chrome",
-        browser: "Chrome",
-        ip: "192.168.1.145",
-        location: "Office Workstation",
-        lastActive: "Yesterday at 4:15 PM",
-        isCurrent: false,
-        iconType: "laptop",
+        id: "current-session",
+        device: current.device,
+        browser: current.browser,
+        ip: isLocal ? "127.0.0.1" : "Client IP",
+        location: "Current Device",
+        lastActive: "Active Now",
+        isCurrent: true,
+        iconType: current.iconType,
       },
     ];
   });
+  const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+  const [isRevokingOther, setIsRevokingOther] = useState(false);
+  const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
 
-  // Sync active sessions to localStorage
-  useEffect(() => {
+  const fetchActiveSessions = useCallback(async () => {
     try {
-      localStorage.setItem(
-        "collabboard_active_sessions",
-        JSON.stringify(activeSessions),
-      );
-    } catch {
-      // ignore
+      setIsLoadingSessions(true);
+      const sessions = await getActiveSessions();
+      if (sessions && sessions.length > 0) {
+        const hasCurrent = sessions.some((s) => s.isCurrent);
+        if (!hasCurrent) {
+          sessions[0].isCurrent = true;
+          sessions[0].lastActive = "Active Now";
+        }
+        setActiveSessions(sessions);
+      }
+    } catch (err) {
+      console.error("Failed to load active sessions:", err);
+    } finally {
+      setIsLoadingSessions(false);
     }
-  }, [activeSessions]);
+  }, []);
+
+  useEffect(() => {
+    fetchActiveSessions();
+  }, [fetchActiveSessions]);
 
   // Toast feedback state
   const [toastMessage, setToastMessage] = useState<{
@@ -537,21 +519,37 @@ export const Profile: React.FC = () => {
 
   const otherSessionsCount = activeSessions.filter((s) => !s.isCurrent).length;
 
-  const handleRevokeOtherSessions = () => {
-    if (otherSessionsCount === 0) {
+  const handleRevokeOtherSessions = async () => {
+    if (otherSessionsCount === 0 || isRevokingOther) {
       showToast("No other active sessions to revoke", "info");
       return;
     }
-    setActiveSessions((prev) => prev.filter((s) => s.isCurrent));
-    showToast(
-      `Revoked ${otherSessionsCount} other session${otherSessionsCount > 1 ? "s" : ""} successfully!`,
-      "success",
-    );
+    try {
+      setIsRevokingOther(true);
+      const res = await apiRevokeOtherSessions();
+      await fetchActiveSessions();
+      showToast(
+        `Revoked ${res.revokedCount} other session${res.revokedCount > 1 ? "s" : ""} successfully!`,
+        "success",
+      );
+    } catch (err: any) {
+      showToast(err?.message || "Failed to revoke other sessions", "error");
+    } finally {
+      setIsRevokingOther(false);
+    }
   };
 
-  const handleLogoutSession = (sessionId: string, deviceName: string) => {
-    setActiveSessions((prev) => prev.filter((s) => s.id !== sessionId));
-    showToast(`${deviceName} session logged out successfully!`, "info");
+  const handleLogoutSession = async (sessionId: string, deviceName: string) => {
+    try {
+      setRevokingSessionId(sessionId);
+      await apiRevokeSession(sessionId);
+      await fetchActiveSessions();
+      showToast(`${deviceName} session logged out successfully!`, "info");
+    } catch (err: any) {
+      showToast(err?.message || `Failed to log out ${deviceName}`, "error");
+    } finally {
+      setRevokingSessionId(null);
+    }
   };
 
   const toggleTaskStatus = (taskId: string) => {
@@ -1510,66 +1508,87 @@ export const Profile: React.FC = () => {
                 <Button
                   variant="secondary"
                   size="sm"
-                  disabled={otherSessionsCount === 0}
+                  disabled={otherSessionsCount === 0 || isRevokingOther}
                   onClick={handleRevokeOtherSessions}
-                  className={otherSessionsCount === 0 ? "opacity-50 cursor-not-allowed" : ""}
+                  className={otherSessionsCount === 0 || isRevokingOther ? "opacity-50 cursor-not-allowed" : ""}
                 >
-                  {otherSessionsCount > 0
-                    ? `Revoke Other Sessions (${otherSessionsCount})`
-                    : "No Other Sessions"}
+                  {isRevokingOther ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Revoking...</span>
+                    </span>
+                  ) : otherSessionsCount > 0 ? (
+                    `Revoke Other Sessions (${otherSessionsCount})`
+                  ) : (
+                    "No Other Sessions"
+                  )}
                 </Button>
               </div>
 
               <div className="space-y-3">
-                {activeSessions.map((session) => (
-                  <div
-                    key={session.id}
-                    className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/70 flex items-center justify-between text-xs transition-all hover:border-slate-700/80"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div
-                        className={`p-2 rounded-xl ${
-                          session.isCurrent
-                            ? "bg-indigo-500/10 text-indigo-400"
-                            : "bg-slate-800 text-slate-400"
-                        }`}
-                      >
-                        {session.iconType === "laptop" ? (
-                          <Laptop className="w-4 h-4" />
-                        ) : (
-                          <Smartphone className="w-4 h-4" />
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-semibold text-slate-200 flex items-center space-x-2">
-                          <span>{session.device}</span>
-                          {session.isCurrent && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400">
-                              Current Device
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-[11px] text-slate-400 mt-0.5">
-                          {session.location} • IP: {session.ip}
-                          {!session.isCurrent && ` • ${session.lastActive}`}
-                        </p>
-                      </div>
-                    </div>
-                    {session.isCurrent ? (
-                      <span className="text-[11px] font-medium text-emerald-400 inline-flex items-center space-x-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        <span>Active Now</span>
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => handleLogoutSession(session.id, session.device)}
-                        className="text-xs text-rose-400 hover:text-rose-300 font-medium px-2 py-1 rounded-lg hover:bg-rose-500/10 transition-colors cursor-pointer"
-                      >
-                        Log Out
-                      </button>
-                    )}
+                {isLoadingSessions && activeSessions.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                    <span>Loading active sessions...</span>
                   </div>
-                ))}
+                ) : (
+                  activeSessions.map((session) => (
+                    <div
+                      key={session.id}
+                      className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/70 flex items-center justify-between text-xs transition-all hover:border-slate-700/80"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div
+                          className={`p-2 rounded-xl ${
+                            session.isCurrent
+                              ? "bg-indigo-500/10 text-indigo-400"
+                              : "bg-slate-800 text-slate-400"
+                          }`}
+                        >
+                          {session.iconType === "laptop" ? (
+                            <Laptop className="w-4 h-4" />
+                          ) : (
+                            <Smartphone className="w-4 h-4" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-200 flex items-center space-x-2">
+                            <span>{session.device}</span>
+                            {session.isCurrent && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400">
+                                Current Device
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            {session.location} • IP:{" "}
+                            {session.ip === "::1" || session.ip === "::"
+                              ? "127.0.0.1"
+                              : session.ip}
+                            {!session.isCurrent && ` • ${session.lastActive}`}
+                          </p>
+                        </div>
+                      </div>
+                      {session.isCurrent ? (
+                        <span className="text-[11px] font-medium text-emerald-400 inline-flex items-center space-x-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          <span>Active Now</span>
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleLogoutSession(session.id, session.device)}
+                          disabled={revokingSessionId === session.id}
+                          className="text-xs text-rose-400 hover:text-rose-300 font-medium px-2 py-1 rounded-lg hover:bg-rose-500/10 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+                        >
+                          {revokingSessionId === session.id && (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          )}
+                          <span>Log Out</span>
+                        </button>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>

@@ -17,4 +17,8 @@ router.patch('/profile', authenticate, validate(updateProfileSchema, 'body'), as
 router.put('/password', authenticate, validate(updatePasswordSchema, 'body'), asyncHandler(controller.updatePassword));
 router.patch('/password', authenticate, validate(updatePasswordSchema, 'body'), asyncHandler(controller.updatePassword));
 
+router.get('/sessions', authenticate, asyncHandler(controller.getSessions));
+router.delete('/sessions/:sessionId', authenticate, asyncHandler(controller.revokeSession));
+router.post('/sessions/revoke-others', authenticate, asyncHandler(controller.revokeOtherSessions));
+
 export default router;

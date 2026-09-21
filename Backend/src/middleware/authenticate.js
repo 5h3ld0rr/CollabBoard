@@ -1,12 +1,13 @@
 import jwt from 'jsonwebtoken';
 import { config } from '../config.js';
 import { AppError } from '../utils/AppError.js';
+import { sessionRepo } from '../repos/sessionRepo.js';
 
 /**
  * Middleware to verify JWT token from Authorization header or HTTP-only cookie
  * and attach user payload to req.user
  */
-export function authenticate(req, res, next) {
+export async function authenticate(req, res, next) {
   let token = null;
 
   if (req.headers.authorization) {
@@ -26,9 +27,19 @@ export function authenticate(req, res, next) {
 
   try {
     const payload = jwt.verify(token, config.jwtSecret);
-    req.user = { id: payload.sub, email: payload.email };
+    if (payload.sessionId) {
+      const isRevoked = await sessionRepo.isSessionRevoked(payload.sessionId);
+      if (isRevoked) {
+        return next(new AppError('Session has been revoked', 401, 'SESSION_REVOKED'));
+      }
+      sessionRepo.updateLastActive(payload.sessionId);
+    }
+    req.user = { id: payload.sub, email: payload.email, sessionId: payload.sessionId };
     next();
   } catch (err) {
+    if (err instanceof AppError) {
+      return next(err);
+    }
     const expired = err.name === 'TokenExpiredError';
     next(
       new AppError(
@@ -39,3 +50,4 @@ export function authenticate(req, res, next) {
     );
   }
 }
+

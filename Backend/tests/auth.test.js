@@ -223,6 +223,145 @@ describe('Authentication API', () => {
     });
   });
 
+  describe('Active Device Sessions API', () => {
+    it('creates a session on login and lists it via GET /api/auth/sessions', async () => {
+      const passwordHash = await bcrypt.hash('THE_REAL_PASSWORD', 10);
+      await User.create({
+        name: 'Session User',
+        email: 'sessionuser@nsbm.lk',
+        passwordHash,
+      });
+
+      const loginRes = await request(app)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', '10.0.1.1')
+        .set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36')
+        .send({ email: 'sessionuser@nsbm.lk', password: 'THE_REAL_PASSWORD' });
+
+      expect(loginRes.status).toBe(200);
+      const token = loginRes.body.token || loginRes.body.data?.token;
+
+      const sessionsRes = await request(app)
+        .get('/api/auth/sessions')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(sessionsRes.status).toBe(200);
+      const sessions = sessionsRes.body.data;
+      expect(Array.isArray(sessions)).toBe(true);
+      expect(sessions.length).toBe(1);
+      expect(sessions[0].isCurrent).toBe(true);
+      expect(sessions[0].device).toContain('Windows');
+      expect(sessions[0].browser).toBe('Chrome');
+      expect(sessions[0].iconType).toBe('laptop');
+    });
+
+    it('revokes a specific session and blocks subsequent requests with 401 SESSION_REVOKED', async () => {
+      const passwordHash = await bcrypt.hash('THE_REAL_PASSWORD', 10);
+      await User.create({
+        name: 'Revoke User',
+        email: 'revokeuser@nsbm.lk',
+        passwordHash,
+      });
+
+      // Login first device
+      const login1 = await request(app)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', '10.0.2.1')
+        .set('User-Agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)')
+        .send({ email: 'revokeuser@nsbm.lk', password: 'THE_REAL_PASSWORD' });
+      expect(login1.status).toBe(200);
+      const token1 = login1.body.token || login1.body.data?.token;
+
+      // Login second device
+      const login2 = await request(app)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', '10.0.2.2')
+        .set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
+        .send({ email: 'revokeuser@nsbm.lk', password: 'THE_REAL_PASSWORD' });
+      expect(login2.status).toBe(200);
+      const token2 = login2.body.token || login2.body.data?.token;
+
+      // Device 2 lists sessions and finds device 1's sessionId
+      const listRes = await request(app)
+        .get('/api/auth/sessions')
+        .set('Authorization', `Bearer ${token2}`);
+      expect(listRes.status).toBe(200);
+      const otherSession = listRes.body.data.find((s) => !s.isCurrent);
+      expect(otherSession).toBeDefined();
+
+      // Device 2 revokes device 1's session
+      const revokeRes = await request(app)
+        .delete(`/api/auth/sessions/${otherSession.id}`)
+        .set('Authorization', `Bearer ${token2}`);
+      expect(revokeRes.status).toBe(200);
+
+      // Device 1 tries to make an authenticated request -> must be rejected with 401 SESSION_REVOKED
+      const checkRes = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${token1}`);
+      expect(checkRes.status).toBe(401);
+      const code = checkRes.body.code || checkRes.body.error?.code;
+      expect(code).toBe('SESSION_REVOKED');
+    });
+
+    it('revokes all other sessions except current via POST /api/auth/sessions/revoke-others', async () => {
+      const passwordHash = await bcrypt.hash('THE_REAL_PASSWORD', 10);
+      await User.create({
+        name: 'Multi Session User',
+        email: 'multisession@nsbm.lk',
+        passwordHash,
+      });
+
+      // Login 3 sessions
+      const login1 = await request(app)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', '10.0.3.1')
+        .send({ email: 'multisession@nsbm.lk', password: 'THE_REAL_PASSWORD' });
+      expect(login1.status).toBe(200);
+      const token1 = login1.body.token || login1.body.data?.token;
+
+      const login2 = await request(app)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', '10.0.3.2')
+        .send({ email: 'multisession@nsbm.lk', password: 'THE_REAL_PASSWORD' });
+      expect(login2.status).toBe(200);
+      const token2 = login2.body.token || login2.body.data?.token;
+
+      const login3 = await request(app)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', '10.0.3.3')
+        .send({ email: 'multisession@nsbm.lk', password: 'THE_REAL_PASSWORD' });
+      expect(login3.status).toBe(200);
+      const token3 = login3.body.token || login3.body.data?.token;
+
+      // Current session is device 3 -> revoke others
+      const revokeAllRes = await request(app)
+        .post('/api/auth/sessions/revoke-others')
+        .set('Authorization', `Bearer ${token3}`);
+      expect(revokeAllRes.status).toBe(200);
+      expect(revokeAllRes.body.revokedCount).toBe(2);
+
+      // Device 1 and 2 should now be revoked
+      const check1 = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${token1}`);
+      expect(check1.status).toBe(401);
+      expect(check1.body.code || check1.body.error?.code).toBe('SESSION_REVOKED');
+
+      const check2 = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${token2}`);
+      expect(check2.status).toBe(401);
+      expect(check2.body.code || check2.body.error?.code).toBe('SESSION_REVOKED');
+
+      // Device 3 is still active
+      const check3 = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${token3}`);
+      expect(check3.status).toBe(200);
+    });
+  });
+
   describe('Rate Limiter Security Guard', () => {
     it('returns 429 when exceeding login attempt threshold from same IP', async () => {
       const clientIp = '198.51.100.42';
