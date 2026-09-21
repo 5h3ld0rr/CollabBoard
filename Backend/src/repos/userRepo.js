@@ -23,6 +23,7 @@ export function publicUser(user) {
     id,
     initials: userObj.initials || getInitials(safeUser.name),
     color: userObj.color || getRandomColor(),
+    avatar: userObj.avatar || '',
     ...safeUser,
     favoriteBoardIds: Array.isArray(userObj.favoriteBoardIds) ? userObj.favoriteBoardIds.map(String) : [],
     createdAt: (() => {

@@ -80,7 +80,7 @@ export async function getMe(userId) {
 /**
  * Update authenticated user profile
  */
-export async function updateProfile(userId, { name, email, color, subscriptionPlan, billingCycle }) {
+export async function updateProfile(userId, { name, email, color, avatar, subscriptionPlan, billingCycle }) {
   const user = await userRepo.findById(userId);
   if (!user) {
     throw new NotFoundError('User');
@@ -92,6 +92,9 @@ export async function updateProfile(userId, { name, email, color, subscriptionPl
   }
   if (color !== undefined) {
     updates.color = color;
+  }
+  if (avatar !== undefined) {
+    updates.avatar = avatar;
   }
   if (subscriptionPlan !== undefined) {
     updates.subscriptionPlan = subscriptionPlan;

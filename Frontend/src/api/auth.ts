@@ -24,6 +24,7 @@ export interface UpdateProfileInput {
   name?: string;
   email?: string;
   color?: string;
+  avatar?: string;
   subscriptionPlan?: 'basic' | 'pro';
   billingCycle?: 'monthly' | 'yearly';
 }

@@ -162,6 +162,34 @@ describe('Authentication API', () => {
       expect(res.status).toBe(200);
       expect(res.body.message).toBe('Logged out successfully');
     });
+
+    it('updates user profile including avatar', async () => {
+      const passwordHash = await bcrypt.hash('Password123!', 10);
+      const user = await User.create({
+        name: 'Avatar User',
+        email: 'avatar@nsbm.lk',
+        passwordHash,
+      });
+
+      const token = jwt.sign({ sub: user._id.toString(), email: user.email }, config.jwtSecret);
+
+      const res = await request(app)
+        .patch('/api/auth/profile')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          name: 'Updated Avatar User',
+          avatar: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        });
+
+      expect(res.status).toBe(200);
+      const updated = res.body.data?.user || res.body.user;
+      expect(updated.name).toBe('Updated Avatar User');
+      expect(updated.avatar).toContain('data:image/png;base64,');
+
+      // Verify db document
+      const dbUser = await User.findById(user._id);
+      expect(dbUser.avatar).toContain('data:image/png;base64,');
+    });
   });
 
   describe('PUT /api/auth/password', () => {
