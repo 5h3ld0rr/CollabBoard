@@ -155,6 +155,7 @@ export interface AppNotification {
   type: NotificationType;
   linkUrl?: string;
   actor?: {
+    id?: string;
     name: string;
     avatar?: string;
     initials: string;

@@ -10,7 +10,7 @@ async function enrichWorkspace(workspace, userId, sharedBoardsCount = 0) {
   if (!workspace) return null;
   const boardIds = Array.isArray(workspace.boards) ? workspace.boards.map(String) : [];
   const ownedBoardCount = boardIds.length;
-  const sharedCount = typeof sharedBoardsCount === 'number' ? sharedBoardsCount : 0;
+  const sharedCount = sharedBoardsCount || 0;
 
   return {
     ...workspace,
@@ -46,15 +46,12 @@ export async function assertWorkspaceAccess(workspaceId, userId) {
  */
 export async function listWorkspaces(userId) {
   const workspaces = await workspaceRepo.listByUserId(userId);
-  if (!userId || workspaces.length === 0) {
-    return Promise.all(workspaces.map((w) => enrichWorkspace(w, userId, 0)));
+  const uid = userId ? String(userId) : null;
+  let sharedCount = 0;
+  if (uid) {
+    const userBoards = await boardRepo.listByUserId(uid);
+    sharedCount = userBoards.filter((b) => String(b.ownerId) !== uid).length;
   }
-
-  // Get user's shared boards (boards user is a member of, but not owner)
-  const userBoards = await boardRepo.listByUserId(userId);
-  const uid = String(userId);
-  const sharedBoards = userBoards.filter((b) => b.ownerId && String(b.ownerId) !== uid);
-  const sharedCount = sharedBoards.length;
 
   return Promise.all(
     workspaces.map((w, index) =>
@@ -68,15 +65,11 @@ export async function listWorkspaces(userId) {
  */
 export async function getWorkspace(workspaceId, userId) {
   const workspace = await assertWorkspaceAccess(workspaceId, userId);
+  const uid = userId ? String(userId) : null;
   let sharedCount = 0;
-  if (userId) {
-    const userBoards = await boardRepo.listByUserId(userId);
-    const uid = String(userId);
-    const sharedBoards = userBoards.filter((b) => b.ownerId && String(b.ownerId) !== uid);
-    const userWorkspaces = await workspaceRepo.listByUserId(userId);
-    if (userWorkspaces.length > 0 && String(userWorkspaces[0].id) === String(workspaceId)) {
-      sharedCount = sharedBoards.length;
-    }
+  if (uid) {
+    const userBoards = await boardRepo.listByUserId(uid);
+    sharedCount = userBoards.filter((b) => String(b.ownerId) !== uid).length;
   }
   return enrichWorkspace(workspace, userId, sharedCount);
 }

@@ -60,11 +60,6 @@ const TAILWIND_COLOR_MAP: Record<string, string> = {
   'bg-red-400': '#f87171',
 };
 
-const isCustomColor = (color?: string): boolean => {
-  if (!color) return false;
-  return color.startsWith('#') || color.startsWith('rgb') || color.startsWith('hsl');
-};
-
 const toHexColor = (color?: string): string => {
   if (!color) return '#818cf8';
   if (color.startsWith('#')) {
