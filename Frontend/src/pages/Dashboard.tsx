@@ -177,7 +177,7 @@ export const Dashboard: React.FC = () => {
 
   const handleCreateBoard = async (newBoard: Board) => {
     const targetWs = workspaces.find((w) => w.id === newBoard.workspaceId) || currentWorkspace;
-    const currentCount = targetWs?.boardCount ?? currentWorkspaceBoards.length;
+    const currentCount = targetWs?.ownedBoardCount ?? targetWs?.boards?.length ?? currentWorkspaceBoards.length;
     if (!isPro && currentCount >= PLAN_LIMITS.basic.maxBoardsPerWorkspace) {
       showToast(`Board limit reached for this workspace (${currentCount}/${PLAN_LIMITS.basic.maxBoardsPerWorkspace}). Upgrade to Pro for unlimited boards.`);
       return;
@@ -186,7 +186,11 @@ export const Dashboard: React.FC = () => {
     setWorkspaces((prev) =>
       prev.map((w) =>
         w.id === newBoard.workspaceId
-          ? { ...w, boardCount: (w.boardCount || 0) + 1 }
+          ? {
+              ...w,
+              boardCount: (w.boardCount || 0) + 1,
+              ownedBoardCount: (w.ownedBoardCount || 0) + 1,
+            }
           : w
       )
     );

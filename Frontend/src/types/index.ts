@@ -85,6 +85,8 @@ export interface Workspace {
   boards?: string[];
   boardIds?: string[];
   boardCount?: number;
+  ownedBoardCount?: number;
+  sharedBoardCount?: number;
   color?: string;
   memberCount?: number;
   ownerId?: string;

@@ -107,8 +107,13 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
                           <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
                         )}
                       </div>
-                      <div className="flex items-center space-x-2 text-[10px] text-slate-400 font-normal">
+                      <div className="flex items-center space-x-1.5 text-[10px] text-slate-400 font-normal">
                         <span>{ws.boardCount || 0} {ws.boardCount === 1 ? 'board' : 'boards'}</span>
+                        {Boolean(ws.sharedBoardCount && ws.sharedBoardCount > 0) && (
+                          <span className="text-[9px] text-indigo-400 font-medium bg-indigo-500/10 px-1.5 py-0.2 rounded-full border border-indigo-500/20">
+                            {ws.sharedBoardCount} shared
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>

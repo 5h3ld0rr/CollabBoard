@@ -515,6 +515,33 @@ export const Profile: React.FC = () => {
     load();
   }, []);
 
+  // Calculate live display board counts per workspace, including shared boards
+  const getWorkspaceStats = useCallback(
+    (ws: Workspace, index: number) => {
+      const uid = currentUser?.id ? String(currentUser.id) : "";
+      const sharedBoards = contextBoards.filter(
+        (b) => b.ownerId && String(b.ownerId) !== uid
+      );
+      const sharedCount =
+        ws.sharedBoardCount !== undefined
+          ? ws.sharedBoardCount
+          : index === 0
+            ? sharedBoards.length
+            : 0;
+      const ownedCount =
+        ws.ownedBoardCount !== undefined
+          ? ws.ownedBoardCount
+          : ws.boards?.length ?? (ws.boardCount || 0);
+      const totalCount =
+        ws.boardCount !== undefined && ws.sharedBoardCount !== undefined
+          ? ws.boardCount
+          : ownedCount + sharedCount;
+
+      return { totalCount, sharedCount };
+    },
+    [contextBoards, currentUser?.id]
+  );
+
   // Security state
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -1306,55 +1333,65 @@ export const Profile: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {workspaces.map((ws: Workspace) => (
-                <div
-                  key={ws.id}
-                  className="p-5 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl hover:border-slate-700 transition-all flex flex-col justify-between space-y-4 group"
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div
-                        className={`w-10 h-10 rounded-xl bg-linear-to-br ${ws.color || "from-indigo-600 to-violet-600"} flex items-center justify-center text-white font-bold text-sm shadow-md`}
-                      >
-                        <Building2 className="w-5 h-5 text-white" />
+              {workspaces.map((ws: Workspace, index: number) => {
+                const { totalCount, sharedCount } = getWorkspaceStats(ws, index);
+                return (
+                  <div
+                    key={ws.id}
+                    className="p-5 rounded-3xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl hover:border-slate-700 transition-all flex flex-col justify-between space-y-4 group"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div
+                          className={`w-10 h-10 rounded-xl bg-linear-to-br ${ws.color || "from-indigo-600 to-violet-600"} flex items-center justify-center text-white font-bold text-sm shadow-md`}
+                        >
+                          <Building2 className="w-5 h-5 text-white" />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setManagingWorkspace(ws);
+                            setIsManageWorkspaceModalOpen(true);
+                          }}
+                          className="p-1.5 rounded-lg bg-slate-950/60 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition cursor-pointer"
+                          title="Workspace Settings"
+                        >
+                          <Settings className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setManagingWorkspace(ws);
-                          setIsManageWorkspaceModalOpen(true);
-                        }}
-                        className="p-1.5 rounded-lg bg-slate-950/60 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition cursor-pointer"
-                        title="Workspace Settings"
+
+                      <div>
+                        <h3 className="text-sm font-bold text-white group-hover:text-indigo-400 transition-colors">
+                          {ws.name}
+                        </h3>
+                        <p className="text-xs text-slate-400 mt-1 line-clamp-2">
+                          {ws.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-400">
+                      <div className="flex items-center space-x-2">
+                        <span>
+                          {totalCount} {totalCount === 1 ? "board" : "boards"}
+                        </span>
+                        {sharedCount > 0 && (
+                          <span className="text-[10px] font-medium text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded-full border border-indigo-500/20">
+                            {sharedCount} shared
+                          </span>
+                        )}
+                      </div>
+                      <Link
+                        to="/dashboard"
+                        className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center space-x-1"
                       >
-                        <Settings className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
-                    <div>
-                      <h3 className="text-sm font-bold text-white group-hover:text-indigo-400 transition-colors">
-                        {ws.name}
-                      </h3>
-                      <p className="text-xs text-slate-400 mt-1 line-clamp-2">
-                        {ws.description}
-                      </p>
+                        <span>Enter</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </Link>
                     </div>
                   </div>
-
-                  <div className="pt-3 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-400">
-                    <div className="flex items-center space-x-3">
-                      <span>{ws.boardCount} {ws.boardCount === 1 ? 'board' : 'boards'}</span>
-                    </div>
-                    <Link
-                      to="/dashboard"
-                      className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center space-x-1"
-                    >
-                      <span>Enter</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </Link>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

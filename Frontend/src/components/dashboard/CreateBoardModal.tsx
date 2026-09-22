@@ -51,7 +51,7 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
   const plan = subscriptionPlan ?? auth?.user?.subscriptionPlan ?? 'basic';
   const isPro = plan === 'pro';
   const selectedWorkspace = workspaces.find((w) => w.id === workspaceId);
-  const currentBoardCount = selectedWorkspace?.boardCount ?? 0;
+  const currentBoardCount = selectedWorkspace?.ownedBoardCount ?? selectedWorkspace?.boards?.length ?? selectedWorkspace?.boardCount ?? 0;
   const isLimitReached = !isPro && currentBoardCount >= PLAN_LIMITS.basic.maxBoardsPerWorkspace;
 
   useEffect(() => {
