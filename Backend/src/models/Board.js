@@ -16,6 +16,15 @@ const columnSchema = new mongoose.Schema(
       required: true,
       default: 0,
     },
+    statusKey: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    colorDot: {
+      type: String,
+      default: 'bg-indigo-400',
+    },
   },
   { _id: true }
 );
@@ -66,9 +75,9 @@ const boardSchema = new mongoose.Schema(
     columns: {
       type: [columnSchema],
       default: () => [
-        { title: 'To Do', position: 0 },
-        { title: 'In Progress', position: 1 },
-        { title: 'Done', position: 2 },
+        { title: 'To Do', position: 0, statusKey: 'todo', colorDot: 'bg-slate-400' },
+        { title: 'In Progress', position: 1, statusKey: 'in-progress', colorDot: 'bg-indigo-400' },
+        { title: 'Done', position: 2, statusKey: 'done', colorDot: 'bg-emerald-400' },
       ],
     },
     shareRevokedAt: {

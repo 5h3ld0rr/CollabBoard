@@ -1,5 +1,7 @@
 import * as authService from '../services/authService.js';
+import { userRepo } from '../repos/userRepo.js';
 import { config } from '../config.js';
+import { detectDeviceFromRequest } from '../utils/deviceDetector.js';
 
 /**
  * Build cookie configuration.
@@ -30,7 +32,8 @@ export async function register(req, res) {
 }
 
 export async function login(req, res) {
-  const result = await authService.login(req.body);
+  const clientInfo = detectDeviceFromRequest(req);
+  const result = await authService.login(req.body, clientInfo);
   res.cookie('token', result.token, getCookieOptions(result.rememberMe));
   res.status(200).json({
     ...result,
@@ -57,6 +60,13 @@ export async function getMe(req, res) {
   });
 }
 
+export async function getUsers(req, res) {
+  const users = await userRepo.list();
+  res.status(200).json({
+    data: users,
+  });
+}
+
 export async function updateProfile(req, res) {
   const updated = await authService.updateProfile(req.user.id, req.body);
   res.status(200).json({
@@ -71,3 +81,22 @@ export async function updatePassword(req, res) {
     data: result,
   });
 }
+
+export async function getSessions(req, res) {
+  const clientInfo = detectDeviceFromRequest(req);
+  const sessions = await authService.getActiveSessions(req.user.id, req.user.sessionId, clientInfo);
+  res.status(200).json({
+    data: sessions,
+  });
+}
+
+export async function revokeSession(req, res) {
+  const result = await authService.revokeSession(req.user.id, req.params.sessionId);
+  res.status(200).json(result);
+}
+
+export async function revokeOtherSessions(req, res) {
+  const result = await authService.revokeOtherSessions(req.user.id, req.user.sessionId);
+  res.status(200).json(result);
+}
+

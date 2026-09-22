@@ -38,6 +38,12 @@ export async function enrichBoard(board, userId = null, preloadedUser = null) {
   const populatedMembers = await Promise.all(
     rawMembers.map(async (m, idx) => {
       if (m && typeof m === 'object' && 'name' in m && m.name) {
+        if (!m.avatar && (m.id || m.email)) {
+          const u = (m.id ? await userRepo.findById(m.id) : null) || (m.email ? await userRepo.findByEmail(m.email) : null);
+          if (u?.avatar) {
+            return { ...m, avatar: u.avatar };
+          }
+        }
         return m;
       }
       const memberId = String(typeof m === 'object' && m !== null ? (m.email || m.id) : m);
@@ -61,6 +67,7 @@ export async function enrichBoard(board, userId = null, preloadedUser = null) {
           email: user.email,
           initials,
           color,
+          avatar: user.avatar || '',
           boardRole,
           role: boardRole,
         };
@@ -75,6 +82,7 @@ export async function enrichBoard(board, userId = null, preloadedUser = null) {
         email: memberId.includes('@') ? memberId : (typeof m === 'object' && m?.email ? m.email : undefined),
         initials,
         color: 'from-indigo-600 to-violet-600',
+        avatar: (typeof m === 'object' && m?.avatar) || '',
         boardRole,
         role: boardRole,
       };

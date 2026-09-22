@@ -324,5 +324,69 @@ describe('Workspace API', () => {
       const ws1AfterData = ws1AfterRes.body.data || ws1AfterRes.body;
       expect(ws1AfterData.boards).not.toContain(boardId);
     });
+
+    it('includes shared boards in workspace boardCount when user is a collaborator', async () => {
+      const owner = authHeader();
+      const collaborator = authHeader();
+
+      // Owner creates a board with collaborator added
+      const createBoardRes = await request(app)
+        .post('/api/boards')
+        .set(owner.header)
+        .send({
+          title: 'Shared Project',
+          members: [collaborator.userId],
+        });
+      expect(createBoardRes.status).toBe(201);
+
+      // Collaborator lists workspaces
+      const collabWsRes = await request(app)
+        .get('/api/workspaces')
+        .set(collaborator.header);
+
+      expect(collabWsRes.status).toBe(200);
+      const collabWorkspaces = collabWsRes.body.data || collabWsRes.body;
+      expect(collabWorkspaces.length).toBeGreaterThan(0);
+      expect(collabWorkspaces[0].sharedBoardCount).toBe(1);
+      expect(collabWorkspaces[0].boardCount).toBeGreaterThanOrEqual(1);
+
+      // Collaborator gets single workspace by id
+      const collabSingleRes = await request(app)
+        .get(`/api/workspaces/${collabWorkspaces[0].id}`)
+        .set(collaborator.header);
+
+      expect(collabSingleRes.status).toBe(200);
+      const collabSingle = collabSingleRes.body.data || collabSingleRes.body;
+      expect(collabSingle.sharedBoardCount).toBe(1);
+      expect(collabSingle.boardCount).toBeGreaterThanOrEqual(1);
+    });
+
+    it('returns 403 when user tries to access, update, or delete another user\'s workspace', async () => {
+      const user1 = authHeader();
+      const user2 = authHeader();
+
+      const createRes = await request(app)
+        .post('/api/workspaces')
+        .set(user1.header)
+        .send({ name: 'Private Space' });
+      expect(createRes.status).toBe(201);
+      const wsId = createRes.body.data.id;
+
+      const getRes = await request(app)
+        .get(`/api/workspaces/${wsId}`)
+        .set(user2.header);
+      expect(getRes.status).toBe(403);
+
+      const patchRes = await request(app)
+        .patch(`/api/workspaces/${wsId}`)
+        .set(user2.header)
+        .send({ name: 'Hacked Space' });
+      expect(patchRes.status).toBe(403);
+
+      const deleteRes = await request(app)
+        .delete(`/api/workspaces/${wsId}`)
+        .set(user2.header);
+      expect(deleteRes.status).toBe(403);
+    });
   });
 });

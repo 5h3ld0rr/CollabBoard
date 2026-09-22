@@ -2,12 +2,17 @@ import { AppError } from '../utils/AppError.js';
 
 const ipAttempts = new Map();
 
+export function resetAuthRateLimiter() {
+  ipAttempts.clear();
+}
+
 /**
  * In-memory rate limiter for authentication endpoints.
  * Enforces a cap of 5 login attempts per IP per minute to prevent brute-force attacks (Slide 57).
  */
 export function authRateLimiter(req, res, next) {
-  const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
+  const forwarded = req.headers['x-forwarded-for'];
+  const ip = forwarded ? forwarded.split(',')[0].trim() : (req.ip || req.socket?.remoteAddress || '127.0.0.1');
   const now = Date.now();
   const WINDOW_MS = 60 * 1000; // 1 minute
   const MAX_ATTEMPTS = 5;

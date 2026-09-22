@@ -12,9 +12,14 @@ router.post('/register', validate(registerSchema, 'body'), asyncHandler(controll
 router.post('/login', authRateLimiter, validate(loginSchema, 'body'), asyncHandler(controller.login));
 router.post('/logout', asyncHandler(controller.logout));
 router.get('/me', authenticate, asyncHandler(controller.getMe));
+router.get('/users', authenticate, asyncHandler(controller.getUsers));
 router.patch('/me', authenticate, validate(updateProfileSchema, 'body'), asyncHandler(controller.updateProfile));
 router.patch('/profile', authenticate, validate(updateProfileSchema, 'body'), asyncHandler(controller.updateProfile));
 router.put('/password', authenticate, validate(updatePasswordSchema, 'body'), asyncHandler(controller.updatePassword));
 router.patch('/password', authenticate, validate(updatePasswordSchema, 'body'), asyncHandler(controller.updatePassword));
+
+router.get('/sessions', authenticate, asyncHandler(controller.getSessions));
+router.delete('/sessions/:sessionId', authenticate, asyncHandler(controller.revokeSession));
+router.post('/sessions/revoke-others', authenticate, asyncHandler(controller.revokeOtherSessions));
 
 export default router;

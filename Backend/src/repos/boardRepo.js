@@ -24,12 +24,30 @@ function formatBoard(doc) {
     decodedRoles[k] = v;
   }
 
+  const defaultColumns = [
+    { id: 'col-todo', _id: 'col-todo', title: 'To Do', position: 0, statusKey: 'todo', colorDot: 'bg-slate-400' },
+    { id: 'col-in-progress', _id: 'col-in-progress', title: 'In Progress', position: 1, statusKey: 'in-progress', colorDot: 'bg-indigo-400' },
+    { id: 'col-done', _id: 'col-done', title: 'Done', position: 2, statusKey: 'done', colorDot: 'bg-emerald-400' },
+  ];
+
+  const columns = Array.isArray(obj.columns) && obj.columns.length > 0
+    ? obj.columns.map((c, idx) => ({
+        id: String(c.id || c._id || `col-${idx}`),
+        _id: String(c._id || c.id || `col-${idx}`),
+        title: c.title,
+        position: typeof c.position === 'number' ? c.position : idx,
+        statusKey: c.statusKey || (c.title ? c.title.toLowerCase().replace(/\s+/g, '-') : 'column'),
+        colorDot: c.colorDot || 'bg-indigo-400',
+      })).sort((a, b) => a.position - b.position)
+    : defaultColumns;
+
   return {
     ...rest,
     id: String(obj.id || _id),
     ownerId: String(obj.ownerId),
     members: Array.isArray(obj.members) ? obj.members.map(String) : [],
     memberRoles: decodedRoles,
+    columns,
     stats: obj.stats || { totalTasks: 0, todoCount: 0, inProgressCount: 0, doneCount: 0 },
   };
 }
@@ -97,6 +115,7 @@ export const boardRepo = {
     description = '',
     ownerId,
     members = [],
+    columns,
     color = 'from-indigo-600 to-violet-600',
     icon = 'Kanban',
     tags = ['General'],
@@ -112,6 +131,16 @@ export const boardRepo = {
       color,
       icon,
       tags: Array.isArray(tags) ? tags : ['General'],
+      ...(Array.isArray(columns) && columns.length > 0
+        ? {
+            columns: columns.map((col, index) => ({
+              title: col.title,
+              position: typeof col.position === 'number' ? col.position : index,
+              statusKey: col.statusKey || (col.title ? col.title.toLowerCase().replace(/\s+/g, '-') : 'column'),
+              colorDot: col.colorDot || 'bg-indigo-400',
+            })),
+          }
+        : {}),
       stats: { totalTasks: 0, todoCount: 0, inProgressCount: 0, doneCount: 0 },
     });
 
@@ -181,6 +210,21 @@ export const boardRepo = {
         sanitized[toSafeKey(k)] = v;
       }
       payload.memberRoles = sanitized;
+    }
+
+    // Sanitize columns if provided in update payload
+    if (Array.isArray(payload.columns)) {
+      payload.columns = payload.columns.map((col, index) => ({
+        ...(col._id && mongoose.Types.ObjectId.isValid(col._id)
+          ? { _id: col._id }
+          : col.id && mongoose.Types.ObjectId.isValid(col.id)
+          ? { _id: col.id }
+          : {}),
+        title: col.title,
+        position: typeof col.position === 'number' ? col.position : index,
+        statusKey: col.statusKey || (col.title ? col.title.toLowerCase().replace(/\s+/g, '-') : 'column'),
+        colorDot: col.colorDot || 'bg-indigo-400',
+      }));
     }
 
     const doc = await Board.findByIdAndUpdate(boardId, payload, { returnDocument: 'after' });

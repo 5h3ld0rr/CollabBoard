@@ -19,11 +19,7 @@ export function detectCurrentDevice(userAgent?: string): DeviceInfo {
   let os = 'Unknown OS';
   let iconType: 'laptop' | 'smartphone' = 'laptop';
 
-  if (/Windows NT 10.0/.test(ua)) {
-    os = 'Windows 11 / 10';
-  } else if (/Windows NT 6.3/.test(ua)) {
-    os = 'Windows 8.1';
-  } else if (/Windows/.test(ua)) {
+  if (/Windows/.test(ua)) {
     os = 'Windows';
   } else if (/Android/.test(ua)) {
     os = 'Android';

@@ -290,3 +290,30 @@ export function subscribeDirectNotification(
   };
 }
 
+/**
+ * Subscribes to real-time comment:created events on the board room
+ */
+export function subscribeCommentCreated(
+  callback: (payload: { boardId: string; taskId: string; comment: any; actorId: string; timestamp: string }) => void
+): () => void {
+  const socket = socketInstance || getSocketClient();
+  socket.on('comment:created', callback);
+  return () => {
+    socket.off('comment:created', callback);
+  };
+}
+
+/**
+ * Subscribes to real-time comment:deleted events on the board room
+ */
+export function subscribeCommentDeleted(
+  callback: (payload: { boardId: string; taskId: string; commentId: string; actorId: string; timestamp: string }) => void
+): () => void {
+  const socket = socketInstance || getSocketClient();
+  socket.on('comment:deleted', callback);
+  return () => {
+    socket.off('comment:deleted', callback);
+  };
+}
+
+

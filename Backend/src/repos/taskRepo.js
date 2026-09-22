@@ -96,7 +96,7 @@ export const taskRepo = {
         $set: payload,
         $inc: { version: 1 },
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     return doc ? doc.toJSON() : null;

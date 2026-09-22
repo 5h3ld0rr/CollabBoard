@@ -69,7 +69,13 @@ export async function update(req, res) {
             message: `${actorName} added you to board "${board.title}"`,
             type: 'board_invite',
             linkUrl: `/boards/${board.id}`,
-            actor: { id: req.user.id, name: actorName },
+            actor: {
+              id: req.user.id,
+              name: actorName,
+              avatar: actor?.avatar || '',
+              initials: actor?.initials || (actorName ? actorName.slice(0, 2).toUpperCase() : 'U'),
+              color: actor?.color || 'from-indigo-600 to-violet-600',
+            },
             meta: { boardId: board.id, role: m.boardRole || 'Editor' },
           });
         }
@@ -112,7 +118,13 @@ export async function addMember(req, res) {
         message: `${actorName} added you to board "${board.title}" as ${req.body.role || 'Editor'}`,
         type: 'board_invite',
         linkUrl: `/boards/${board.id}`,
-        actor: { id: req.user.id, name: actorName },
+        actor: {
+          id: req.user.id,
+          name: actorName,
+          avatar: actor?.avatar || '',
+          initials: actor?.initials || (actorName ? actorName.slice(0, 2).toUpperCase() : 'U'),
+          color: actor?.color || 'from-indigo-600 to-violet-600',
+        },
         meta: { boardId: board.id, role: req.body.role || 'Editor' },
       });
     }

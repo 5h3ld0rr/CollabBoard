@@ -42,7 +42,13 @@ import {
   saveBoardToCache,
   enqueueMutation,
 } from '../db';
-import { flushSyncQueue } from '../sync';
+import {
+  flushSyncQueue,
+  joinBoardRoom,
+  subscribeCommentCreated,
+  subscribeCommentDeleted,
+  subscribeBoardUpdated,
+} from '../sync';
 import { useAuth } from '../context/AuthContext';
 import type { Task, Board, TaskStatus, TaskPriority, User, TaskComment } from '../types';
 import { formatRelativeTime, getInitials, getProfileGradient, hasTaskChanged, hasBoardChanged } from '../utils';
@@ -237,6 +243,55 @@ export const TaskDetails: React.FC = () => {
       window.removeEventListener('online', handleOnline);
     };
   }, [id]);
+
+  // Real-time comments sync
+  useEffect(() => {
+    if (!task?.boardId || !task?.id) return;
+
+    joinBoardRoom(task.boardId);
+
+    const unsubCreated = subscribeCommentCreated((payload) => {
+      if (String(payload.taskId) !== String(task.id)) return;
+      if (payload.actorId && authUser?.id && String(payload.actorId) === String(authUser.id)) {
+        return; // Echo prevention: already added optimistically
+      }
+      setComments((prev) => {
+        if (prev.some((c) => c.id === payload.comment.id)) return prev;
+        return [payload.comment, ...prev];
+      });
+    });
+
+    const unsubDeleted = subscribeCommentDeleted((payload) => {
+      if (String(payload.taskId) !== String(task.id)) return;
+      if (payload.actorId && authUser?.id && String(payload.actorId) === String(authUser.id)) {
+        return;
+      }
+      setComments((prev) => prev.filter((c) => c.id !== payload.commentId));
+    });
+
+    return () => {
+      unsubCreated();
+      unsubDeleted();
+    };
+  }, [task?.boardId, task?.id, authUser?.id]);
+
+  // Real-time board metadata sync (e.g. board title / tooltip updates)
+  useEffect(() => {
+    if (!task?.boardId) return;
+
+    const unsubBoard = subscribeBoardUpdated((payload) => {
+      if (String(payload.boardId) === String(task.boardId) && payload.board) {
+        setBoard((prev) => (prev ? { ...prev, ...payload.board } : payload.board));
+        if (payload.board.members) {
+          setBoardMembers(payload.board.members);
+        }
+      }
+    });
+
+    return () => {
+      unsubBoard();
+    };
+  }, [task?.boardId]);
 
   const priorityInfo = task ? PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium : PRIORITY_CONFIG.medium;
 
@@ -488,7 +543,16 @@ export const TaskDetails: React.FC = () => {
                 <span>Go to Dashboard</span>
               </Link>
               <button
-                onClick={() => navigate(-1)}
+                type="button"
+                onClick={() => {
+                  if (window.history.state?.idx > 0 || window.history.length > 1) {
+                    navigate(-1);
+                  } else if (board) {
+                    navigate(`/boards/${board.id}`);
+                  } else {
+                    navigate('/dashboard');
+                  }
+                }}
                 className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white text-xs font-semibold transition cursor-pointer"
               >
                 Go Back
@@ -502,9 +566,19 @@ export const TaskDetails: React.FC = () => {
             <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
               <nav aria-label="Breadcrumb" className="flex items-center gap-2 flex-wrap">
                 <button
-                  onClick={() => (board ? navigate(`/boards/${board.id}`) : navigate('/dashboard'))}
+                  type="button"
+                  onClick={() => {
+                    if (window.history.state?.idx > 0 || window.history.length > 1) {
+                      navigate(-1);
+                    } else if (board) {
+                      navigate(`/boards/${board.id}`);
+                    } else {
+                      navigate('/dashboard');
+                    }
+                  }}
                   className="p-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800/80 hover:border-slate-700 text-slate-400 hover:text-white shadow-xs transition-all duration-150 flex items-center justify-center shrink-0 cursor-pointer group active:scale-95"
-                  title="Back to board"
+                  title="Go back"
+                  aria-label="Go back"
                 >
                   <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5 text-slate-400 group-hover:text-indigo-400" />
                 </button>
@@ -700,12 +774,21 @@ export const TaskDetails: React.FC = () => {
                   {/* Comment Input Box */}
                   <form onSubmit={handleAddComment} className="space-y-3">
                     <div className="flex items-start space-x-3">
-                      <div
-                        className={`w-8 h-8 rounded-xl ${getProfileGradient(authUser?.color, authUser?.name)} text-white font-bold text-xs flex items-center justify-center shrink-0 mt-1 shadow`}
-                        title={authUser?.name || 'User'}
-                      >
-                        {getInitials(authUser?.initials || authUser?.name)}
-                      </div>
+                      {authUser?.avatar ? (
+                        <img
+                          src={authUser.avatar}
+                          alt={authUser.name || 'User'}
+                          title={authUser.name || 'User'}
+                          className="w-8 h-8 rounded-xl object-cover shrink-0 mt-1 shadow ring-1 ring-slate-800"
+                        />
+                      ) : (
+                        <div
+                          className={`w-8 h-8 rounded-xl ${getProfileGradient(authUser?.color, authUser?.name)} text-white font-bold text-xs flex items-center justify-center shrink-0 mt-1 shadow`}
+                          title={authUser?.name || 'User'}
+                        >
+                          {getInitials(authUser?.initials || authUser?.name)}
+                        </div>
+                      )}
                       <div className="flex-1 space-y-2">
                         <textarea
                           rows={3}
@@ -764,11 +847,19 @@ export const TaskDetails: React.FC = () => {
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center space-x-2.5">
-                                <div
-                                  className={`w-6 h-6 rounded-lg ${getProfileGradient(commentAuthorColor, comment.author.name)} text-white font-bold text-[10px] flex items-center justify-center shadow-sm`}
-                                >
-                                  {getInitials(comment.author.initials || comment.author.name)}
-                                </div>
+                                {comment.author.avatar ? (
+                                  <img
+                                    src={comment.author.avatar}
+                                    alt={comment.author.name}
+                                    className="w-6 h-6 rounded-lg object-cover shadow-sm ring-1 ring-slate-800 shrink-0"
+                                  />
+                                ) : (
+                                  <div
+                                    className={`w-6 h-6 rounded-lg ${getProfileGradient(commentAuthorColor, comment.author.name)} text-white font-bold text-[10px] flex items-center justify-center shadow-sm shrink-0`}
+                                  >
+                                    {getInitials(comment.author.initials || comment.author.name)}
+                                  </div>
+                                )}
                                 <div>
                                   <span className="text-xs font-semibold text-slate-200 mr-2">
                                     {comment.author.name}
@@ -854,6 +945,7 @@ export const TaskDetails: React.FC = () => {
                     (() => {
                       const name = typeof task.assignee === 'object' && task.assignee !== null ? task.assignee.name : String(task.assignee);
                       const color = typeof task.assignee === 'object' && task.assignee !== null ? task.assignee.color : undefined;
+                      const avatar = typeof task.assignee === 'object' && task.assignee !== null ? task.assignee.avatar : undefined;
                       const initials = (typeof task.assignee === 'object' && task.assignee !== null && task.assignee.initials)
                         ? task.assignee.initials
                         : getInitials(name);
@@ -861,11 +953,19 @@ export const TaskDetails: React.FC = () => {
 
                       return (
                         <div className="flex items-center space-x-3 p-3 rounded-2xl bg-slate-950 border border-slate-800">
-                          <div
-                            className={`w-10 h-10 rounded-2xl ${getProfileGradient(color, name)} text-white font-bold text-sm flex items-center justify-center shadow-md`}
-                          >
-                            {initials}
-                          </div>
+                          {avatar ? (
+                            <img
+                              src={avatar}
+                              alt={name}
+                              className="w-10 h-10 rounded-2xl object-cover shadow-md ring-1 ring-slate-800 shrink-0"
+                            />
+                          ) : (
+                            <div
+                              className={`w-10 h-10 rounded-2xl ${getProfileGradient(color, name)} text-white font-bold text-sm flex items-center justify-center shadow-md shrink-0`}
+                            >
+                              {initials}
+                            </div>
+                          )}
                           <div className="min-w-0 flex-1">
                             <p className="text-xs font-bold text-white truncate">{name}</p>
                             {email && <p className="text-[10px] text-slate-400 truncate">{email}</p>}

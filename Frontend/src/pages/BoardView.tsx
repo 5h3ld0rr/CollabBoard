@@ -48,7 +48,7 @@ import {
 import { useReconnectionRecovery } from "../hooks/useReconnectionRecovery";
 import * as tasksApi from "../api/tasks";
 import { getWorkspaces, getWorkspaceById } from "../api/workspaces";
-import type { Board, Task, TaskStatus, User, Workspace } from "../types";
+import type { Board, BoardColumn, Task, TaskStatus, User, Workspace } from "../types";
 
 export const BoardView: React.FC = () => {
   const { id: boardId } = useParams<{ id: string }>();
@@ -64,6 +64,7 @@ export const BoardView: React.FC = () => {
     updateTask,
     deleteTask,
     moveTaskStatus,
+    reorderTask,
     clearBoardTasks,
     updateBoard,
     deleteBoard,
@@ -162,6 +163,16 @@ export const BoardView: React.FC = () => {
     }
   }, [boardId, shareToken, loadBoard, dispatch]);
 
+  // Dynamically update document title (browser tab title and tooltip)
+  useEffect(() => {
+    if (boardData?.title) {
+      document.title = `${boardData.title} | CollabBoard`;
+    }
+    return () => {
+      document.title = "CollabBoard";
+    };
+  }, [boardData?.title]);
+
   // URL-Reflected Filter States
   const searchQuery = searchParams.get("search") || searchParams.get("q") || "";
   const selectedAssignee = searchParams.get("assignee") || "all";
@@ -172,6 +183,8 @@ export const BoardView: React.FC = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [settingsModalTab, setSettingsModalTab] = useState<'general' | 'columns' | 'danger'>('general');
+  const [selectedCreateColumnId, setSelectedCreateColumnId] = useState<string | null>(null);
   const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
   const [workspaceMembers, setWorkspaceMembers] = useState<User[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -228,11 +241,11 @@ export const BoardView: React.FC = () => {
     if (user) {
       const existing = knownMembersMap.get(user.id);
       knownMembersMap.set(user.id, {
+        ...existing,
         id: user.id,
         email: user.email || existing?.email,
         avatar: user.avatar || existing?.avatar,
         initials: user.initials || existing?.initials,
-        ...existing,
         color: user.color || existing?.color || "from-indigo-600 to-violet-600",
         name: user.name || existing?.name || "You",
       });
@@ -247,6 +260,7 @@ export const BoardView: React.FC = () => {
       return {
         id: uid,
         name: fallbackName,
+        avatar: isSelf ? user?.avatar : undefined,
         initials: fallbackName.slice(0, 2).toUpperCase(),
         color: isSelf
           ? user?.color || "from-indigo-600 to-violet-600"
@@ -481,25 +495,24 @@ export const BoardView: React.FC = () => {
     selectedTag,
   ]);
 
-  // Column grouped tasks
-  const todoTasks = useMemo(
-    () => filteredTasks.filter((t) => t.status === "todo"),
-    [filteredTasks],
-  );
-  const inProgressTasks = useMemo(
-    () => filteredTasks.filter((t) => t.status === "in-progress"),
-    [filteredTasks],
-  );
-  const doneTasks = useMemo(
-    () => filteredTasks.filter((t) => t.status === "done"),
-    [filteredTasks],
-  );
+  // Dynamic columns list
+  const columnsToRender: BoardColumn[] = useMemo(() => {
+    if (boardData?.columns && boardData.columns.length > 0) {
+      return [...boardData.columns].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+    }
+    return [
+      { id: 'col-todo', title: 'To Do', statusKey: 'todo', colorDot: 'bg-slate-400', position: 0 },
+      { id: 'col-in-progress', title: 'In Progress', statusKey: 'in-progress', colorDot: 'bg-indigo-400', position: 1 },
+      { id: 'col-done', title: 'Completed', statusKey: 'done', colorDot: 'bg-emerald-400', position: 2 },
+    ];
+  }, [boardData?.columns]);
 
   // Task mutation handlers
-  const handleOpenCreateTask = (status: TaskStatus = "todo") => {
+  const handleOpenCreateTask = (status: TaskStatus = "todo", columnId?: string) => {
     if (isReadOnly) return;
     setEditingTask(null);
     setModalDefaultStatus(status);
+    setSelectedCreateColumnId(columnId || null);
     setIsModalOpen(true);
   };
 
@@ -547,9 +560,32 @@ export const BoardView: React.FC = () => {
     }
   };
 
-  const handleDropTask = (taskId: string, targetStatus: TaskStatus) => {
+  const handleDropTask = async (
+    taskId: string,
+    targetStatus: TaskStatus,
+    targetIndex?: number,
+    targetColumnId?: string
+  ) => {
     if (isReadOnly) return;
-    handleMoveStatus(taskId, targetStatus);
+    try {
+      if (typeof targetIndex === 'number' || targetColumnId) {
+        await reorderTask(taskId, targetStatus, targetIndex, targetColumnId);
+      } else {
+        await moveTaskStatus(taskId, targetStatus);
+      }
+      const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+      showToast(
+        `Task moved${isOffline ? " (saved locally, will sync when online)" : ""}`,
+      );
+    } catch (err: any) {
+      if (err?.status === 409 || err?.code === "CONFLICT") {
+        showToast(
+          "⚠️ Task modified by someone else — reloaded latest board state",
+        );
+      } else {
+        showToast(err?.message || "Failed to move task");
+      }
+    }
   };
 
   const handleSaveTask = async (savedTask: Task) => {
@@ -585,7 +621,10 @@ export const BoardView: React.FC = () => {
       }
     } else {
       if (boardData) {
-        await addTask(boardData.id, savedTask);
+        await addTask(boardData.id, {
+          ...savedTask,
+          columnId: selectedCreateColumnId || savedTask.columnId,
+        });
         showToast(
           isOffline
             ? "New task added locally (will sync when online)"
@@ -751,7 +790,14 @@ export const BoardView: React.FC = () => {
                 <span>{isGuestView ? "Back to Home" : "Go to Dashboard"}</span>
               </Link>
               <button
-                onClick={() => navigate(-1)}
+                type="button"
+                onClick={() => {
+                  if (window.history.state?.idx > 0 || window.history.length > 1) {
+                    navigate(-1);
+                  } else {
+                    navigate(isGuestView ? "/" : "/dashboard");
+                  }
+                }}
                 className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white text-xs font-semibold transition cursor-pointer"
               >
                 Go Back
@@ -792,7 +838,7 @@ export const BoardView: React.FC = () => {
             )}
 
             {/* Board Header Bar */}
-            <div className="relative z-40 flex flex-col md:flex-row md:items-end justify-between gap-4 pb-6 border-b border-slate-800/80 mb-6">
+            <div className="relative z-20 flex flex-col md:flex-row md:items-end justify-between gap-4 pb-6 border-b border-slate-800/80 mb-6">
               <div className="space-y-2">
                 {/* Modern Glassmorphic Breadcrumb Navigation */}
                 <nav
@@ -801,7 +847,13 @@ export const BoardView: React.FC = () => {
                 >
                   <button
                     type="button"
-                    onClick={() => navigate(-1)}
+                    onClick={() => {
+                      if (window.history.state?.idx > 0 || window.history.length > 1) {
+                        navigate(-1);
+                      } else {
+                        navigate(isGuestView ? "/" : "/dashboard");
+                      }
+                    }}
                     className="p-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800/80 hover:border-slate-700 text-slate-400 hover:text-white shadow-xs transition-all duration-150 flex items-center justify-center shrink-0 cursor-pointer group active:scale-95"
                     title="Go back"
                     aria-label="Go back"
@@ -949,7 +1001,10 @@ export const BoardView: React.FC = () => {
                     )}
 
                     <ChevronRight className="w-3 h-3 text-slate-600 shrink-0" />
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg font-semibold text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 max-w-36 sm:max-w-xs truncate shadow-xs">
+                    <span
+                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg font-semibold text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 max-w-36 sm:max-w-xs truncate shadow-xs cursor-default"
+                      title={boardData.title}
+                    >
                       <Kanban className="w-3 h-3 text-indigo-400 shrink-0" />
                       <span className="truncate">{boardData.title}</span>
                     </span>
@@ -958,7 +1013,10 @@ export const BoardView: React.FC = () => {
 
                 {/* Board Title & Optional Description */}
                 <div>
-                  <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                  <h1
+                    className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight"
+                    title={boardData.title}
+                  >
                     {boardData.title}
                   </h1>
                   {boardData.description &&
@@ -1014,9 +1072,12 @@ export const BoardView: React.FC = () => {
 
                     {/* Board Settings — hidden from Viewers */}
                     <button
-                      onClick={() => setIsSettingsModalOpen(true)}
+                      onClick={() => {
+                        setSettingsModalTab('general');
+                        setIsSettingsModalOpen(true);
+                      }}
                       className="p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800/80 hover:border-slate-700 text-slate-400 hover:text-white shadow-xs transition-all active:scale-95 cursor-pointer"
-                      title="Board Settings (General, Danger Zone)"
+                      title="Board Settings (General, Columns, Danger Zone)"
                     >
                       <Settings className="w-4 h-4" />
                     </button>
@@ -1026,7 +1087,7 @@ export const BoardView: React.FC = () => {
             </div>
 
             {/* Board Search & Filter Controls Strip */}
-            <div className="relative z-30 space-y-3 mb-6">
+            <div className="relative z-10 space-y-3 mb-6">
               {/* Main Filter Bar */}
               <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-slate-900/90 border border-slate-800 backdrop-blur-xl">
                 {/* Left Controls: Title Search & Dropdowns */}
@@ -1071,16 +1132,24 @@ export const BoardView: React.FC = () => {
                     >
                       {selectedUser ? (
                         <>
-                          <div
-                            className={`w-4 h-4 rounded-full ${getProfileGradient(
-                              selectedUser.id === user?.id
-                                ? user?.color || selectedUser.color
-                                : selectedUser.color,
-                              selectedUser.name,
-                            )} text-white font-bold text-[8px] flex items-center justify-center`}
-                          >
-                            {selectedUser.initials}
-                          </div>
+                          {selectedUser.avatar ? (
+                            <img
+                              src={selectedUser.avatar}
+                              alt={selectedUser.name}
+                              className="w-4 h-4 rounded-full object-cover shrink-0"
+                            />
+                          ) : (
+                            <div
+                              className={`w-4 h-4 rounded-full ${getProfileGradient(
+                                selectedUser.id === user?.id
+                                  ? user?.color || selectedUser.color
+                                  : selectedUser.color,
+                                selectedUser.name,
+                              )} text-white font-bold text-[8px] flex items-center justify-center`}
+                            >
+                              {selectedUser.initials}
+                            </div>
+                          )}
                           <span className="truncate max-w-27.5">
                             {selectedUser.name}
                           </span>
@@ -1210,14 +1279,22 @@ export const BoardView: React.FC = () => {
                                   }`}
                                 >
                                   <div className="flex items-center space-x-2 min-w-0">
-                                    <div
-                                      className={`w-5 h-5 rounded-full ${getProfileGradient(
-                                        memberColor,
-                                        member.name,
-                                      )} text-white font-bold text-[9px] flex items-center justify-center shrink-0`}
-                                    >
-                                      {member.initials}
-                                    </div>
+                                    {member.avatar ? (
+                                      <img
+                                        src={member.avatar}
+                                        alt={member.name}
+                                        className="w-5 h-5 rounded-full object-cover shrink-0"
+                                      />
+                                    ) : (
+                                      <div
+                                        className={`w-5 h-5 rounded-full ${getProfileGradient(
+                                          memberColor,
+                                          member.name,
+                                        )} text-white font-bold text-[9px] flex items-center justify-center shrink-0`}
+                                      >
+                                        {member.initials}
+                                      </div>
+                                    )}
                                     <div className="text-left min-w-0">
                                       <p className="truncate text-xs">
                                         {member.name}
@@ -1377,8 +1454,8 @@ export const BoardView: React.FC = () => {
               )}
             </div>
 
-            {/* Empty Search/Filter State Banner if 0 cards match */}
-            {filteredTasks.length === 0 && (
+            {/* Empty Search/Filter State Banner if 0 cards match active filters */}
+            {hasActiveFilters && filteredTasks.length === 0 && (
               <div className="p-8 mb-6 text-center rounded-2xl bg-slate-900/40 border border-slate-800/80 flex flex-col items-center justify-center space-y-3 animate-in fade-in duration-200">
                 <div className="w-10 h-10 rounded-xl bg-slate-800/70 border border-slate-700/60 flex items-center justify-center text-slate-400">
                   <Search className="w-5 h-5" />
@@ -1414,48 +1491,42 @@ export const BoardView: React.FC = () => {
             )}
 
             {/* Kanban Columns Canvas */}
-            <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-5 pb-6">
-              <Column
-                title="To Do"
-                status="todo"
-                colorDot="bg-slate-400"
-                accentBadge="bg-slate-800 text-slate-300"
-                tasks={todoTasks}
-                onAddTask={handleOpenCreateTask}
-                onEditTask={handleEditTask}
-                onDeleteTask={handleRequestDeleteTask}
-                onMoveStatus={handleMoveStatus}
-                onDropTask={handleDropTask}
-                readOnly={isReadOnly}
-              />
+            <div className="flex-1 flex flex-col lg:flex-row gap-5 pb-6 overflow-x-auto items-start">
+              {columnsToRender.map((col) => {
+                const colKey = col.statusKey || col.title.toLowerCase().replace(/\s+/g, '-');
+                const colTasks = filteredTasks
+                  .filter((t) => {
+                    if (t.columnId && (t.columnId === col.id || t.columnId === col._id)) return true;
+                    if (!t.columnId && t.status === colKey) return true;
+                    if (t.status === colKey) return true;
+                    return false;
+                  })
+                  .sort((a, b) => (a.order ?? a.position ?? 0) - (b.order ?? b.position ?? 0));
 
-              <Column
-                title="In Progress"
-                status="in-progress"
-                colorDot="bg-indigo-400"
-                accentBadge="bg-indigo-950 text-indigo-300 border border-indigo-800/60"
-                tasks={inProgressTasks}
-                onAddTask={handleOpenCreateTask}
-                onEditTask={handleEditTask}
-                onDeleteTask={handleRequestDeleteTask}
-                onMoveStatus={handleMoveStatus}
-                onDropTask={handleDropTask}
-                readOnly={isReadOnly}
-              />
-
-              <Column
-                title="Completed"
-                status="done"
-                colorDot="bg-emerald-400"
-                accentBadge="bg-emerald-950 text-emerald-300 border border-emerald-800/60"
-                tasks={doneTasks}
-                onAddTask={handleOpenCreateTask}
-                onEditTask={handleEditTask}
-                onDeleteTask={handleRequestDeleteTask}
-                onMoveStatus={handleMoveStatus}
-                onDropTask={handleDropTask}
-                readOnly={isReadOnly}
-              />
+                return (
+                  <Column
+                    key={col.id || col._id || col.title}
+                    title={col.title}
+                    status={colKey as TaskStatus}
+                    columnId={col.id || col._id}
+                    colorDot={col.colorDot || 'bg-indigo-400'}
+                    accentBadge={
+                      colKey === 'in-progress'
+                        ? 'bg-indigo-950 text-indigo-300 border border-indigo-800/60'
+                        : colKey === 'done'
+                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60'
+                        : 'bg-slate-800 text-slate-300'
+                    }
+                    tasks={colTasks}
+                    onAddTask={handleOpenCreateTask}
+                    onEditTask={handleEditTask}
+                    onDeleteTask={handleRequestDeleteTask}
+                    onMoveStatus={handleMoveStatus}
+                    onDropTask={handleDropTask}
+                    readOnly={isReadOnly}
+                  />
+                );
+              })}
             </div>
           </>
         )}
@@ -1492,13 +1563,14 @@ export const BoardView: React.FC = () => {
         />
       )}
 
-      {/* Board Settings Modal (General, Members, Danger Zone) */}
+      {/* Board Settings Modal (General, Columns, Danger Zone) */}
       {boardData && (
         <BoardSettingsModal
           isOpen={isSettingsModalOpen}
           onClose={() => setIsSettingsModalOpen(false)}
           board={boardData}
           workspaceMembers={workspaceMembers}
+          initialTab={settingsModalTab}
           onUpdateBoard={handleUpdateBoard}
           onDeleteBoard={handleDeleteBoard}
           onClearTasks={handleClearTasks}

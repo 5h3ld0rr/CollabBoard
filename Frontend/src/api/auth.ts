@@ -1,5 +1,5 @@
 import { request } from './client';
-import type { User } from '../types';
+import type { User, ActiveSession } from '../types';
 
 export interface AuthResponse {
   data: {
@@ -24,6 +24,7 @@ export interface UpdateProfileInput {
   name?: string;
   email?: string;
   color?: string;
+  avatar?: string;
   subscriptionPlan?: 'basic' | 'pro';
   billingCycle?: 'monthly' | 'yearly';
 }
@@ -37,6 +38,14 @@ export async function updateProfile(input: UpdateProfileInput): Promise<User> {
     body: JSON.stringify(input),
   });
   return res.data.user;
+}
+
+/**
+ * Fetch all registered users
+ */
+export async function getUsers(): Promise<User[]> {
+  const res = await request<{ data: User[] }>('/api/auth/users');
+  return res.data;
 }
 
 /**
@@ -109,3 +118,31 @@ export async function updatePassword(input: UpdatePasswordInput): Promise<{ mess
   });
   return res.data || res;
 }
+
+/**
+ * Fetch active device sessions for currently authenticated user
+ */
+export async function getActiveSessions(): Promise<ActiveSession[]> {
+  const res = await request<{ data: ActiveSession[] }>('/api/auth/sessions');
+  return res.data || [];
+}
+
+/**
+ * Revoke a specific device session
+ */
+export async function revokeSession(sessionId: string): Promise<void> {
+  await request(`/api/auth/sessions/${sessionId}`, {
+    method: 'DELETE',
+  });
+}
+
+/**
+ * Revoke all other active device sessions except current
+ */
+export async function revokeOtherSessions(): Promise<{ message: string; revokedCount: number }> {
+  const res = await request<{ message: string; revokedCount: number }>('/api/auth/sessions/revoke-others', {
+    method: 'POST',
+  });
+  return res;
+}
+

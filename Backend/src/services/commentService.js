@@ -22,6 +22,7 @@ function formatAuthor(user, authorId) {
     name,
     email,
     initials,
+    avatar: user?.avatar || '',
     color: user?.color || 'from-indigo-600 to-violet-600',
   };
 }

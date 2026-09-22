@@ -48,7 +48,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setStatus(defaultStatus);
       setPriority('medium');
       setAssigneeId('');
-      setTagInput('Frontend, Feature');
+      setTagInput('');
       setDueDate('');
     }
     setError(null);

@@ -197,4 +197,50 @@ describe('BoardSettingsModal Component', () => {
     expect(mockOnDeleteBoard).toHaveBeenCalledWith('board-settings-1');
     expect(mockOnClose).toHaveBeenCalledTimes(1);
   });
+
+  it('allows opening column color picker and changing column color', async () => {
+    const boardWithCols: Board = {
+      ...mockBoard,
+      columns: [
+        { id: 'c1', title: 'To Do', position: 0, statusKey: 'todo', colorDot: 'bg-slate-400' },
+        { id: 'c2', title: 'In Progress', position: 1, statusKey: 'in-progress', colorDot: 'bg-indigo-400' },
+      ],
+    };
+
+    render(
+      <BoardSettingsModal
+        isOpen={true}
+        onClose={mockOnClose}
+        board={boardWithCols}
+        onUpdateBoard={mockOnUpdateBoard}
+        initialTab="columns"
+      />
+    );
+
+    // Color figure input is present on the column
+    const todoColorInput = screen.getByLabelText(/change color for to do/i);
+    expect(todoColorInput).toBeInTheDocument();
+
+    // Change color directly via color figure input
+    fireEvent.change(todoColorInput, { target: { value: '#ff007f' } });
+
+    // Save columns
+    const saveColsBtn = screen.getByRole('button', { name: /save columns/i });
+    fireEvent.click(saveColsBtn);
+
+    await waitFor(() => {
+      expect(mockOnUpdateBoard).toHaveBeenCalledWith(
+        expect.objectContaining({
+          columns: expect.arrayContaining([
+            expect.objectContaining({
+              id: 'c1',
+              title: 'To Do',
+              colorDot: '#ff007f',
+            }),
+          ]),
+        })
+      );
+    });
+  });
 });
+

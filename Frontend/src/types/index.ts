@@ -1,5 +1,14 @@
-export type TaskStatus = 'todo' | 'in-progress' | 'done';
+export type TaskStatus = 'todo' | 'in-progress' | 'done' | (string & {});
 export type TaskPriority = 'low' | 'normal' | 'medium' | 'high' | 'urgent';
+
+export interface BoardColumn {
+  id: string;
+  _id?: string;
+  title: string;
+  position: number;
+  statusKey?: string;
+  colorDot?: string;
+}
 
 export interface User {
   id: string;
@@ -33,9 +42,11 @@ export interface Task {
   status: TaskStatus;
   priority: TaskPriority;
   boardId: string;
+  columnId?: string;
   assignee?: User;
   tags: string[];
   order: number;
+  position?: number;
   version: number;
   dueDate?: string;
   commentCount?: number;
@@ -56,6 +67,7 @@ export interface Board {
   members: User[];
   memberRoles?: Record<string, string>;
   tags: string[];
+  columns?: BoardColumn[];
   stats: {
     totalTasks: number;
     todoCount: number;
@@ -73,6 +85,8 @@ export interface Workspace {
   boards?: string[];
   boardIds?: string[];
   boardCount?: number;
+  ownedBoardCount?: number;
+  sharedBoardCount?: number;
   color?: string;
   memberCount?: number;
   ownerId?: string;
@@ -91,12 +105,8 @@ export interface UserProfile {
 }
 
 export interface UserPreferences {
-  emailTaskAssignment: boolean;
-  emailWeeklyDigest: boolean;
   desktopNotifications: boolean;
   soundEffects: boolean;
-  compactBoardView: boolean;
-  offlineAutoSync: boolean;
 }
 
 export interface ActiveSession {
@@ -145,6 +155,7 @@ export interface AppNotification {
   type: NotificationType;
   linkUrl?: string;
   actor?: {
+    id?: string;
     name: string;
     avatar?: string;
     initials: string;

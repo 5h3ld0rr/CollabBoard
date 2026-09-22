@@ -34,6 +34,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: getRandomColor,
     },
+    avatar: {
+      type: String,
+      default: '',
+    },
     subscriptionPlan: {
       type: String,
       enum: ['basic', 'pro'],

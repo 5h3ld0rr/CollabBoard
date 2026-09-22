@@ -64,6 +64,7 @@ const normalizeMember = (m: any, idx: number, ownerId?: string, currentUser?: Us
       id: memberId,
       name: m.name || '',
       email: m.email || '',
+      avatar: isSelf && currentUser?.avatar ? currentUser.avatar : (m.avatar || ''),
       initials: m.initials || (m.name ? m.name.slice(0, 2).toUpperCase() : ''),
       color: isSelf && currentUser?.color ? currentUser.color : m.color,
       boardRole: isOwner ? 'Owner' : (m.boardRole || 'Editor'),
@@ -74,6 +75,7 @@ const normalizeMember = (m: any, idx: number, ownerId?: string, currentUser?: Us
     id: memberId,
     name: '',
     email: '',
+    avatar: isSelf && currentUser?.avatar ? currentUser.avatar : '',
     initials: '',
     color: '',
     boardRole: isOwner ? 'Owner' : 'Editor',
@@ -434,14 +436,22 @@ export const BoardMembersModal: React.FC<BoardMembersModalProps> = ({
                 >
                   <div className="flex items-center space-x-3 min-w-0 flex-1 mr-3">
                     <div className="relative shrink-0">
-                      <div
-                        className={`w-8 h-8 rounded-xl ${getProfileGradient(
-                          member.color,
-                          member.name
-                        )} text-white font-bold text-xs flex items-center justify-center shadow-xs`}
-                      >
-                        {member.initials}
-                      </div>
+                      {member.avatar ? (
+                        <img
+                          src={member.avatar}
+                          alt={member.name || 'Member'}
+                          className="w-8 h-8 rounded-xl object-cover ring-1 ring-slate-800 shadow-xs"
+                        />
+                      ) : (
+                        <div
+                          className={`w-8 h-8 rounded-xl ${getProfileGradient(
+                            member.color,
+                            member.name
+                          )} text-white font-bold text-xs flex items-center justify-center shadow-xs`}
+                        >
+                          {member.initials}
+                        </div>
+                      )}
                       <span
                         className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-slate-950 ${
                           isOnline

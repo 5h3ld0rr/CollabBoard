@@ -22,12 +22,8 @@ export const STATUS_COLUMNS = [
 ] as const;
 
 export const DEFAULT_USER_PREFERENCES = {
-  emailTaskAssignment: true,
-  emailWeeklyDigest: false,
   desktopNotifications: false,
   soundEffects: true,
-  compactBoardView: false,
-  offlineAutoSync: true,
 };
 
 export const DEFAULT_ACTIVE_SESSIONS = [

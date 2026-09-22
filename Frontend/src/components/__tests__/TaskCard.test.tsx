@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { TaskCard } from '../board/TaskCard';
@@ -124,4 +124,25 @@ describe('TaskCard Component', () => {
 
     expect(screen.getByText('Overdue')).toBeInTheDocument();
   });
+
+  it('triggers onEdit when card or edit button is clicked', () => {
+    const handleEdit = vi.fn();
+    render(
+      <MemoryRouter>
+        <TaskCard task={baseTask} onEdit={handleEdit} />
+      </MemoryRouter>
+    );
+
+    // Click edit button
+    const editBtn = screen.getByRole('button', { name: /edit task/i });
+    editBtn.click();
+    expect(handleEdit).toHaveBeenCalledWith(baseTask);
+
+    // Click card container
+    handleEdit.mockClear();
+    const card = screen.getByTestId(`task-card-${baseTask.id}`);
+    card.click();
+    expect(handleEdit).toHaveBeenCalledWith(baseTask);
+  });
 });
+

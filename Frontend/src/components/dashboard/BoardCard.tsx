@@ -88,7 +88,10 @@ export const BoardCard: React.FC<BoardCardProps> = memo(({
                   </span>
                 )}
               </div>
-              <h3 className="text-base font-bold text-white group-hover:text-indigo-300 transition-colors leading-snug line-clamp-1">
+              <h3
+                className="text-base font-bold text-white group-hover:text-indigo-300 transition-colors leading-snug line-clamp-1"
+                title={board.title}
+              >
                 {board.title}
               </h3>
             </div>
@@ -169,7 +172,17 @@ export const BoardCard: React.FC<BoardCardProps> = memo(({
                   ? currentUser.initials
                   : (member.initials || getInitials(member.name));
 
-                return (
+                const avatar = isCurrentUser && currentUser?.avatar ? currentUser.avatar : member.avatar;
+
+                return avatar ? (
+                  <img
+                    key={member.id}
+                    src={avatar}
+                    alt={member.name}
+                    title={member.name}
+                    className="w-6 h-6 rounded-full object-cover ring-2 ring-slate-900 shadow-sm"
+                  />
+                ) : (
                   <div
                     key={member.id}
                     title={member.name}
