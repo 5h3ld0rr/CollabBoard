@@ -1291,8 +1291,9 @@ export const Profile: React.FC = () => {
                   Your Workspaces
                 </h2>
                 <p className="text-xs text-slate-400">
-                  You are a collaborator or administrator in{" "}
-                  {workspaces.length} team spaces
+                  {workspaces.length === 1
+                    ? "You have 1 active workspace"
+                    : `You have ${workspaces.length} active workspaces`}
                 </p>
               </div>
               <Button
@@ -1317,30 +1318,17 @@ export const Profile: React.FC = () => {
                       >
                         <Building2 className="w-5 h-5 text-white" />
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setManagingWorkspace(ws);
-                            setIsManageWorkspaceModalOpen(true);
-                          }}
-                          className="p-1.5 rounded-lg bg-slate-950/60 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition cursor-pointer"
-                          title="Workspace Settings"
-                        >
-                          <Settings className="w-3.5 h-3.5" />
-                        </button>
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
-                            ws.role === "Owner"
-                              ? "bg-indigo-500/10 text-indigo-300 border-indigo-500/30"
-                              : ws.role === "Admin"
-                                ? "bg-violet-500/10 text-violet-300 border-violet-500/30"
-                                : "bg-slate-800 text-slate-300 border border-slate-700"
-                          }`}
-                        >
-                          {ws.role}
-                        </span>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setManagingWorkspace(ws);
+                          setIsManageWorkspaceModalOpen(true);
+                        }}
+                        className="p-1.5 rounded-lg bg-slate-950/60 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition cursor-pointer"
+                        title="Workspace Settings"
+                      >
+                        <Settings className="w-3.5 h-3.5" />
+                      </button>
                     </div>
 
                     <div>
