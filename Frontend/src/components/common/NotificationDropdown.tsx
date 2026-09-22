@@ -15,7 +15,8 @@ import {
   AtSign,
   Settings,
 } from 'lucide-react';
-import { useNotifications } from '../../context';
+import { useNotifications, useAuth } from '../../context';
+import { getUsers } from '../../api/auth';
 import type { AppNotification, NotificationType } from '../../types';
 
 function formatRelativeTime(isoString: string): string {
@@ -73,6 +74,52 @@ export const NotificationDropdown: React.FC = () => {
     removeNotification,
     clearAll,
   } = useNotifications();
+
+  const { user } = useAuth();
+  const [userAvatarMap, setUserAvatarMap] = useState<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    let isMounted = true;
+    getUsers()
+      .then((users) => {
+        if (!isMounted || !Array.isArray(users)) return;
+        const map = new Map<string, string>();
+        users.forEach((u) => {
+          if (u.avatar) {
+            if (u.id) map.set(String(u.id), u.avatar);
+            if (u.email) map.set(u.email.toLowerCase(), u.avatar);
+            if (u.name) map.set(u.name.toLowerCase().trim(), u.avatar);
+          }
+        });
+        setUserAvatarMap(map);
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const resolveActorAvatar = (actor?: AppNotification['actor']) => {
+    if (!actor) return undefined;
+    if (actor.avatar) return actor.avatar;
+    if (
+      user &&
+      ((actor.name && user.name && actor.name.toLowerCase().trim() === user.name.toLowerCase().trim()) ||
+        (actor.id && String(actor.id) === String(user.id)))
+    ) {
+      if (user.avatar) return user.avatar;
+    }
+    if (actor.id && userAvatarMap.has(String(actor.id))) {
+      return userAvatarMap.get(String(actor.id));
+    }
+    if (actor.name) {
+      const nameKey = actor.name.toLowerCase().trim();
+      if (userAvatarMap.has(nameKey)) {
+        return userAvatarMap.get(nameKey);
+      }
+    }
+    return undefined;
+  };
 
   // Close on outside click
   useEffect(() => {
@@ -237,21 +284,24 @@ export const NotificationDropdown: React.FC = () => {
                   {/* Left Avatar / Icon */}
                   <div className="relative shrink-0 mt-0.5">
                     {notif.actor ? (
-                      notif.actor.avatar ? (
-                        <img
-                          src={notif.actor.avatar}
-                          alt={notif.actor.name || 'User'}
-                          className="w-8 h-8 rounded-xl object-cover ring-1 ring-slate-800"
-                        />
-                      ) : (
-                        <div
-                          className={`w-8 h-8 rounded-xl bg-linear-to-br ${
-                            notif.actor.color || 'from-indigo-600 to-violet-600'
-                          } text-white font-bold text-xs flex items-center justify-center shadow-inner`}
-                        >
-                          {notif.actor.initials}
-                        </div>
-                      )
+                      (() => {
+                        const avatarSrc = resolveActorAvatar(notif.actor);
+                        return avatarSrc ? (
+                          <img
+                            src={avatarSrc}
+                            alt={notif.actor.name || 'User'}
+                            className="w-8 h-8 rounded-xl object-cover ring-1 ring-slate-800"
+                          />
+                        ) : (
+                          <div
+                            className={`w-8 h-8 rounded-xl bg-linear-to-br ${
+                              notif.actor.color || 'from-indigo-600 to-violet-600'
+                            } text-white font-bold text-xs flex items-center justify-center shadow-inner`}
+                          >
+                            {notif.actor.initials}
+                          </div>
+                        );
+                      })()
                     ) : (
                       <div className="w-8 h-8 rounded-xl bg-slate-800 border border-slate-700/60 flex items-center justify-center text-indigo-400">
                         <Bell className="w-4 h-4" />

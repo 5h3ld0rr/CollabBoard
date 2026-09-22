@@ -918,7 +918,8 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
 
       const actor = state.boardMembers.find(
-        (m) => String(m.id || (m as any)._id || '') === String(payload.actorId)
+        (m) => String(m.id || (m as any)._id || '') === String(payload.actorId) ||
+               (m.email && String(m.email).toLowerCase() === String(payload.actorId).toLowerCase())
       );
       const actorName = actor?.name || 'A teammate';
 
@@ -931,6 +932,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           actor: actor
             ? {
                 name: actor.name,
+                avatar: actor.avatar || '',
                 initials: actor.initials || actor.name.slice(0, 2).toUpperCase(),
                 color: actor.color,
               }
@@ -973,7 +975,8 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         const isStatusMoved = !current || current.status !== incoming.status;
         const actor = state.boardMembers.find(
-          (m) => String(m.id || (m as any)._id || '') === String(payload.actorId)
+          (m) => String(m.id || (m as any)._id || '') === String(payload.actorId) ||
+                 (m.email && String(m.email).toLowerCase() === String(payload.actorId).toLowerCase())
         );
         const actorName = actor?.name || 'A teammate';
 
@@ -994,6 +997,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               actor: actor
                 ? {
                     name: actor.name,
+                    avatar: actor.avatar || '',
                     initials: actor.initials || actor.name.slice(0, 2).toUpperCase(),
                     color: actor.color,
                   }
@@ -1018,6 +1022,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               actor: actor
                 ? {
                     name: actor.name,
+                    avatar: actor.avatar || '',
                     initials: actor.initials || actor.name.slice(0, 2).toUpperCase(),
                     color: actor.color,
                   }
@@ -1059,7 +1064,8 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
 
       const actor = state.boardMembers.find(
-        (m) => String(m.id || (m as any)._id || '') === String(payload.actorId)
+        (m) => String(m.id || (m as any)._id || '') === String(payload.actorId) ||
+               (m.email && String(m.email).toLowerCase() === String(payload.actorId).toLowerCase())
       );
       const actorName = actor?.name || 'A teammate';
 
@@ -1072,6 +1078,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           actor: actor
             ? {
                 name: actor.name,
+                avatar: actor.avatar || '',
                 initials: actor.initials || actor.name.slice(0, 2).toUpperCase(),
                 color: actor.color,
               }

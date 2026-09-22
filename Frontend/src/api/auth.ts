@@ -41,6 +41,14 @@ export async function updateProfile(input: UpdateProfileInput): Promise<User> {
 }
 
 /**
+ * Fetch all registered users
+ */
+export async function getUsers(): Promise<User[]> {
+  const res = await request<{ data: User[] }>('/api/auth/users');
+  return res.data;
+}
+
+/**
  * Register a new user account
  */
 export async function register(input: RegisterInput): Promise<{ user: User; token?: string }> {

@@ -1,4 +1,5 @@
 import * as authService from '../services/authService.js';
+import { userRepo } from '../repos/userRepo.js';
 import { config } from '../config.js';
 import { detectDeviceFromRequest } from '../utils/deviceDetector.js';
 
@@ -56,6 +57,13 @@ export async function getMe(req, res) {
   const user = await authService.getMe(req.user.id);
   res.status(200).json({
     data: { user },
+  });
+}
+
+export async function getUsers(req, res) {
+  const users = await userRepo.list();
+  res.status(200).json({
+    data: users,
   });
 }
 

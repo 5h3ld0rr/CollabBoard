@@ -58,7 +58,13 @@ export async function create(req, res) {
         message: `${actorName} assigned you to "${task.title}"`,
         type: 'task_assigned',
         linkUrl: `/boards/${task.boardId}`,
-        actor: { id: req.user.id, name: actorName },
+        actor: {
+          id: req.user.id,
+          name: actorName,
+          avatar: actor?.avatar || '',
+          initials: actor?.initials || (actorName ? actorName.slice(0, 2).toUpperCase() : 'U'),
+          color: actor?.color || 'from-indigo-600 to-violet-600',
+        },
         meta: { taskId: task.id || task._id, boardId: task.boardId },
       });
     }
@@ -90,7 +96,13 @@ export async function update(req, res) {
           message: `${actorName} assigned you to "${task.title}"`,
           type: 'task_assigned',
           linkUrl: `/boards/${task.boardId}`,
-          actor: { id: req.user.id, name: actorName },
+          actor: {
+            id: req.user.id,
+            name: actorName,
+            avatar: actor?.avatar || '',
+            initials: actor?.initials || (actorName ? actorName.slice(0, 2).toUpperCase() : 'U'),
+            color: actor?.color || 'from-indigo-600 to-violet-600',
+          },
           meta: { taskId: task.id || task._id, boardId: task.boardId },
         });
       }

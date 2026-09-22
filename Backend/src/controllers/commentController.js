@@ -41,7 +41,13 @@ export async function create(req, res) {
           message: `${actorName} commented on "${task.title}"`,
           type: 'task_comment',
           linkUrl: `/tasks/${taskId}`,
-          actor: { id: req.user.id, name: actorName },
+          actor: {
+            id: req.user.id,
+            name: actorName,
+            avatar: actor?.avatar || '',
+            initials: actor?.initials || (actorName ? actorName.slice(0, 2).toUpperCase() : 'U'),
+            color: actor?.color || 'from-indigo-600 to-violet-600',
+          },
           meta: { taskId, boardId: task.boardId, commentId: comment.id },
         });
       }
