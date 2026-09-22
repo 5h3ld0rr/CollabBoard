@@ -237,13 +237,21 @@ export const NotificationDropdown: React.FC = () => {
                   {/* Left Avatar / Icon */}
                   <div className="relative shrink-0 mt-0.5">
                     {notif.actor ? (
-                      <div
-                        className={`w-8 h-8 rounded-xl bg-linear-to-br ${
-                          notif.actor.color || 'from-indigo-600 to-violet-600'
-                        } text-white font-bold text-xs flex items-center justify-center shadow-inner`}
-                      >
-                        {notif.actor.initials}
-                      </div>
+                      notif.actor.avatar ? (
+                        <img
+                          src={notif.actor.avatar}
+                          alt={notif.actor.name || 'User'}
+                          className="w-8 h-8 rounded-xl object-cover ring-1 ring-slate-800"
+                        />
+                      ) : (
+                        <div
+                          className={`w-8 h-8 rounded-xl bg-linear-to-br ${
+                            notif.actor.color || 'from-indigo-600 to-violet-600'
+                          } text-white font-bold text-xs flex items-center justify-center shadow-inner`}
+                        >
+                          {notif.actor.initials}
+                        </div>
+                      )
                     ) : (
                       <div className="w-8 h-8 rounded-xl bg-slate-800 border border-slate-700/60 flex items-center justify-center text-indigo-400">
                         <Bell className="w-4 h-4" />

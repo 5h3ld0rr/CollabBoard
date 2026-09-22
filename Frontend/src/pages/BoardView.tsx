@@ -241,11 +241,11 @@ export const BoardView: React.FC = () => {
     if (user) {
       const existing = knownMembersMap.get(user.id);
       knownMembersMap.set(user.id, {
+        ...existing,
         id: user.id,
         email: user.email || existing?.email,
         avatar: user.avatar || existing?.avatar,
         initials: user.initials || existing?.initials,
-        ...existing,
         color: user.color || existing?.color || "from-indigo-600 to-violet-600",
         name: user.name || existing?.name || "You",
       });
@@ -260,6 +260,7 @@ export const BoardView: React.FC = () => {
       return {
         id: uid,
         name: fallbackName,
+        avatar: isSelf ? user?.avatar : undefined,
         initials: fallbackName.slice(0, 2).toUpperCase(),
         color: isSelf
           ? user?.color || "from-indigo-600 to-violet-600"
@@ -1131,16 +1132,24 @@ export const BoardView: React.FC = () => {
                     >
                       {selectedUser ? (
                         <>
-                          <div
-                            className={`w-4 h-4 rounded-full ${getProfileGradient(
-                              selectedUser.id === user?.id
-                                ? user?.color || selectedUser.color
-                                : selectedUser.color,
-                              selectedUser.name,
-                            )} text-white font-bold text-[8px] flex items-center justify-center`}
-                          >
-                            {selectedUser.initials}
-                          </div>
+                          {selectedUser.avatar ? (
+                            <img
+                              src={selectedUser.avatar}
+                              alt={selectedUser.name}
+                              className="w-4 h-4 rounded-full object-cover shrink-0"
+                            />
+                          ) : (
+                            <div
+                              className={`w-4 h-4 rounded-full ${getProfileGradient(
+                                selectedUser.id === user?.id
+                                  ? user?.color || selectedUser.color
+                                  : selectedUser.color,
+                                selectedUser.name,
+                              )} text-white font-bold text-[8px] flex items-center justify-center`}
+                            >
+                              {selectedUser.initials}
+                            </div>
+                          )}
                           <span className="truncate max-w-27.5">
                             {selectedUser.name}
                           </span>
@@ -1270,14 +1279,22 @@ export const BoardView: React.FC = () => {
                                   }`}
                                 >
                                   <div className="flex items-center space-x-2 min-w-0">
-                                    <div
-                                      className={`w-5 h-5 rounded-full ${getProfileGradient(
-                                        memberColor,
-                                        member.name,
-                                      )} text-white font-bold text-[9px] flex items-center justify-center shrink-0`}
-                                    >
-                                      {member.initials}
-                                    </div>
+                                    {member.avatar ? (
+                                      <img
+                                        src={member.avatar}
+                                        alt={member.name}
+                                        className="w-5 h-5 rounded-full object-cover shrink-0"
+                                      />
+                                    ) : (
+                                      <div
+                                        className={`w-5 h-5 rounded-full ${getProfileGradient(
+                                          memberColor,
+                                          member.name,
+                                        )} text-white font-bold text-[9px] flex items-center justify-center shrink-0`}
+                                      >
+                                        {member.initials}
+                                      </div>
+                                    )}
                                     <div className="text-left min-w-0">
                                       <p className="truncate text-xs">
                                         {member.name}

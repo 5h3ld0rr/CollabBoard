@@ -207,6 +207,7 @@ export const TaskCard: React.FC<TaskCardProps> = memo(({
             (() => {
               const name = typeof task.assignee === 'object' && task.assignee !== null ? task.assignee.name : String(task.assignee);
               const color = typeof task.assignee === 'object' && task.assignee !== null ? task.assignee.color : undefined;
+              const avatar = typeof task.assignee === 'object' && task.assignee !== null ? task.assignee.avatar : undefined;
               const initials = (typeof task.assignee === 'object' && task.assignee !== null && task.assignee.initials)
                 ? task.assignee.initials
                 : getInitials(name);
@@ -214,12 +215,21 @@ export const TaskCard: React.FC<TaskCardProps> = memo(({
 
               return (
                 <>
-                  <div
-                    title={name}
-                    className={`w-5 h-5 rounded-full ${getProfileGradient(color, name)} text-white font-bold text-[9px] flex items-center justify-center ring-1 ring-slate-800`}
-                  >
-                    {initials}
-                  </div>
+                  {avatar ? (
+                    <img
+                      src={avatar}
+                      alt={name}
+                      title={name}
+                      className="w-5 h-5 rounded-full object-cover ring-1 ring-slate-800 shrink-0"
+                    />
+                  ) : (
+                    <div
+                      title={name}
+                      className={`w-5 h-5 rounded-full ${getProfileGradient(color, name)} text-white font-bold text-[9px] flex items-center justify-center ring-1 ring-slate-800 shrink-0`}
+                    >
+                      {initials}
+                    </div>
+                  )}
                   <span className="text-[11px] truncate max-w-24">
                     {firstName}
                   </span>

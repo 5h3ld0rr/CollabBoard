@@ -774,12 +774,21 @@ export const TaskDetails: React.FC = () => {
                   {/* Comment Input Box */}
                   <form onSubmit={handleAddComment} className="space-y-3">
                     <div className="flex items-start space-x-3">
-                      <div
-                        className={`w-8 h-8 rounded-xl ${getProfileGradient(authUser?.color, authUser?.name)} text-white font-bold text-xs flex items-center justify-center shrink-0 mt-1 shadow`}
-                        title={authUser?.name || 'User'}
-                      >
-                        {getInitials(authUser?.initials || authUser?.name)}
-                      </div>
+                      {authUser?.avatar ? (
+                        <img
+                          src={authUser.avatar}
+                          alt={authUser.name || 'User'}
+                          title={authUser.name || 'User'}
+                          className="w-8 h-8 rounded-xl object-cover shrink-0 mt-1 shadow ring-1 ring-slate-800"
+                        />
+                      ) : (
+                        <div
+                          className={`w-8 h-8 rounded-xl ${getProfileGradient(authUser?.color, authUser?.name)} text-white font-bold text-xs flex items-center justify-center shrink-0 mt-1 shadow`}
+                          title={authUser?.name || 'User'}
+                        >
+                          {getInitials(authUser?.initials || authUser?.name)}
+                        </div>
+                      )}
                       <div className="flex-1 space-y-2">
                         <textarea
                           rows={3}
@@ -838,11 +847,19 @@ export const TaskDetails: React.FC = () => {
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center space-x-2.5">
-                                <div
-                                  className={`w-6 h-6 rounded-lg ${getProfileGradient(commentAuthorColor, comment.author.name)} text-white font-bold text-[10px] flex items-center justify-center shadow-sm`}
-                                >
-                                  {getInitials(comment.author.initials || comment.author.name)}
-                                </div>
+                                {comment.author.avatar ? (
+                                  <img
+                                    src={comment.author.avatar}
+                                    alt={comment.author.name}
+                                    className="w-6 h-6 rounded-lg object-cover shadow-sm ring-1 ring-slate-800 shrink-0"
+                                  />
+                                ) : (
+                                  <div
+                                    className={`w-6 h-6 rounded-lg ${getProfileGradient(commentAuthorColor, comment.author.name)} text-white font-bold text-[10px] flex items-center justify-center shadow-sm shrink-0`}
+                                  >
+                                    {getInitials(comment.author.initials || comment.author.name)}
+                                  </div>
+                                )}
                                 <div>
                                   <span className="text-xs font-semibold text-slate-200 mr-2">
                                     {comment.author.name}
@@ -928,6 +945,7 @@ export const TaskDetails: React.FC = () => {
                     (() => {
                       const name = typeof task.assignee === 'object' && task.assignee !== null ? task.assignee.name : String(task.assignee);
                       const color = typeof task.assignee === 'object' && task.assignee !== null ? task.assignee.color : undefined;
+                      const avatar = typeof task.assignee === 'object' && task.assignee !== null ? task.assignee.avatar : undefined;
                       const initials = (typeof task.assignee === 'object' && task.assignee !== null && task.assignee.initials)
                         ? task.assignee.initials
                         : getInitials(name);
@@ -935,11 +953,19 @@ export const TaskDetails: React.FC = () => {
 
                       return (
                         <div className="flex items-center space-x-3 p-3 rounded-2xl bg-slate-950 border border-slate-800">
-                          <div
-                            className={`w-10 h-10 rounded-2xl ${getProfileGradient(color, name)} text-white font-bold text-sm flex items-center justify-center shadow-md`}
-                          >
-                            {initials}
-                          </div>
+                          {avatar ? (
+                            <img
+                              src={avatar}
+                              alt={name}
+                              className="w-10 h-10 rounded-2xl object-cover shadow-md ring-1 ring-slate-800 shrink-0"
+                            />
+                          ) : (
+                            <div
+                              className={`w-10 h-10 rounded-2xl ${getProfileGradient(color, name)} text-white font-bold text-sm flex items-center justify-center shadow-md shrink-0`}
+                            >
+                              {initials}
+                            </div>
+                          )}
                           <div className="min-w-0 flex-1">
                             <p className="text-xs font-bold text-white truncate">{name}</p>
                             {email && <p className="text-[10px] text-slate-400 truncate">{email}</p>}
