@@ -9,7 +9,12 @@ const router = Router();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const openApiPath = path.resolve(__dirname, '../../../docs/openapi.yaml');
+
+const possiblePaths = [
+  path.resolve(__dirname, '../../../docs/openapi.yaml'), // Local dev from Backend/src/routes
+  path.resolve(__dirname, '../../docs/openapi.yaml'),    // Container /app/docs/openapi.yaml
+];
+const openApiPath = possiblePaths.find((p) => fs.existsSync(p)) || possiblePaths[0];
 
 let swaggerDocument = {};
 if (fs.existsSync(openApiPath)) {
