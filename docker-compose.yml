@@ -3,6 +3,8 @@ services:
     build:
       context: ./Backend
       dockerfile: Dockerfile
+      additional_contexts:
+        docs: ./docs
     restart: unless-stopped
     env_file:
       - ./Backend/.env
